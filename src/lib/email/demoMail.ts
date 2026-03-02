@@ -23,11 +23,11 @@ export function buildDemoEmail(state: OnboardingState, companyId: string, extern
 
   const companyName = state.tenant.name;
 
-  const subject = `Perfilab | Onboarding recibido | ${companyName} | ${trackingId}`;
+  const subject = `DanaConnect | Onboarding recibido | ${companyName} | ${trackingId}`;
   const body = [
     'Hola,',
     '',
-    'Se recibió documentación validada desde el Portal de Onboarding Perfilab.',
+    'Se recibió documentación validada desde el Portal de Onboarding DanaConnect.',
     '',
     `Empresa: ${companyName} (ID: ${companyId})`,
     `Tracking ID: ${trackingId}`,

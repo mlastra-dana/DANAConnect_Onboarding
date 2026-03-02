@@ -11,9 +11,9 @@ export type TenantConfig = {
 export const tenantsRegistry: Record<string, TenantConfig> = {
   'demo-001': {
     companyId: 'demo-001',
-    name: 'Grupo Perfilab',
-    logoUrl: '/perfilab-logo.svg',
-    brandColor: '#F28C28',
+    name: 'DanaConnect',
+    logoUrl: '/logo-danaconnect-horizontal.png',
+    brandColor: '#DD5736',
     slaHours: 8,
     whatsAppNumber: '584128194750',
     phone: '0212.819.47.50'
@@ -21,8 +21,8 @@ export const tenantsRegistry: Record<string, TenantConfig> = {
   'demo-002': {
     companyId: 'demo-002',
     name: 'Red Integral Preventiva C.A.',
-    logoUrl: '/perfilab-logo.svg',
-    brandColor: '#F28C28',
+    logoUrl: '/logo-danaconnect-horizontal.png',
+    brandColor: '#DD5736',
     slaHours: 8,
     whatsAppNumber: '584120002222',
     phone: '0212.819.47.50'
@@ -30,8 +30,8 @@ export const tenantsRegistry: Record<string, TenantConfig> = {
   'demo-003': {
     companyId: 'demo-003',
     name: 'Servicios Médicos Delta',
-    logoUrl: '/perfilab-logo.svg',
-    brandColor: '#F28C28',
+    logoUrl: '/logo-danaconnect-horizontal.png',
+    brandColor: '#DD5736',
     slaHours: 12,
     whatsAppNumber: '584120003333',
     phone: '0212.819.47.50'

@@ -11,7 +11,7 @@ export function WhatsAppWidget({
   const [open, setOpen] = useState(false);
 
   const chatUrl = useMemo(() => {
-    const text = encodeURIComponent('Hola, necesito apoyo con el onboarding de Perfilab.');
+    const text = encodeURIComponent('Hola, necesito apoyo con el onboarding de DanaConnect.');
     return `https://wa.me/${whatsAppNumber}?text=${text}`;
   }, [whatsAppNumber]);
 

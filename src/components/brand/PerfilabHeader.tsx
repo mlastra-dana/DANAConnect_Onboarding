@@ -21,8 +21,8 @@ export function PerfilabHeader({
   return (
     <header className="sticky top-0 z-40 border-b border-borderLight bg-white">
       <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 md:px-6">
-        <Link to={`/onboarding/${companyId}`} className="flex items-center gap-3" aria-label="Ir a inicio Perfilab" onClick={onHomeClick}>
-          <img src={logoUrl || '/perfilab-logo.svg'} alt="Logo Perfilab" className="h-9 w-auto" />
+        <Link to={`/onboarding/${companyId}`} className="flex items-center gap-3" aria-label="Ir a inicio DanaConnect" onClick={onHomeClick}>
+          <img src={logoUrl || '/logo-danaconnect-horizontal.png'} alt="Logo DanaConnect" className="h-9 w-auto" />
           <span className="hidden text-sm font-semibold text-dark md:inline">{tenantName}</span>
         </Link>
 
