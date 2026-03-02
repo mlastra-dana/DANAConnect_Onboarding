@@ -6,8 +6,25 @@
 
 :root {
   color-scheme: light;
+  --hero-bg-primary: #DD5736;
 }
 
 body {
   @apply bg-surface text-dark antialiased;
+}
+
+.hero-bg-primary {
+  background: var(--hero-bg-primary);
+}
+
+.hero-title {
+  font-size: clamp(2.2rem, 7vw, 5.8rem);
+  font-weight: 800;
+  line-height: 0.96;
+  letter-spacing: -0.02em;
+}
+
+.hero-subtitle {
+  font-size: clamp(1rem, 1.8vw, 1.25rem);
+  line-height: 1.65;
 }
