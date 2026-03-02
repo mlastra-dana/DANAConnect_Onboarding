@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Trash2 } from 'lucide-react';
 import { useOnboarding } from '../app/OnboardingContext';
-import { DocumentUploader } from '../components/onboarding/DocumentUploader';
+import { FileUploadCard } from '../components/onboarding/FileUploadCard';
 import { Button } from '../components/ui/Button';
 import { Toast } from '../components/ui/Toast';
 import { validateDocumentFile } from '../lib/validators/documentValidators';
@@ -35,6 +35,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
   const representative1 = state.representatives.find((rep) => rep.id === 1)!;
   const representative2 = state.representatives.find((rep) => rep.id === 2)!;
+  const documentOrder: RequiredDocumentType[] = ['rif', 'registroMercantil'];
 
   async function handleUploadBase(docType: RequiredDocumentType, file: File) {
     const key: UploadKey = docType;
@@ -160,11 +161,11 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
   return (
     <div className="space-y-6">
-      <Toast type="info" message="Sus documentos se procesan en su navegador (demo)." />
+      <Toast type="info" message="Cargue los documentos requeridos para continuar." />
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {(Object.keys(state.documents) as RequiredDocumentType[]).map((docType) => (
-          <DocumentUploader
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {documentOrder.map((docType) => (
+          <FileUploadCard
             key={docType}
             docRecord={state.documents[docType] as DocumentRecord}
             loading={loadingMap[docType] || uploadingMap[docType]}
@@ -177,8 +178,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
           />
         ))}
 
-        <DocumentUploader
-          title="Cédula del Representante 1 (Obligatorio)"
+        <FileUploadCard
           sectionTitle="Representantes legales"
           sectionDescription="Cargue la cédula del representante principal. Puede agregar un segundo representante si aplica."
           sectionAction={
@@ -187,8 +187,9 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                 <Plus className="h-4 w-4" />
                 Agregar segundo representante
               </Button>
-            ) : null
+            ) : undefined
           }
+          title="Cédula del Representante (Obligatorio)"
           docRecord={{ ...representative1.document, type: 'cedulaRepresentante' }}
           loading={loadingMap.rep1 || uploadingMap.rep1}
           isUploading={uploadingMap.rep1}
@@ -199,15 +200,9 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
           onRemoveFile={() => handleRemoveRepresentative(1)}
         />
 
-      </div>
-
-      {representative2.enabled ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <div className="hidden md:block" aria-hidden="true" />
-          <div className="hidden lg:block" aria-hidden="true" />
-          <DocumentUploader
-            title="Cédula del Segundo representante (Opcional)"
-            sectionTitle="Segundo representante"
+        {representative2.enabled ? (
+          <FileUploadCard
+            title="Cédula del segundo representante (Opcional)"
             sectionAction={
               <Button type="button" variant="ghost" onClick={handleDeleteRepresentative2}>
                 <Trash2 className="h-4 w-4" />
@@ -223,8 +218,8 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
             onSelectFile={(file) => handleUploadRepresentative(2, file)}
             onRemoveFile={() => handleRemoveRepresentative(2)}
           />
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       <div className="flex flex-wrap justify-between gap-3">
         <Link to={`/onboarding/${companyId}`}>

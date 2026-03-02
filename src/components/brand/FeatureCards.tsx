@@ -21,16 +21,18 @@ const features = [
 
 export function FeatureCards() {
   return (
-    <section className="bg-surface py-12 md:py-16">
-      <div className="mx-auto w-full max-w-7xl px-5 md:px-8">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <section className="bg-surface pb-12 pt-6 md:pb-16 md:pt-8">
+      <div className="mx-auto w-full max-w-6xl px-5 md:px-8">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => {
             const Icon = feature.icon;
             return (
-              <Card key={feature.title} className="rounded-2xl border-borderLight p-6 shadow-soft">
-                <Icon className="h-6 w-6 text-primary" />
-                <h2 className="mt-4 text-base font-semibold uppercase tracking-[0.02em] text-dark">{feature.title}</h2>
-                <p className="mt-2 text-sm text-grayText">{feature.description}</p>
+              <Card key={feature.title} className="min-h-[190px] rounded-3xl border-borderLight p-6 shadow-soft md:p-7">
+                <Icon className="h-6 w-6 text-primary md:h-7 md:w-7" />
+                <h2 className="mt-4 text-[1rem] font-semibold uppercase leading-tight tracking-[0.01em] text-dark md:text-[1.04rem]">
+                  {feature.title}
+                </h2>
+                <p className="mt-2 text-[0.92rem] leading-relaxed text-grayText md:text-[0.96rem]">{feature.description}</p>
               </Card>
             );
           })}

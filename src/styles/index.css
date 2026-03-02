@@ -17,14 +17,18 @@ body {
   background: var(--hero-bg-primary);
 }
 
+.hero-shell {
+  background: var(--hero-bg-primary);
+}
+
 .hero-title {
-  font-size: clamp(2.2rem, 7vw, 5.8rem);
+  font-size: clamp(2.6rem, 5.15vw, 4.9rem);
   font-weight: 800;
-  line-height: 0.96;
+  line-height: 0.92;
   letter-spacing: -0.02em;
 }
 
 .hero-subtitle {
-  font-size: clamp(1rem, 1.8vw, 1.25rem);
-  line-height: 1.65;
+  font-size: clamp(1.15rem, 1.9vw, 2rem);
+  line-height: 1.3;
 }

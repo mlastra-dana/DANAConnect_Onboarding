@@ -10,7 +10,7 @@ export default {
         grayText: '#6B6B6B',
         surface: '#F5F5F5',
         borderLight: '#EAEAEA',
-        successSoft: '#ECFDF3',
+        successSoft: '#FFF4F1',
         errorSoft: '#FEF3F2',
         pendingSoft: '#F3F4F6',
         brand: {

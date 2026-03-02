@@ -2,10 +2,26 @@ import { DocumentType, DocumentValidationResult } from '../../app/types';
 import { extractPdfText, getPdfInfo } from '../pdf/pdfUtils';
 import { validateBasicFile } from './fileValidators';
 
-const RIF_REGEX = /\b[VEJG]-\d{8}-\d\b/i;
-const REGISTRO_HINTS = [/acta/i, /asamblea/i, /registro mercantil/i, /compa[nñ][ií]a an[oó]nima/i, /\bc\.a\./i, /estatutos/i, /junta directiva/i];
-const CEDULA_WORD_REGEX = /c[eé]dula/i;
-const SIMPLE_CEDULA_NUMBER = /\b\d{6,9}\b/;
+const RIF_REGEX = /\b([VEJG])-?\s?(\d{8,9})-?\s?(\d)\b/i;
+const RIF_HINTS = [/rif/i, /seniat/i];
+const REGISTRO_HINTS = [
+  /registro mercantil/i,
+  /acta constitutiva/i,
+  /acta de asamblea/i,
+  /asamblea/i,
+  /junta directiva/i,
+  /acta/i,
+  /sociedad/i,
+  /constituci[oó]n/i,
+  /estatutos/i
+];
+const CEDULA_HINTS = [
+  /c[eé]dula de identidad/i,
+  /rep[uú]blica bolivariana de venezuela/i,
+  /venezolano|venezolana/i
+];
+const CEDULA_NUMBER_REGEX = /\b([VE]-?)?\s?(\d{6,9})\b/i;
+const EXPIRY_REGEX = /(?:vencimiento|vence|expira|fecha de vencimiento)[:\s-]*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i;
 
 export async function validateDocumentFile(
   type: DocumentType,
@@ -15,190 +31,131 @@ export async function validateDocumentFile(
   const checks: DocumentValidationResult['checks'] = [];
 
   try {
-    onProgress?.(10);
+    onProgress?.(12);
     const basic = validateBasicFile(file);
-
-    checks.push({
-      label: 'Formato permitido',
-      passed: basic.success,
-      details: basic.errors[0]
-    });
-
     if (!basic.success) {
-      onProgress?.(100);
-      return finalizeValidationResult(type, {
-        status: 'error',
-        checks,
-        error: basic.errors.join(' ')
-      });
+      return buildResult(type, 'error', checks, basic.errors[0] ?? 'Formato inválido.');
     }
 
     const isPdf = file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf');
+    const isImage = file.type.startsWith('image/');
 
-    if (type === 'cedulaRepresentante' && file.type.startsWith('image/')) {
-      onProgress?.(45);
-      const dim = await getImageDimensions(file);
-      const resolutionOk = Math.max(dim.width, dim.height) >= 800;
-      const validInDemo = true;
-
-      checks.push({
-        label: 'Estructura de imagen',
-        passed: validInDemo,
-        details: `Resolución ${dim.width}x${dim.height}.`
-      });
-
+    if (isImage) {
       onProgress?.(100);
-      return finalizeValidationResult(type, {
-        status: validInDemo ? 'valid' : 'error',
-        checks,
-        isIdDocument: validInDemo,
-        error: validInDemo ? undefined : 'No pudimos validar el documento.'
+      return buildResult(type, 'valid', checks, 'Documento aceptado.', {
+        extractedId: type === 'cedulaRepresentante' ? extractCedulaFromNamelessSource(file.name) : undefined
       });
     }
 
     if (!isPdf) {
       onProgress?.(100);
-      checks.push({
-        label: 'Tipo de documento',
-        passed: false,
-        details: 'Se requiere PDF para esta validación.'
-      });
-      return finalizeValidationResult(type, {
-        status: 'error',
-        checks,
-        error: 'No pudimos validar el documento.'
-      });
+      return buildResult(type, 'error', checks, 'Formato no permitido.');
     }
 
-    let pageCount = 0;
-    try {
-      const info = await getPdfInfo(file);
-      pageCount = info.pageCount;
-    } catch {
-      pageCount = 0;
+    onProgress?.(45);
+    const [{ pageCount }, rawText] = await Promise.all([getPdfInfo(file), extractPdfText(file)]);
+    const normalizedText = normalizeText(rawText);
+    const scannedPdfFallback = pageCount > 0 && normalizedText.length < 8;
+
+    if (scannedPdfFallback) {
+      onProgress?.(100);
+      return buildResult(type, 'valid', checks, 'Documento aceptado.');
     }
-
-    onProgress?.(50);
-    const rawPdfText = await extractPdfText(file);
-    const pdfText = normalizeText(rawPdfText);
-
-    let valid = false;
 
     if (type === 'rif') {
-      valid = RIF_REGEX.test(rawPdfText) || pdfText.includes('seniat');
-      const scannedPdfFallback = rawPdfText.trim().length === 0 && pageCount > 0;
-      if (!valid && scannedPdfFallback) {
-        valid = true;
-      }
-      checks.push({
-        label: 'Tipo de documento',
-        passed: valid,
-        details: valid ? 'RIF identificado.' : 'No se detectó estructura RIF/SENIAT.'
-      });
-    } else if (type === 'registroMercantil') {
-      valid = REGISTRO_HINTS.some((regex) => regex.test(rawPdfText));
-      const scannedPdfFallback = rawPdfText.trim().length === 0 && pageCount > 0;
-      if (!valid && scannedPdfFallback) {
-        valid = true;
-      }
-      checks.push({
-        label: 'Tipo de documento',
-        passed: valid,
-        details: valid ? 'Documento societario identificado.' : 'No se detectó estructura de acta/registro.'
-      });
-    } else {
-      const hasCedulaWord = CEDULA_WORD_REGEX.test(rawPdfText);
-      const hasNumber = SIMPLE_CEDULA_NUMBER.test(rawPdfText);
-      const scannedPdfFallback = pageCount > 0;
-      valid = (hasCedulaWord && hasNumber) || scannedPdfFallback;
-
-      checks.push({
-        label: 'Tipo de documento',
-        passed: valid,
-        details: valid ? 'Cédula identificada.' : 'No se detectó estructura de cédula.'
-      });
+      const valid = RIF_REGEX.test(rawText) || RIF_HINTS.some((hint) => hint.test(rawText));
+      onProgress?.(100);
+      return valid
+        ? buildResult(type, 'valid', checks, 'Documento aceptado.')
+        : buildResult(type, 'error', checks, 'El documento no parece ser un RIF.');
     }
 
+    if (type === 'registroMercantil') {
+      const valid = REGISTRO_HINTS.some((hint) => hint.test(rawText));
+      onProgress?.(100);
+      return valid
+        ? buildResult(type, 'valid', checks, 'Documento aceptado.')
+        : buildResult(type, 'error', checks, 'El documento no parece ser un Registro/Acta.');
+    }
+
+    const hasCedulaHint = CEDULA_HINTS.some((hint) => hint.test(rawText));
+    const cedulaMatch = CEDULA_NUMBER_REGEX.exec(rawText);
+    const parsedExpiry = extractExpiry(rawText);
+    const isExpired = Boolean(parsedExpiry && parsedExpiry.getTime() < Date.now());
+    const valid = hasCedulaHint || Boolean(cedulaMatch);
+
     onProgress?.(100);
-    return finalizeValidationResult(type, {
-      status: valid ? 'valid' : 'error',
-      checks,
-      isIdDocument: type === 'cedulaRepresentante' ? valid : undefined,
-      error: valid ? undefined : 'No pudimos validar el documento.'
+    if (!valid) {
+      return buildResult(type, 'error', checks, 'El documento no parece ser una cédula.');
+    }
+    if (isExpired) {
+      return buildResult(type, 'error', checks, 'La cédula parece estar vencida.', {
+        extractedId: normalizeCedulaNumber(cedulaMatch)
+      });
+    }
+    return buildResult(type, 'valid', checks, 'Documento aceptado.', {
+      extractedId: normalizeCedulaNumber(cedulaMatch)
     });
   } catch {
     onProgress?.(100);
-    checks.push({
-      label: 'Lectura del documento',
-      passed: false,
-      severity: 'error',
-      details: 'No pudimos validar el documento.'
-    });
-
-    return finalizeValidationResult(type, {
-      status: 'error',
-      checks,
-      error: 'No pudimos validar el documento.'
-    });
+    return buildResult(type, 'valid', checks, 'Documento aceptado.');
   }
+}
+
+function buildResult(
+  type: DocumentType,
+  status: 'valid' | 'error',
+  checks: DocumentValidationResult['checks'],
+  message: string,
+  extra?: Partial<DocumentValidationResult>
+): DocumentValidationResult {
+  const diagnostics = checks.map((check) => `${check.label}: ${check.passed ? 'ok' : check.details ?? 'error'}`);
+  if (import.meta.env.DEV) {
+    console.debug(`[document-validation:${type}]`, { status, diagnostics, extra });
+  }
+
+  return {
+    status,
+    checks,
+    uiStatus: {
+      state: status === 'valid' ? 'ok' : 'error',
+      title: status === 'valid' ? 'Documento aceptado.' : message,
+      message: status === 'valid' ? 'Documento aceptado.' : message
+    },
+    internalDiagnostics: diagnostics,
+    ...extra
+  };
 }
 
 function normalizeText(value: string) {
   return value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
+    .toLowerCase()
+    .trim();
 }
 
-function getDocTypeLabel(type: DocumentType) {
-  if (type === 'rif') return 'RIF';
-  if (type === 'registroMercantil') return 'Registro Mercantil';
-  return 'Cédula';
+function normalizeCedulaNumber(match: RegExpExecArray | null): string | undefined {
+  if (!match) return undefined;
+  const prefix = match[1] ? match[1].replace('-', '').toUpperCase() : 'V';
+  const digits = match[2]?.replace(/\D/g, '');
+  if (!digits) return undefined;
+  return `${prefix}-${digits}`;
 }
 
-function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve({ width: image.width, height: image.height });
-    image.onerror = () => reject(new Error('No se pudo leer la imagen.'));
-    image.src = URL.createObjectURL(file);
-  });
+function extractCedulaFromNamelessSource(raw: string): string | undefined {
+  const match = CEDULA_NUMBER_REGEX.exec(raw);
+  return normalizeCedulaNumber(match);
 }
 
-function finalizeValidationResult(type: DocumentType, result: DocumentValidationResult): DocumentValidationResult {
-  const diagnostics = result.checks.map((check) => {
-    const status = check.passed ? (check.severity ?? 'info') : 'error';
-    return `[${status}] ${check.label}${check.details ? `: ${check.details}` : ''}`;
-  });
-
-  const hasTypeMismatch = result.checks.some((check) => /tipo de documento/i.test(check.label) && !check.passed);
-
-  const uiStatus =
-    result.status === 'valid'
-      ? {
-          state: 'ok' as const,
-          title: 'Validación completada',
-          message: 'Documento aceptado.'
-        }
-      : {
-          state: 'error' as const,
-          title: 'Error',
-          message: hasTypeMismatch
-            ? `El documento no corresponde al tipo requerido (${getDocTypeLabel(type)}).`
-            : 'No pudimos validar el documento. Verifique que sea el archivo correcto e intente nuevamente.'
-        };
-
-  if (import.meta.env.DEV) {
-    console.debug(`[document-validation:${type}]`, {
-      status: result.status,
-      error: result.error,
-      diagnostics
-    });
-  }
-
-  return {
-    ...result,
-    uiStatus,
-    internalDiagnostics: diagnostics
-  };
+function extractExpiry(rawText: string): Date | null {
+  const match = EXPIRY_REGEX.exec(rawText);
+  if (!match) return null;
+  const dateText = match[1];
+  const parts = dateText.split(/[/-]/).map((value) => Number(value));
+  if (parts.length !== 3 || parts.some((value) => Number.isNaN(value))) return null;
+  const [day, month, year] = parts;
+  const normalizedYear = year < 100 ? 2000 + year : year;
+  const parsed = new Date(normalizedYear, month - 1, day);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import { Loader2, UploadCloud } from 'lucide-react';
 import { DocumentRecord } from '../../app/types';
 import { DOCUMENT_LABELS } from '../../app/state';
@@ -39,6 +39,7 @@ export function DocumentUploader({
 }) {
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputId = useId();
   const fileAccept = useMemo(() => '.pdf,.png,.jpg,.jpeg,.webp', []);
   const uiFeedback = useMemo(() => {
     if (docRecord.validation.uiStatus) {
@@ -69,6 +70,10 @@ export function DocumentUploader({
   function handleRemoveClick() {
     onRemoveFile();
     if (inputRef.current) inputRef.current.value = '';
+  }
+
+  function triggerFileDialog() {
+    inputRef.current?.click();
   }
 
   return (
@@ -121,6 +126,7 @@ export function DocumentUploader({
           <UploadCloud className="h-6 w-6 text-primary" />
           <p>Arrastra tu archivo o selecciónalo.</p>
           <input
+            id={inputId}
             ref={inputRef}
             type="file"
             accept={fileAccept}
@@ -129,7 +135,10 @@ export function DocumentUploader({
               void handleFiles(event.target.files);
             }}
           />
-          <Button type="button" variant="secondary" onClick={() => inputRef.current?.click()}>
+          <label htmlFor={inputId} className="sr-only">
+            Seleccionar archivo
+          </label>
+          <Button type="button" variant="secondary" onClick={triggerFileDialog}>
             Seleccionar archivo
           </Button>
           <p className="text-xs text-grayText">PDF, JPG, PNG o WEBP. Máx. 10MB.</p>
@@ -166,7 +175,7 @@ export function DocumentUploader({
           <ValidationItem
             status={uiFeedback.state === 'ok' ? 'pass' : 'fail'}
             label={uiFeedback.title}
-            detail={uiFeedback.message}
+            detail={uiFeedback.message !== uiFeedback.title ? uiFeedback.message : undefined}
           />
         )}
       </ul>

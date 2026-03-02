@@ -1,4 +1,4 @@
-# Portal Perfilab – Onboarding Demo
+# Portal DanaConnect – Onboarding Demo
 ## Sesión Técnica – Resumen Codex
 
 ---
@@ -22,17 +22,17 @@ El portal es una demo desplegable en AWS Amplify.
 
 ---
 
-## 🎨 Ajustes de UI Perfilab
+## 🎨 Ajustes de UI DanaConnect
 
 ### Cambios realizados:
 
-- Nombre del portal actualizado a **Perfilab**
+- Nombre del portal actualizado a **DanaConnect**
 - Eliminado botón duplicado “No esperes más”
-- Colores ajustados a branding Perfilab:
+- Colores ajustados a branding DanaConnect:
   - Naranja principal
   - Texto negro / gris oscuro
   - Eliminado verde en validaciones
-- Diseño más alineado al sitio oficial Perfilab
+- Diseño más alineado al sitio oficial DanaConnect
 
 ---
 
@@ -131,7 +131,7 @@ Para la demo:
 ## Estado actual
 
 ✔ Funciona local
-✔ Diseño alineado a Perfilab
+✔ Diseño alineado a DanaConnect
 ✔ Envío demo configurado
 ✔ UX mejorada
 ✔ Reset completo funcional
