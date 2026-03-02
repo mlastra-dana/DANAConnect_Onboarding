@@ -1,0 +1,20 @@
+<svg width="320" height="86" viewBox="0 0 320 86" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Grupo Perfilab">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#FFD06B"/>
+      <stop offset="60%" stop-color="#F28C28"/>
+      <stop offset="100%" stop-color="#C96810"/>
+    </radialGradient>
+  </defs>
+  <text x="0" y="36" font-family="Plus Jakarta Sans, Arial" font-size="38" fill="#7a7a7a" letter-spacing="1">Grupo</text>
+  <circle cx="128" cy="28" r="16" fill="url(#g)"/>
+  <circle cx="128" cy="28" r="5" fill="#fff" fill-opacity="0.65"/>
+  <text x="152" y="36" font-family="Plus Jakarta Sans, Arial" font-size="38" fill="#7a7a7a" letter-spacing="1">Perfi</text>
+  <text x="237" y="36" font-family="Plus Jakarta Sans, Arial" font-size="38" fill="#F28C28" letter-spacing="1">Lab</text>
+  <circle cx="128" cy="70" r="12" fill="#e3e3e3" stroke="#adadad"/>
+  <line x1="128" y1="43" x2="128" y2="58" stroke="#b7b7b7" stroke-width="4"/>
+  <line x1="118" y1="60" x2="104" y2="66" stroke="#b7b7b7" stroke-width="4"/>
+  <line x1="138" y1="60" x2="152" y2="66" stroke="#b7b7b7" stroke-width="4"/>
+  <circle cx="104" cy="66" r="6" fill="#efefef" stroke="#b7b7b7"/>
+  <circle cx="152" cy="66" r="6" fill="#efefef" stroke="#b7b7b7"/>
+</svg>
