@@ -15,11 +15,11 @@ export function SuccessPage({ companyId }: { companyId: string }) {
 
   const submittedAt = state.submission.submittedAt ? new Date(state.submission.submittedAt) : new Date();
   const requestCode = shortRequestCode(state.submission.registrationId);
-  const representative1 = state.representatives[0];
-  const validDocsCount =
-    Object.values(state.documents).filter((doc) => doc.validation.status === 'valid').length +
-    (representative1.document.validation.status === 'valid' ? 1 : 0);
-  const excelReceived = state.excel.totalRows > 0;
+  const baseDocsValidCount = Object.values(state.documents).filter((doc) => doc.validation.status === 'valid').length;
+  const requiredRepresentatives = state.representatives.filter((rep) => rep.enabled);
+  const representativesValidCount = requiredRepresentatives.filter((rep) => rep.document.validation.status === 'valid').length;
+  const validDocsCount = baseDocsValidCount + representativesValidCount;
+  const totalExpectedDocs = 2 + requiredRepresentatives.length;
 
   async function handleCopyCode() {
     await navigator.clipboard.writeText(requestCode);
@@ -61,10 +61,7 @@ export function SuccessPage({ companyId }: { companyId: string }) {
             <span className="font-medium text-dark">Empresa:</span> {state.tenant.name}
           </p>
           <p>
-            <span className="font-medium text-dark">Documentos recibidos:</span> {validDocsCount}/3
-          </p>
-          <p>
-            <span className="font-medium text-dark">Archivo de datos:</span> {excelReceived ? 'Recibido' : 'No cargado'}
+            <span className="font-medium text-dark">Documentos recibidos:</span> {validDocsCount}/{totalExpectedDocs}
           </p>
           <p>
             <span className="font-medium text-dark">Fecha:</span> {formatDateTime(submittedAt)}

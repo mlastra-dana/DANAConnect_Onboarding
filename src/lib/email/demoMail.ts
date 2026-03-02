@@ -45,10 +45,6 @@ export function buildDemoEmail(state: OnboardingState, companyId: string, extern
     `- Cédula Representante 2: ${
       state.representatives[1].enabled ? statusLabel(state.representatives[1].document.validation.status) : 'No aplica'
     } | Archivo: ${state.representatives[1].enabled ? state.representatives[1].document.fileName ?? 'N/A' : 'No aplica'}`,
-    `- Archivo de datos: ${statusLabel(state.excel.status)} | Archivo: N/A | Filas: ${state.excel.totalRows} | Válidas: ${
-      state.excel.validRows
-    } | Inválidas: ${state.excel.invalidRows}`,
-    '',
     'Nota (modo demo):',
     'Los archivos fueron validados localmente en el navegador y no se adjuntan automáticamente.',
     '',

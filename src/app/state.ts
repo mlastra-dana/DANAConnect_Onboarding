@@ -36,16 +36,6 @@ export function createInitialState(companyId: string, tenant: TenantConfig): Onb
       registroMercantil: createEmptyDocument('registroMercantil')
     },
     representatives: [createEmptyRepresentative(1, true), createEmptyRepresentative(2, false)],
-    excel: {
-      status: 'pending',
-      totalRows: 0,
-      processedRows: 0,
-      validRows: 0,
-      invalidRows: 0,
-      headers: [],
-      previewRows: [],
-      issues: []
-    },
     submission: {
       status: 'idle'
     }

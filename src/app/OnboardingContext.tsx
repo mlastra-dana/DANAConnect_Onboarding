@@ -1,13 +1,12 @@
 import { PropsWithChildren, createContext, useContext, useEffect, useMemo, useReducer } from 'react';
 import { TenantConfig } from '../data/tenants';
-import { DocumentRecord, ExcelValidationState, OnboardingState, RepresentativeRecord, RequiredDocumentType, SubmissionState } from './types';
+import { DocumentRecord, OnboardingState, RepresentativeRecord, RequiredDocumentType, SubmissionState } from './types';
 import { clearState, createInitialState, loadState, saveState } from './state';
 
 type Action =
   | { type: 'set_document'; payload: { docType: RequiredDocumentType; record: DocumentRecord } }
   | { type: 'set_representative'; payload: { id: 1 | 2; representative: RepresentativeRecord } }
   | { type: 'set_representative_enabled'; payload: { id: 2; enabled: boolean } }
-  | { type: 'set_excel'; payload: ExcelValidationState }
   | { type: 'set_submission'; payload: SubmissionState }
   | { type: 'reset'; payload: OnboardingState };
 
@@ -16,12 +15,10 @@ type ContextValue = {
   setDocument: (docType: RequiredDocumentType, record: DocumentRecord) => void;
   setRepresentative: (id: 1 | 2, representative: RepresentativeRecord) => void;
   setRepresentativeEnabled: (id: 2, enabled: boolean) => void;
-  setExcel: (excel: ExcelValidationState) => void;
   setSubmission: (submission: SubmissionState) => void;
   resetOnboarding: () => void;
   resetOnboardingState: () => void;
   allDocumentsValid: boolean;
-  excelValid: boolean;
   canSubmit: boolean;
 };
 
@@ -36,11 +33,6 @@ function reducer(state: OnboardingState, action: Action): OnboardingState {
           ...state.documents,
           [action.payload.docType]: action.payload.record
         }
-      };
-    case 'set_excel':
-      return {
-        ...state,
-        excel: action.payload
       };
     case 'set_representative':
       return {
@@ -99,14 +91,12 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
     const representative1Valid = representative1?.document.validation.status === 'valid';
     const representative2Valid = !representative2?.enabled || representative2.document.validation.status === 'valid';
     const allDocumentsValid = Boolean(baseDocumentsValid && representative1Valid && representative2Valid);
-    const excelValid = state.excel.status === 'valid' && state.excel.totalRows > 0;
 
     return {
       state,
       setDocument: (docType, record) => dispatch({ type: 'set_document', payload: { docType, record } }),
       setRepresentative: (id, representative) => dispatch({ type: 'set_representative', payload: { id, representative } }),
       setRepresentativeEnabled: (id, enabled) => dispatch({ type: 'set_representative_enabled', payload: { id, enabled } }),
-      setExcel: (excel) => dispatch({ type: 'set_excel', payload: excel }),
       setSubmission: (submission) => dispatch({ type: 'set_submission', payload: submission }),
       resetOnboarding: () => {
         clearState(companyId);
@@ -117,8 +107,7 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
         dispatch({ type: 'reset', payload: createInitialState(companyId, tenant) });
       },
       allDocumentsValid,
-      excelValid,
-      canSubmit: allDocumentsValid && excelValid
+      canSubmit: allDocumentsValid
     };
   }, [companyId, state, tenant]);
 

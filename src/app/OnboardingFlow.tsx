@@ -5,7 +5,6 @@ import { getTenantByCompanyId } from '../data/tenants';
 import { OnboardingProvider, useOnboarding } from './OnboardingContext';
 import { WelcomePage } from '../pages/WelcomePage';
 import { DocumentsPage } from '../pages/DocumentsPage';
-import { ExcelPage } from '../pages/ExcelPage';
 import { ReviewPage } from '../pages/ReviewPage';
 import { SuccessPage } from '../pages/SuccessPage';
 import { Card } from '../components/ui/Card';
@@ -18,12 +17,10 @@ function resolveStep(segment?: string) {
       return { step: 1, key: 'welcome' };
     case 'documents':
       return { step: 2, key: 'documents' };
-    case 'excel':
-      return { step: 3, key: 'excel' };
     case 'review':
-      return { step: 4, key: 'review' };
+      return { step: 3, key: 'review' };
     case 'success':
-      return { step: 4, key: 'success' };
+      return { step: 3, key: 'success' };
     default:
       return { step: 1, key: 'notfound' };
   }
@@ -95,7 +92,6 @@ function OnboardingContent({
   const stepTitles: Record<string, string> = {
     welcome: 'DanaConnect | Onboarding',
     documents: 'DanaConnect | Documentos',
-    excel: 'DanaConnect | Excel',
     review: 'DanaConnect | Revisión',
     success: 'DanaConnect | Resultado',
     notfound: 'DanaConnect | No encontrado'
@@ -119,9 +115,8 @@ function OnboardingContent({
 
   return (
     <AppLayout tenant={tenant} currentStep={step}>
-      {stepKey === 'welcome' ? <WelcomePage tenant={tenant} companyId={companyId} /> : null}
+      {stepKey === 'welcome' ? <WelcomePage companyId={companyId} /> : null}
       {stepKey === 'documents' ? <DocumentsPage companyId={companyId} /> : null}
-      {stepKey === 'excel' ? <ExcelPage companyId={companyId} /> : null}
       {stepKey === 'review' ? <ReviewPage companyId={companyId} /> : null}
       {stepKey === 'success' ? <SuccessPage companyId={companyId} /> : null}
       {stepKey === 'notfound' ? (

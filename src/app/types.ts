@@ -42,24 +42,6 @@ export type RepresentativeRecord = {
   document: DocumentRecord;
 };
 
-export type ExcelRowIssue = {
-  rowNumber: number;
-  reasons: string[];
-  fieldErrors?: Array<{ field: string; message: string }>;
-  rowData: Record<string, unknown>;
-};
-
-export type ExcelValidationState = {
-  status: ValidationStatus;
-  totalRows: number;
-  processedRows: number;
-  validRows: number;
-  invalidRows: number;
-  headers: string[];
-  previewRows: Record<string, unknown>[];
-  issues: ExcelRowIssue[];
-};
-
 export type SubmissionState = {
   status: 'idle' | 'loading' | 'success' | 'error';
   registrationId?: string;
@@ -75,6 +57,5 @@ export type OnboardingState = {
   tenant: TenantConfig;
   documents: Record<RequiredDocumentType, DocumentRecord>;
   representatives: [RepresentativeRecord, RepresentativeRecord];
-  excel: ExcelValidationState;
   submission: SubmissionState;
 };

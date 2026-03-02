@@ -230,8 +230,8 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         <Link to={`/onboarding/${companyId}`}>
           <Button variant="ghost">Volver</Button>
         </Link>
-        <Link to={`/onboarding/${companyId}/excel`}>
-          <Button disabled={!allDocumentsValid}>Continuar al Excel</Button>
+        <Link to={`/onboarding/${companyId}/review`}>
+          <Button disabled={!allDocumentsValid}>Continuar</Button>
         </Link>
       </div>
     </div>

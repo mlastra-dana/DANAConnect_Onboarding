@@ -6,13 +6,6 @@ type ReceiptData = {
   requestCode: string;
   submittedAt: Date;
   documents: Array<{ label: string; fileName?: string }>;
-  excel: {
-    received: boolean;
-    fileName?: string;
-    totalRows?: number;
-    validRows?: number;
-    invalidRows?: number;
-  };
 };
 
 export function buildReceiptData(state: OnboardingState): ReceiptData {
@@ -32,14 +25,7 @@ export function buildReceiptData(state: OnboardingState): ReceiptData {
         label: 'Representante 2',
         fileName: state.representatives[1].enabled ? state.representatives[1].document.fileName : 'No aplica'
       }
-    ],
-    excel: {
-      received: state.excel.totalRows > 0,
-      fileName: undefined,
-      totalRows: state.excel.totalRows || undefined,
-      validRows: state.excel.validRows || undefined,
-      invalidRows: state.excel.invalidRows || undefined
-    }
+    ]
   };
 }
 
@@ -61,13 +47,6 @@ export function generateReceiptHtml(data: ReceiptData) {
       return `<tr><td>${escapeHtml(doc.label)}</td><td>Recibido${fileInfo}</td></tr>`;
     })
     .join('');
-
-  const excelStatus = data.excel.received
-    ? `Recibido${data.excel.totalRows ? ` (${data.excel.totalRows} filas)` : ''}`
-    : 'No cargado';
-  const excelDetail = data.excel.received
-    ? `<p class="meta">Válidas: ${data.excel.validRows ?? 0} | Inválidas: ${data.excel.invalidRows ?? 0}</p>`
-    : '';
 
   return `<!doctype html>
 <html lang="es">
@@ -107,10 +86,8 @@ export function generateReceiptHtml(data: ReceiptData) {
         <thead><tr><th>Documento</th><th>Estatus</th></tr></thead>
         <tbody>
           ${rows}
-          <tr><td>Archivo de datos (Excel/CSV)</td><td>${escapeHtml(excelStatus)}</td></tr>
         </tbody>
       </table>
-      ${excelDetail}
 
       <div class="note">
         La documentación será revisada por el equipo de DanaConnect. Si requiere soporte, indique su código de solicitud.

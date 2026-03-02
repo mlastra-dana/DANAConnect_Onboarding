@@ -49,12 +49,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
         registrationId: email.trackingId,
         submittedAt: email.submittedAtISO,
         to: sendResult.to ?? 'mlastra@danaconnect.com (mailto)',
-        documents: state.documents,
-        excel: {
-          totalRows: state.excel.totalRows,
-          validRows: state.excel.validRows,
-          invalidRows: state.excel.invalidRows
-        }
+        documents: state.documents
       };
 
       localStorage.setItem(`onboarding_submission:${companyId}:${email.trackingId}`, JSON.stringify(payload));
@@ -106,18 +101,8 @@ export function ReviewPage({ companyId }: { companyId: string }) {
         </ul>
       </Card>
 
-      <Card>
-        <h2 className="text-lg font-semibold text-dark">Resultado de Excel</h2>
-        <p className="mt-1 text-sm text-grayText">
-          {state.excel.validRows}/{state.excel.totalRows} filas válidas. {state.excel.invalidRows} filas inválidas.
-        </p>
-        <div className="mt-3">
-          <StatusBadge status={state.excel.status} />
-        </div>
-      </Card>
-
       <div className="flex flex-wrap justify-between gap-3">
-        <Link to={`/onboarding/${companyId}/excel`}>
+        <Link to={`/onboarding/${companyId}/documents`}>
           <Button variant="ghost">Volver</Button>
         </Link>
         <Button onClick={() => void submit()} disabled={!canSubmit || state.submission.status === 'loading'}>
@@ -128,7 +113,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
       {!canSubmit ? (
         <Toast
           type="error"
-          message="No puede enviar todavía: verifique que los 3 documentos estén válidos y el Excel esté 100% en verde."
+          message="No puede enviar todavía: verifique que todos los documentos requeridos estén válidos."
         />
       ) : null}
     </div>

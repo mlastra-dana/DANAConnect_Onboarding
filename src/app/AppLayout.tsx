@@ -24,9 +24,7 @@ export function AppLayout({
 
   const hasLoadedData =
     Object.values(state.documents).some((doc) => Boolean(doc.fileName)) ||
-    state.representatives.some((rep) => rep.enabled && Boolean(rep.document.fileName)) ||
-    state.excel.totalRows > 0 ||
-    state.excel.processedRows > 0;
+    state.representatives.some((rep) => rep.enabled && Boolean(rep.document.fileName));
 
   function handleHomeClick(event: React.MouseEvent<HTMLAnchorElement>) {
     if (!hasLoadedData) {
@@ -60,8 +58,8 @@ export function AppLayout({
         showExit={currentStep > 1}
       />
 
-      <main className="mx-auto w-full max-w-7xl px-4 py-8 md:px-6">
-        <Stepper currentStep={currentStep} />
+      <main className={`${currentStep === 1 ? '' : 'mx-auto w-full max-w-7xl px-4 py-8 md:px-6'}`}>
+        {currentStep > 1 ? <Stepper currentStep={currentStep} /> : null}
         {children}
       </main>
 
