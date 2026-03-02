@@ -43,39 +43,39 @@ export function SuccessPage({ companyId }: { companyId: string }) {
   }
 
   return (
-    <Card className="mx-auto max-w-3xl border-slate-200 bg-white shadow-soft-dark">
-      <div className="flex items-start gap-3">
-        <div className="rounded-full bg-orange-50 p-2">
-          <CheckCircle2 className="h-7 w-7 text-perfilabOrange" />
+    <div className="mx-auto max-w-3xl space-y-6">
+      <div className="rounded-xl border border-borderLight bg-white px-6 py-10 text-center shadow-soft">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#FFF4F1]">
+          <CheckCircle2 className="h-9 w-9 text-primary" />
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-perfilabDark">Solicitud recibida</h1>
-          <p className="mt-1 text-perfilabGray">Tu documentación fue recibida y está en revisión.</p>
-        </div>
+        <h1 className="mt-4 text-3xl font-bold text-dark">Proceso completado</h1>
+        <p className="mx-auto mt-2 max-w-xl text-sm text-grayText md:text-base">
+          Hemos recibido tu documentación correctamente. Nuestro equipo la revisará en breve.
+        </p>
       </div>
 
-      <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-        <h2 className="text-base font-semibold text-perfilabDark">Resumen</h2>
-        <div className="mt-3 space-y-1.5 text-sm text-perfilabGray">
+      <Card className="mx-auto max-w-3xl">
+        <h2 className="text-base font-semibold text-dark">Resumen de la solicitud</h2>
+        <div className="mt-3 space-y-1.5 text-sm text-grayText">
           <p>
-            <span className="font-medium text-perfilabDark">Empresa:</span> {state.tenant.name}
+            <span className="font-medium text-dark">Empresa:</span> {state.tenant.name}
           </p>
           <p>
-            <span className="font-medium text-perfilabDark">Documentos recibidos:</span> {validDocsCount}/3
+            <span className="font-medium text-dark">Documentos recibidos:</span> {validDocsCount}/3
           </p>
           <p>
-            <span className="font-medium text-perfilabDark">Archivo de datos:</span> {excelReceived ? 'Recibido' : 'No cargado'}
+            <span className="font-medium text-dark">Archivo de datos:</span> {excelReceived ? 'Recibido' : 'No cargado'}
           </p>
           <p>
-            <span className="font-medium text-perfilabDark">Fecha:</span> {formatDateTime(submittedAt)}
+            <span className="font-medium text-dark">Fecha:</span> {formatDateTime(submittedAt)}
           </p>
         </div>
-      </div>
+      </Card>
 
-      <div className="mt-5 rounded-xl border border-orange-200 bg-orange-50/70 p-4">
-        <p className="text-xs uppercase tracking-wide text-perfilabGray">Código de solicitud</p>
+      <div className="rounded-xl border border-[#F5C7BB] bg-[#FFF4F1] p-4">
+        <p className="text-xs uppercase tracking-wide text-grayText">Código de solicitud</p>
         <div className="mt-2 flex items-center justify-between gap-3">
-          <p className="text-xl font-bold tracking-wider text-perfilabOrange">{requestCode}</p>
+          <p className="text-xl font-bold tracking-wider text-primary">{requestCode}</p>
           <Button type="button" variant="secondary" onClick={() => void handleCopyCode()}>
             <Copy className="h-4 w-4" />
             Copiar código
@@ -94,7 +94,7 @@ export function SuccessPage({ companyId }: { companyId: string }) {
         </div>
       ) : null}
 
-      <div className="mt-6 flex flex-wrap justify-end gap-2">
+      <div className="flex flex-wrap justify-center gap-2">
         <Button type="button" onClick={handleDownloadReceipt}>
           Descargar comprobante
         </Button>
@@ -102,6 +102,6 @@ export function SuccessPage({ companyId }: { companyId: string }) {
           Volver al inicio
         </Button>
       </div>
-    </Card>
+    </div>
   );
 }

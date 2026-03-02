@@ -69,7 +69,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
     <div className="space-y-6">
       {errorToast ? <Toast type="error" message={errorToast} /> : null}
       {state.submission.status === 'error' ? (
-        <Card className="border border-red-200 bg-red-50">
+        <Card className="border border-[#F9C9C3] bg-errorSoft">
           <h3 className="text-base font-semibold text-red-800">No se pudo completar el envío</h3>
           <p className="mt-1 text-sm text-red-700">Revise su conexión y vuelva a intentar.</p>
           <div className="mt-3">
@@ -81,22 +81,22 @@ export function ReviewPage({ companyId }: { companyId: string }) {
       ) : null}
 
       <Card>
-        <h2 className="text-lg font-semibold text-slate-900">Resumen documental</h2>
+        <h2 className="text-lg font-semibold text-dark">Resumen documental</h2>
         <ul className="mt-3 space-y-2">
           {Object.values(state.documents).map((doc, idx) => (
-            <li key={`${doc.type}-${idx}`} className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+            <li key={`${doc.type}-${idx}`} className="flex items-center justify-between rounded-lg border border-borderLight p-3">
               <div>
-                <p className="font-medium text-slate-900">{DOCUMENT_LABELS[doc.type]}</p>
-                <p className="text-xs text-slate-500">{doc.fileName ?? 'Sin archivo'}</p>
+                <p className="font-medium text-dark">{DOCUMENT_LABELS[doc.type]}</p>
+                <p className="text-xs text-grayText">{doc.fileName ?? 'Sin archivo'}</p>
               </div>
               <StatusBadge status={doc.validation.status} />
             </li>
           ))}
           {state.representatives.map((rep) => (
-            <li key={`rep-${rep.id}`} className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+            <li key={`rep-${rep.id}`} className="flex items-center justify-between rounded-lg border border-borderLight p-3">
               <div>
-                <p className="font-medium text-slate-900">Cédula del Representante {rep.id}</p>
-                <p className="text-xs text-slate-500">
+                <p className="font-medium text-dark">Cédula del Representante {rep.id}</p>
+                <p className="text-xs text-grayText">
                   {rep.enabled ? rep.document.fileName ?? 'Sin archivo' : 'No aplica'}
                 </p>
               </div>
@@ -107,8 +107,8 @@ export function ReviewPage({ companyId }: { companyId: string }) {
       </Card>
 
       <Card>
-        <h2 className="text-lg font-semibold text-slate-900">Resultado de Excel</h2>
-        <p className="mt-1 text-sm text-slate-600">
+        <h2 className="text-lg font-semibold text-dark">Resultado de Excel</h2>
+        <p className="mt-1 text-sm text-grayText">
           {state.excel.validRows}/{state.excel.totalRows} filas válidas. {state.excel.invalidRows} filas inválidas.
         </p>
         <div className="mt-3">

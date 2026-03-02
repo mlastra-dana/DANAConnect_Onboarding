@@ -8,10 +8,10 @@ const labelMap: Record<ValidationStatus, string> = {
 };
 
 const colorMap: Record<ValidationStatus, string> = {
-  pending: 'bg-slate-100 text-slate-700',
-  validating: 'border border-orange-200 bg-orange-50 text-perfilabOrangeDark',
-  valid: 'border border-orange-200 bg-orange-50 text-perfilabOrange',
-  error: 'bg-red-100 text-red-700'
+  pending: 'border border-borderLight bg-pendingSoft text-grayText',
+  validating: 'border border-[#F5C7BB] bg-[#FFF2EE] text-primary',
+  valid: 'border border-[#CDEED8] bg-successSoft text-[#027A48]',
+  error: 'border border-[#F9C9C3] bg-errorSoft text-[#B42318]'
 };
 
 export function StatusBadge({ status }: { status: ValidationStatus }) {

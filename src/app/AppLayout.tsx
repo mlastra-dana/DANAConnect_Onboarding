@@ -50,7 +50,7 @@ export function AppLayout({
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f7f7] text-perfilabDark" style={{ ['--tenant-brand' as string]: tenant.brandColor ?? '#F28C28' }}>
+    <div className="min-h-screen bg-surface text-dark" style={{ ['--tenant-brand' as string]: tenant.brandColor ?? '#DD5736' }}>
       <PerfilabHeader
         tenantName={tenant.name}
         logoUrl={tenant.logoUrl}
@@ -68,10 +68,10 @@ export function AppLayout({
       {SHOW_WHATSAPP_WIDGET ? <WhatsAppWidget whatsAppNumber={tenant.whatsAppNumber} /> : null}
 
       {showResetConfirm ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4" role="dialog" aria-modal="true">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-soft-dark">
-            <h2 className="text-lg font-semibold text-perfilabDark">¿Desea volver al inicio?</h2>
-            <p className="mt-2 text-sm text-perfilabGray">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-xl border border-borderLight bg-white p-6 shadow-soft-dark">
+            <h2 className="text-lg font-semibold text-dark">¿Desea volver al inicio?</h2>
+            <p className="mt-2 text-sm text-grayText">
               Si regresa al inicio, se van a eliminar los adjuntos y validaciones cargadas.
             </p>
             <div className="mt-5 flex justify-end gap-2">

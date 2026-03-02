@@ -24,5 +24,5 @@ export function PdfPreview({ file }: { file: File }) {
     };
   }, [file]);
 
-  return <div ref={containerRef} aria-label="Vista previa PDF" className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50" />;
+  return <div ref={containerRef} aria-label="Vista previa PDF" className="overflow-hidden rounded-lg border border-borderLight bg-surface" />;
 }

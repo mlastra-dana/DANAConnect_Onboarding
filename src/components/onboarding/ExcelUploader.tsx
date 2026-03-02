@@ -54,13 +54,13 @@ export function ExcelUploader({
   return (
     <Card className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-900">Carga de Excel</h3>
+        <h3 className="text-lg font-semibold text-dark">Carga de Excel</h3>
         <StatusBadge status={loading ? 'validating' : excel.status} />
       </div>
 
       <div
-        className={`rounded-xl border border-dashed p-4 transition ${
-          dragOver ? 'border-perfilabOrange bg-orange-50' : 'border-orange-200 bg-orange-50/60'
+        className={`rounded-xl border border-dashed p-4 transition-colors duration-200 ${
+          dragOver ? 'border-primary bg-[#FAFAFA]' : 'border-borderLight bg-white'
         }`}
         onDragOver={(event) => {
           event.preventDefault();
@@ -71,10 +71,10 @@ export function ExcelUploader({
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <FileSpreadsheet className="h-6 w-6 text-perfilabOrange" />
+            <FileSpreadsheet className="h-6 w-6 text-primary" />
             <div>
-              <p className="text-sm font-medium text-perfilabDark">Seleccione archivo .xlsx o .csv</p>
-              <p className="text-xs text-perfilabGray">Se procesa localmente en su navegador.</p>
+              <p className="text-sm font-medium text-dark">Arrastra tu Excel o selecciónalo</p>
+              <p className="text-xs text-grayText">Formato .xlsx o .csv.</p>
             </div>
           </div>
 
@@ -91,9 +91,9 @@ export function ExcelUploader({
       ) : null}
 
       {loading ? (
-        <div className="space-y-2 rounded-lg border border-orange-200 bg-orange-50/60 p-3">
-          <div className="flex items-center gap-2 text-xs font-medium text-perfilabDark">
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-perfilabOrange" />
+        <div className="space-y-2 rounded-lg border border-[#F5C7BB] bg-[#FFF4F1] p-3">
+          <div className="flex items-center gap-2 text-xs font-medium text-dark">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
             {isUploading ? 'Subiendo Excel...' : 'Validando Excel...'}
           </div>
           <Progress value={uploadProgress} max={100} label={`Subida ${Math.round(uploadProgress)}%`} />
@@ -125,9 +125,9 @@ export function ExcelUploader({
 
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 text-center">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="text-base font-semibold text-slate-900">{value}</p>
+    <div className="rounded-xl border border-borderLight bg-white p-3 text-center">
+      <p className="text-xs text-grayText">{label}</p>
+      <p className="text-base font-semibold text-dark">{value}</p>
     </div>
   );
 }

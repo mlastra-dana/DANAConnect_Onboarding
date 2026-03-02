@@ -44,8 +44,8 @@ export function OnboardingFlow() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16">
         <Card className="text-center">
-          <h1 className="text-2xl font-bold text-slate-900">Falta el identificador de empresa</h1>
-          <p className="mt-2 text-slate-600">Use la ruta `/onboarding/:companyId` o `?companyId=` para iniciar.</p>
+          <h1 className="text-2xl font-bold text-dark">Falta el identificador de empresa</h1>
+          <p className="mt-2 text-grayText">Use la ruta `/onboarding/:companyId` o `?companyId=` para iniciar.</p>
         </Card>
       </div>
     );
@@ -57,8 +57,8 @@ export function OnboardingFlow() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16">
         <Card className="text-center">
-          <h1 className="text-2xl font-bold text-slate-900">Empresa no registrada</h1>
-          <p className="mt-2 text-slate-600">No encontramos el `companyId` `{companyId}` en el tenant registry.</p>
+          <h1 className="text-2xl font-bold text-dark">Empresa no registrada</h1>
+          <p className="mt-2 text-grayText">No encontramos el `companyId` `{companyId}` en el tenant registry.</p>
           <a href="https://wa.me/584128194750" target="_blank" rel="noreferrer" className="mt-4 inline-block">
             <Button>Contactar soporte</Button>
           </a>
@@ -126,8 +126,8 @@ function OnboardingContent({
       {stepKey === 'success' ? <SuccessPage companyId={companyId} /> : null}
       {stepKey === 'notfound' ? (
         <Card className="text-center">
-          <h1 className="text-xl font-bold text-slate-900">Paso no encontrado</h1>
-          <p className="mt-2 text-slate-600">La ruta no corresponde a un paso válido del onboarding.</p>
+          <h1 className="text-xl font-bold text-dark">Paso no encontrado</h1>
+          <p className="mt-2 text-grayText">La ruta no corresponde a un paso válido del onboarding.</p>
         </Card>
       ) : null}
     </AppLayout>

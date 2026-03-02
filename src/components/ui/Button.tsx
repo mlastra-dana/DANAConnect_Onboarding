@@ -9,17 +9,17 @@ type Props = PropsWithChildren<ButtonHTMLAttributes<HTMLButtonElement>> & {
 
 const styles: Record<Variant, string> = {
   primary:
-    'bg-brand-600 text-white hover:bg-brand-700 disabled:bg-brand-100 disabled:text-brand-500',
+    'bg-primary text-white hover:bg-primaryHover disabled:bg-[#F0C5BA] disabled:text-white',
   secondary:
-    'bg-white text-brand-700 border border-brand-200 hover:bg-brand-50 disabled:text-slate-400',
-  ghost: 'bg-transparent text-brand-700 hover:bg-brand-50 disabled:text-slate-400',
+    'bg-white text-dark border border-borderLight hover:bg-surface disabled:text-grayText',
+  ghost: 'bg-transparent text-grayText hover:bg-surface disabled:text-grayText/70',
   danger: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-200'
 };
 
 export function Button({ children, className = '', variant = 'primary', fullWidth, ...props }: Props) {
   return (
     <button
-      className={`inline-flex items-center justify-center rounded-xl px-4 py-2.5 font-medium transition ${styles[variant]} ${
+      className={`inline-flex items-center justify-center rounded-lg px-4 py-2.5 font-semibold transition-colors duration-200 ${styles[variant]} ${
         fullWidth ? 'w-full' : ''
       } ${className}`}
       {...props}
