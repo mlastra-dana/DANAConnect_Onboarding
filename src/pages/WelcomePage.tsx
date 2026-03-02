@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { FeatureCards } from '../components/brand/FeatureCards';
 import { PerfilabHero } from '../components/brand/PerfilabHero';
 
 export function WelcomePage({ companyId }: { companyId: string }) {
@@ -13,6 +14,7 @@ export function WelcomePage({ companyId }: { companyId: string }) {
         primaryCta="Iniciar onboarding"
         onPrimary={() => navigate(`/onboarding/${companyId}/documents`)}
       />
+      <FeatureCards />
     </div>
   );
 }
