@@ -125,11 +125,15 @@ export async function sendEmailViaApi(subject: string, body: string): Promise<Se
 
 function statusLabel(status: string) {
   if (status === 'valid') return 'Válido';
+  if (status === 'warning') return 'Advertencia';
   if (status === 'error') return 'Error';
+  if (status === 'review') return 'Revisión requerida';
   if (status === 'validating') return 'Validando';
   return 'Pendiente';
 }
 
 function statusToFriendly(status: string) {
+  if (status === 'warning') return 'Recibido con advertencia';
+  if (status === 'review') return 'Revisión requerida';
   return status === 'valid' ? 'Recibido' : 'Pendiente';
 }

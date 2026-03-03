@@ -1,12 +1,11 @@
 import { useId, useMemo, useRef, useState } from 'react';
-import { Loader2, UploadCloud } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Loader2, UploadCloud, XCircle } from 'lucide-react';
 import { DocumentRecord } from '../../app/types';
 import { DOCUMENT_LABELS } from '../../app/state';
 import { StatusBadge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { PdfPreview } from './PdfPreview';
-import { ValidationItem } from './ValidationItem';
 import { FileAttachmentChip } from '../ui/FileAttachmentChip';
 import { Progress } from '../ui/Progress';
 
@@ -41,25 +40,21 @@ export function DocumentUploader({
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
   const fileAccept = useMemo(() => '.pdf,.png,.jpg,.jpeg,.webp', []);
-  const uiFeedback = useMemo(() => {
-    if (docRecord.validation.uiStatus) {
-      return docRecord.validation.uiStatus;
-    }
-
-    if (docRecord.validation.status === 'valid') {
-      return { state: 'ok' as const, title: 'Validación completada', message: 'Documento aceptado.' };
-    }
-
-    if (docRecord.validation.status === 'error') {
-      return {
-        state: 'error' as const,
-        title: 'Error',
-        message: 'No pudimos validar este documento. Verifique que sea legible e intente nuevamente.'
-      };
-    }
-
-    return null;
-  }, [docRecord.validation.uiStatus, docRecord.validation.status]);
+  const feedbackStatus = loading
+    ? 'pending'
+    : docRecord.validation.status === 'valid'
+      ? 'valid'
+      : docRecord.validation.status === 'warning'
+        ? 'warning'
+      : docRecord.validation.status === 'error'
+        ? 'error'
+        : docRecord.validation.status === 'review'
+          ? 'review'
+          : 'pending';
+  const friendlyErrorMessage =
+    docRecord.validation.uiStatus?.message || 'No pudimos validar este documento. Verifique que sea legible e intente nuevamente.';
+  const pendingMessage = docRecord.validation.uiStatus?.message || 'Aún no hay validaciones ejecutadas.';
+  const warningMessages = docRecord.validation.warnings ?? [];
 
   async function handleFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
@@ -77,26 +72,24 @@ export function DocumentUploader({
   }
 
   return (
-    <Card className="space-y-4 animate-fadeUp">
+    <Card className="relative space-y-4 animate-fadeUp">
+      <div className="absolute right-5 top-5">
+        <StatusBadge status={feedbackStatus} />
+      </div>
       {sectionTitle ? (
         <div className="space-y-2 border-b border-borderLight pb-3">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-lg font-semibold text-dark">{sectionTitle}</h3>
-            {sectionAction}
-          </div>
+          <h3 className="pr-24 text-lg font-semibold text-dark">{sectionTitle}</h3>
           {sectionDescription ? <p className="text-sm text-grayText">{sectionDescription}</p> : null}
+          {sectionAction ? <div className="pt-1">{sectionAction}</div> : null}
         </div>
       ) : null}
 
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-lg font-semibold text-dark">{title ?? DOCUMENT_LABELS[docRecord.type]}</h3>
-        <StatusBadge status={loading ? 'validating' : docRecord.validation.status} />
-      </div>
+      <h3 className="pr-24 text-lg font-semibold text-dark">{title ?? DOCUMENT_LABELS[docRecord.type]}</h3>
 
       {loading ? (
-        <div className="space-y-2 rounded-lg border border-[#F5C7BB] bg-[#FFF4F1] p-3">
+        <div className="space-y-2 rounded-lg border border-borderLight bg-surface p-3">
           <div className="flex items-center gap-2 text-xs font-medium text-dark">
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-grayText" />
             {isUploading ? 'Subiendo archivo...' : 'Validando documento...'}
           </div>
           <Progress value={uploadProgress} max={100} label={`Subida ${Math.round(uploadProgress)}%`} />
@@ -108,6 +101,13 @@ export function DocumentUploader({
         role="button"
         tabIndex={0}
         aria-label={`Subir ${DOCUMENT_LABELS[docRecord.type]}`}
+        onClick={triggerFileDialog}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            triggerFileDialog();
+          }
+        }}
         onDragOver={(event) => {
           event.preventDefault();
           setDragOver(true);
@@ -138,7 +138,14 @@ export function DocumentUploader({
           <label htmlFor={inputId} className="sr-only">
             Seleccionar archivo
           </label>
-          <Button type="button" variant="secondary" onClick={triggerFileDialog}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={(event) => {
+              event.stopPropagation();
+              triggerFileDialog();
+            }}
+          >
             Seleccionar archivo
           </Button>
           <p className="text-xs text-grayText">PDF, JPG, PNG o WEBP. Máx. 10MB.</p>
@@ -168,17 +175,46 @@ export function DocumentUploader({
         </div>
       ) : null}
 
-      <ul className="space-y-1 text-sm">
-        {!uiFeedback ? (
-          <li className="text-grayText">Aún no hay validaciones ejecutadas.</li>
-        ) : (
-          <ValidationItem
-            status={uiFeedback.state === 'ok' ? 'pass' : 'fail'}
-            label={uiFeedback.title}
-            detail={uiFeedback.message !== uiFeedback.title ? uiFeedback.message : undefined}
-          />
-        )}
-      </ul>
+      <div className="space-y-1 text-sm">
+        {feedbackStatus === 'valid' ? (
+          <p className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700">
+            <CheckCircle className="h-4 w-4" />
+            <span>Documento válido</span>
+          </p>
+        ) : null}
+        {feedbackStatus === 'warning' ? (
+          <p className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-700">
+            <AlertTriangle className="h-4 w-4" />
+            <span>Válido con advertencias</span>
+          </p>
+        ) : null}
+        {feedbackStatus === 'error' ? (
+          <div>
+            <p className="inline-flex items-center gap-1.5 font-medium text-red-700">
+              <XCircle className="h-4 w-4" />
+              <span>Documento inválido</span>
+            </p>
+            <p className="text-gray-700">{friendlyErrorMessage}</p>
+          </div>
+        ) : null}
+        {feedbackStatus === 'review' ? (
+          <div>
+            <p className="font-medium text-amber-700">Revisión requerida</p>
+            <p className="text-gray-700">{pendingMessage}</p>
+          </div>
+        ) : null}
+        {warningMessages.length > 0 ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+            <p className="text-sm font-medium text-amber-700">Advertencia</p>
+            {warningMessages.map((warning, idx) => (
+              <p key={`${warning}-${idx}`} className="text-sm text-amber-700">
+                {warning}
+              </p>
+            ))}
+          </div>
+        ) : null}
+        {feedbackStatus === 'pending' ? <p className="text-grayText">{pendingMessage}</p> : null}
+      </div>
     </Card>
   );
 }

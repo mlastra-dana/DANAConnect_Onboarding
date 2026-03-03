@@ -3,7 +3,9 @@ import { TenantConfig } from '../data/tenants';
 export type DocumentType = 'rif' | 'registroMercantil' | 'cedulaRepresentante';
 export type DocumentRecordType = DocumentType;
 export type RequiredDocumentType = 'rif' | 'registroMercantil';
-export type ValidationStatus = 'pending' | 'validating' | 'valid' | 'error';
+export type ValidationStatus = 'pending' | 'validating' | 'valid' | 'error' | 'warning' | 'review';
+export type ValidityStatus = 'ok' | 'warning' | 'unknown';
+export type SharpnessLabel = 'ok' | 'warning' | 'bad' | 'unknown';
 
 export type DocumentCheck = {
   label: string;
@@ -15,10 +17,25 @@ export type DocumentCheck = {
 export type DocumentValidationResult = {
   status: ValidationStatus;
   checks: DocumentCheck[];
+  typeStatus?: 'valid' | 'error' | 'review';
+  validityStatus?: ValidityStatus;
+  reasons?: string[];
+  warnings?: string[];
   uiStatus?: {
     state: 'ok' | 'error';
     title: string;
     message: string;
+  };
+  extracted?: {
+    hasText: boolean;
+    usedOcr: boolean;
+    confidence?: number;
+    keywordsFound?: string[];
+    datesFound?: string[];
+  };
+  quality?: {
+    sharpnessScore?: number;
+    sharpnessLabel: SharpnessLabel;
   };
   internalDiagnostics?: string[];
   isIdDocument?: boolean;

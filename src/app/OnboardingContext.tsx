@@ -85,11 +85,12 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
   }, [state]);
 
   const value = useMemo<ContextValue>(() => {
-    const baseDocumentsValid = Object.values(state.documents).every((doc) => doc.validation.status === 'valid');
+    const isAccepted = (status?: string) => status === 'valid' || status === 'warning';
+    const baseDocumentsValid = Object.values(state.documents).every((doc) => isAccepted(doc.validation.status));
     const representative1 = state.representatives.find((rep) => rep.id === 1);
     const representative2 = state.representatives.find((rep) => rep.id === 2);
-    const representative1Valid = representative1?.document.validation.status === 'valid';
-    const representative2Valid = !representative2?.enabled || representative2.document.validation.status === 'valid';
+    const representative1Valid = isAccepted(representative1?.document.validation.status);
+    const representative2Valid = !representative2?.enabled || isAccepted(representative2.document.validation.status);
     const allDocumentsValid = Boolean(baseDocumentsValid && representative1Valid && representative2Valid);
 
     return {
