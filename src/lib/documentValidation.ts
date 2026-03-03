@@ -273,12 +273,16 @@ export async function validateDocumentForSlot(file: File, slot: DocumentType): P
 
 export async function validateRifDocument(file: File): Promise<ValidationResult> {
   const detected = await detectDocType(file);
-  if (detected === 'CEDULA' || detected === 'MERCANTIL') {
+  if (detected === 'CEDULA' || detected === 'MERCANTIL' || detected === 'UNKNOWN') {
+    const reason =
+      detected === 'UNKNOWN'
+        ? 'No se pudo confirmar que el archivo corresponda a un RIF.'
+        : 'Este archivo no corresponde a un RIF.';
     return {
       status: 'invalid',
       category: 'rif',
-      confidence: 'high',
-      details: { reasons: ['Este archivo no corresponde a un RIF.'] }
+      confidence: detected === 'UNKNOWN' ? 'low' : 'high',
+      details: { reasons: [reason] }
     };
   }
   return {
@@ -291,12 +295,16 @@ export async function validateRifDocument(file: File): Promise<ValidationResult>
 
 export async function validateMercantilActaDocument(file: File): Promise<ValidationResult> {
   const detected = await detectDocType(file);
-  if (detected === 'RIF' || detected === 'CEDULA') {
+  if (detected === 'RIF' || detected === 'CEDULA' || detected === 'UNKNOWN') {
+    const reason =
+      detected === 'UNKNOWN'
+        ? 'No se pudo confirmar que el archivo corresponda a Registro Mercantil/Acta.'
+        : 'Este archivo no corresponde a Registro Mercantil/Acta.';
     return {
       status: 'invalid',
       category: 'mercantil_acta',
-      confidence: 'high',
-      details: { reasons: ['Este archivo no corresponde a Registro Mercantil/Acta.'] }
+      confidence: detected === 'UNKNOWN' ? 'low' : 'high',
+      details: { reasons: [reason] }
     };
   }
   return {
@@ -309,12 +317,16 @@ export async function validateMercantilActaDocument(file: File): Promise<Validat
 
 export async function validateCedulaDocument(file: File): Promise<ValidationResult> {
   const detected = await detectDocType(file);
-  if (detected === 'RIF' || detected === 'MERCANTIL') {
+  if (detected === 'RIF' || detected === 'MERCANTIL' || detected === 'UNKNOWN') {
+    const reason =
+      detected === 'UNKNOWN'
+        ? 'No se pudo confirmar que el archivo corresponda a una cédula.'
+        : 'Este archivo no corresponde a Cédula.';
     return {
       status: 'invalid',
       category: 'cedula',
-      confidence: 'high',
-      details: { reasons: ['Este archivo no corresponde a Cédula.'] }
+      confidence: detected === 'UNKNOWN' ? 'low' : 'high',
+      details: { reasons: [reason] }
     };
   }
   return {
