@@ -3,9 +3,9 @@ import { extractPdfText, renderPdfPageToCanvas } from './pdf/pdfUtils';
 
 export type SlotStatus = 'valid' | 'error' | 'warning';
 export type ValidationResult = {
-  status: SlotStatus;
+  status: 'valid' | 'invalid';
   category: 'rif' | 'mercantil_acta' | 'cedula';
-  confidence: number;
+  confidence: 'high' | 'low';
   details: {
     reasons: string[];
     extracted?: {
@@ -23,6 +23,8 @@ export type ValidationResult = {
     warnings?: string[];
   };
 };
+
+type DetectedKind = 'rif' | 'cedula' | 'mercantil' | 'unknown';
 
 export type SlotValidationResult = {
   status: SlotStatus;
@@ -269,308 +271,173 @@ export async function validateDocumentForSlot(file: File, slot: DocumentType): P
 }
 
 export async function validateRifDocument(file: File): Promise<ValidationResult> {
-  const warnings: string[] = [];
-  const isPdf = file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf');
-  const isImage = file.type.startsWith('image/');
-
-  if (!isPdf && !isImage) {
-    return {
-      status: 'error',
-      category: 'rif',
-      confidence: 0,
-      details: {
-        reasons: ['Archivo no permitido para validar RIF.']
-      }
-    };
-  }
-
-  const analysisCanvas = isPdf ? await buildPdfCanvas(file, 1, MAX_IMAGE_WIDTH) : await buildImageCanvas(file, MAX_IMAGE_WIDTH);
-  const sharpnessScore = computeSharpness(analysisCanvas);
-  const sharpnessLabel = classifySharpness(sharpnessScore);
-
-  const initialText = isPdf ? (await extractPdfText(file, 1)) ?? '' : '';
-  const initialClassification = classifyTextAsRif(initialText);
-  const hasStrongInitialSignals = initialClassification.valid && initialClassification.score >= 8;
-
-  let text = initialText;
-  let usedOcr = false;
-  let confidence = initialClassification.confidence;
-
-  if (!hasStrongInitialSignals) {
-    if (isImage || file.size <= OCR_MAX_BYTES) {
-      const ocr = await runOcrLight(analysisCanvas, OCR_TIMEOUT_MS);
-      usedOcr = true;
-      if (ocr.text) text = `${text} ${ocr.text}`.trim();
-      if (typeof ocr.confidence === 'number') {
-        confidence = Math.max(confidence, clamp01(ocr.confidence / 100));
-      }
-    }
-  }
-
-  const classification = classifyTextAsRif(text);
-  const normalized = normalize(text);
-  const hasText = normalized.length >= TEXT_MIN_LENGTH;
-
-  if (!hasText || !classification.valid) {
-    return {
-      status: 'error',
-      category: 'rif',
-      confidence: classification.confidence,
-      details: {
-        reasons: [classification.reason],
-        extracted: {
-          text: text.slice(0, 320),
-          rifMatches: classification.rifMatches,
-          keywordsFound: classification.keywordsFound,
-          datesFound: findAllDateStrings(text),
-          hasText,
-          usedOcr,
-          score: classification.score,
-          sharpnessScore: round(sharpnessScore),
-          sharpnessLabel
-        },
-        warnings: warnings.length > 0 ? warnings : undefined
-      }
-    };
-  }
-
-  const { expiry } = parseExpiry(text);
-  if (expiry && expiry.getTime() < Date.now()) {
-    warnings.push('RIF no vigente (verificar).');
-  }
-
-  return {
-    status: warnings.length > 0 ? 'warning' : 'valid',
-    category: 'rif',
-    confidence: classification.confidence,
-    details: {
-      reasons: ['Se detectó un RIF del SENIAT.'],
-      extracted: {
-        text: text.slice(0, 320),
-        rifMatches: classification.rifMatches,
-        keywordsFound: classification.keywordsFound,
-        datesFound: findAllDateStrings(text),
-        hasText: true,
-        usedOcr,
-        score: classification.score,
-        sharpnessScore: round(sharpnessScore),
-        sharpnessLabel
-      },
-      warnings: warnings.length > 0 ? warnings : undefined
-    }
-  };
+  return validateDemoBySlot(file, 'rif');
 }
 
 export async function validateMercantilActaDocument(file: File): Promise<ValidationResult> {
+  return validateDemoBySlot(file, 'mercantil_acta');
+}
+
+export async function validateCedulaDocument(file: File): Promise<ValidationResult> {
+  return validateDemoBySlot(file, 'cedula');
+}
+
+async function validateDemoBySlot(file: File, expected: ValidationResult['category']): Promise<ValidationResult> {
   const isPdf = file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf');
   const isImage = file.type.startsWith('image/');
-
   if (!isPdf && !isImage) {
     return {
-      status: 'error',
-      category: 'mercantil_acta',
-      confidence: 0,
+      status: 'invalid',
+      category: expected,
+      confidence: 'high',
       details: {
-        reasons: ['Documento no corresponde a Registro Mercantil/Acta.']
+        reasons: [invalidMessageFor(expected)]
       }
     };
   }
 
-  const analysisCanvas = isPdf ? await buildPdfCanvas(file, 1, MAX_IMAGE_WIDTH) : await buildImageCanvas(file, MAX_IMAGE_WIDTH);
-  const sharpnessScore = computeSharpness(analysisCanvas);
-  const sharpnessLabel = classifySharpness(sharpnessScore);
+  const extracted = await extractSupportTextForDemo(file);
+  const normalized = normalize(extracted.text);
 
-  const initialText = isPdf ? (await extractPdfText(file, 1)) ?? '' : '';
-  const initialClassification = classifyTextAsMercantilActa(initialText);
-  const hasStrongInitialSignals = initialClassification.score >= 0.78 && initialClassification.valid;
-
-  let text = initialText;
-  let usedOcr = false;
-  let confidence = initialClassification.confidence;
-
-  if (!hasStrongInitialSignals && (isImage || file.size <= OCR_MAX_BYTES)) {
-    const ocr = await runOcrLight(analysisCanvas, OCR_TIMEOUT_MS);
-    usedOcr = true;
-    if (ocr.text) text = `${text} ${ocr.text}`.trim();
-    if (typeof ocr.confidence === 'number') {
-      confidence = Math.max(confidence, clamp01(ocr.confidence / 100));
-    }
-  }
-
-  const normalized = normalize(text).replace(/\s+/g, ' ').trim();
-  if (!normalized) {
+  if (!normalized.trim()) {
     return {
-      status: 'error',
-      category: 'mercantil_acta',
-      confidence: 0,
+      status: 'valid',
+      category: expected,
+      confidence: 'low',
       details: {
-        reasons: ['No pudimos validar este documento. Prueba con otra versión o una imagen más nítida.'],
+        reasons: ['Documento aceptado.'],
         extracted: {
           text: '',
-          mercantilSignals: [],
-          keywordsFound: [],
-          datesFound: [],
           hasText: false,
-          usedOcr,
-          score: 0,
-          sharpnessScore: round(sharpnessScore),
-          sharpnessLabel
+          usedOcr: extracted.usedOcr,
+          keywordsFound: [],
+          datesFound: []
         }
       }
     };
   }
 
-  const classification = classifyTextAsMercantilActa(normalized);
-  if (!classification.valid) {
+  const detected = detectStrongDocumentKind(normalized);
+  if (expected === 'rif' && detected === 'unknown') {
+    const cedulaEvidence = findPhraseMatches(normalized, ['CEDULA', 'IDENTIDAD', 'REPUBLICA BOLIVARIANA', 'VENEZOLANO', 'APELLIDOS', 'NOMBRES'], 0.5);
+    const mercantilEvidence = findPhraseMatches(
+      normalized,
+      ['REGISTRO MERCANTIL', 'ACTA', 'ASAMBLEA', 'JUNTA DIRECTIVA', 'TOMO', 'FOLIO', 'NOTARIA'],
+      0.5
+    );
+    if (cedulaEvidence.length >= 2 || mercantilEvidence.length >= 2) {
+      return {
+        status: 'invalid',
+        category: expected,
+        confidence: 'high',
+        details: {
+          reasons: [invalidMessageFor(expected)],
+          extracted: {
+            text: extracted.text.slice(0, 320),
+            hasText: true,
+            usedOcr: extracted.usedOcr,
+            keywordsFound: [],
+            datesFound: findAllDateStrings(extracted.text)
+          }
+        }
+      };
+    }
+  }
+  if (detected !== 'unknown' && detected !== kindForCategory(expected)) {
     return {
-      status: 'error',
-      category: 'mercantil_acta',
-      confidence: classification.confidence,
+      status: 'invalid',
+      category: expected,
+      confidence: 'high',
       details: {
-        reasons: [classification.reason],
+        reasons: [invalidMessageFor(expected)],
         extracted: {
-          text: text.slice(0, 320),
-          mercantilSignals: classification.mercantilSignals,
-          keywordsFound: classification.keywordsFound,
-          datesFound: findAllDateStrings(text),
+          text: extracted.text.slice(0, 320),
           hasText: true,
-          usedOcr,
-          score: round(classification.score * 100),
-          sharpnessScore: round(sharpnessScore),
-          sharpnessLabel
+          usedOcr: extracted.usedOcr,
+          keywordsFound: [],
+          datesFound: findAllDateStrings(extracted.text)
         }
       }
     };
   }
 
+  const confidence: 'high' | 'low' = detected === kindForCategory(expected) ? 'high' : 'low';
   return {
     status: 'valid',
-    category: 'mercantil_acta',
-    confidence: classification.confidence,
+    category: expected,
+    confidence,
     details: {
-      reasons: ['Documento corresponde a Registro Mercantil/Acta.'],
+      reasons: ['Documento aceptado.'],
       extracted: {
-        text: text.slice(0, 320),
-        mercantilSignals: classification.mercantilSignals,
-        keywordsFound: classification.keywordsFound,
-        datesFound: findAllDateStrings(text),
+        text: extracted.text.slice(0, 320),
         hasText: true,
-        usedOcr,
-        score: round(classification.score * 100),
-        sharpnessScore: round(sharpnessScore),
-        sharpnessLabel
+        usedOcr: extracted.usedOcr,
+        keywordsFound: [],
+        datesFound: findAllDateStrings(extracted.text)
       }
     }
   };
 }
 
-export async function validateCedulaDocument(file: File): Promise<ValidationResult> {
-  const warnings: string[] = [];
+async function extractSupportTextForDemo(file: File) {
   const isPdf = file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf');
-  const isImage = file.type.startsWith('image/');
+  let text = '';
+  let usedOcr = false;
 
-  if (!isPdf && !isImage) {
-    return {
-      status: 'error',
-      category: 'cedula',
-      confidence: 0,
-      details: {
-        reasons: ['Documento no corresponde a una cédula venezolana.']
-      }
-    };
+  if (isPdf) {
+    text = (await extractPdfText(file, 1)) ?? '';
   }
 
-  const analysisCanvas = isPdf ? await buildPdfCanvas(file, 1, MAX_IMAGE_WIDTH) : await buildImageCanvas(file, MAX_IMAGE_WIDTH);
-  const sharpnessScore = computeSharpness(analysisCanvas);
-  const sharpnessLabel = classifySharpness(sharpnessScore);
-
-  const initialText = isPdf ? (await extractPdfText(file, 1)) ?? '' : '';
-  const initialClassification = classifyTextAsCedula(initialText);
-  const hasStrongInitialSignals = initialClassification.valid && initialClassification.score >= 0.78;
-
-  let text = initialText;
-  let usedOcr = false;
-  let confidence = initialClassification.confidence;
-
-  if (!hasStrongInitialSignals && (isImage || file.size <= OCR_MAX_BYTES)) {
-    const ocr = await runOcrLight(analysisCanvas, OCR_TIMEOUT_MS);
+  const normalized = normalize(text);
+  const needsOcr = normalized.length < TEXT_MIN_LENGTH && file.size <= OCR_MAX_BYTES;
+  if (needsOcr) {
+    const canvas = isPdf ? await buildPdfCanvas(file, 1, MAX_IMAGE_WIDTH) : await buildImageCanvas(file, MAX_IMAGE_WIDTH);
+    const ocr = await runOcrLight(canvas, OCR_TIMEOUT_MS);
     usedOcr = true;
     if (ocr.text) text = `${text} ${ocr.text}`.trim();
-    if (typeof ocr.confidence === 'number') {
-      confidence = Math.max(confidence, clamp01(ocr.confidence / 100));
-    }
   }
 
-  const normalized = normalize(text).replace(/\s+/g, ' ').trim();
-  if (!normalized) {
-    return {
-      status: 'error',
-      category: 'cedula',
-      confidence: 0,
-      details: {
-        reasons: ['No pudimos validar este documento. Prueba con otra versión o una imagen más nítida.'],
-        extracted: {
-          text: '',
-          keywordsFound: [],
-          datesFound: [],
-          hasText: false,
-          usedOcr,
-          score: 0,
-          sharpnessScore: round(sharpnessScore),
-          sharpnessLabel
-        },
-        warnings: warnings.length > 0 ? warnings : undefined
-      }
-    };
-  }
+  return { text, usedOcr };
+}
 
-  const classification = classifyTextAsCedula(normalized);
-  if (!classification.valid) {
-    return {
-      status: 'error',
-      category: 'cedula',
-      confidence: classification.confidence,
-      details: {
-        reasons: [classification.reason],
-        extracted: {
-          text: text.slice(0, 320),
-          keywordsFound: classification.keywordsFound,
-          datesFound: findAllDateStrings(text),
-          hasText: true,
-          usedOcr,
-          score: round(classification.score * 100),
-          sharpnessScore: round(sharpnessScore),
-          sharpnessLabel
-        },
-        warnings: warnings.length > 0 ? warnings : undefined
-      }
-    };
-  }
+function detectStrongDocumentKind(text: string): DetectedKind {
+  const cedulaHits = findPhraseMatches(
+    text,
+    ['CEDULA DE IDENTIDAD', 'REPUBLICA BOLIVARIANA', 'VENEZOLANO', 'APELLIDOS', 'NOMBRES', 'IDENTIDAD'],
+    0.5
+  );
+  const isCedula = cedulaHits.length >= 2 || (cedulaHits.some((x) => x.includes('APELLIDOS')) && cedulaHits.some((x) => x.includes('NOMBRES')));
+  if (isCedula) return 'cedula';
 
-  const { expiry } = parseExpiry(text);
-  if (expiry && expiry.getTime() < Date.now()) {
-    warnings.push('Cédula no vigente (verificar).');
-  }
+  const rifHits = findPhraseMatches(
+    text,
+    ['SENIAT', 'REGISTRO DE INFORMACION FISCAL', 'REGISTRO UNICO DE INFORMACION FISCAL', 'COMPROBANTE DE INSCRIPCION', 'RIF'],
+    0.6
+  );
+  const isRif = rifHits.length >= 2 || /\b[JVEGPC]\s*[-]?\s*\d{7,9}\s*[-]?\s*\d\b/.test(text);
+  if (isRif) return 'rif';
 
-  return {
-    status: warnings.length > 0 ? 'warning' : 'valid',
-    category: 'cedula',
-    confidence: classification.confidence,
-    details: {
-      reasons: ['Documento corresponde a una cédula venezolana.'],
-      extracted: {
-        text: text.slice(0, 320),
-        keywordsFound: classification.keywordsFound,
-        datesFound: findAllDateStrings(text),
-        hasText: true,
-        usedOcr,
-        score: round(classification.score * 100),
-        sharpnessScore: round(sharpnessScore),
-        sharpnessLabel
-      },
-      warnings: warnings.length > 0 ? warnings : undefined
-    }
-  };
+  const mercantilHits = findPhraseMatches(
+    text,
+    ['REGISTRO MERCANTIL', 'ACTA', 'ASAMBLEA', 'JUNTA DIRECTIVA', 'TOMO', 'FOLIO', 'NOTARIA', 'PROTOCOLO'],
+    0.5
+  );
+  const isMercantil = mercantilHits.length >= 2;
+  if (isMercantil) return 'mercantil';
+
+  return 'unknown';
+}
+
+function kindForCategory(category: ValidationResult['category']): Exclude<DetectedKind, 'unknown'> {
+  if (category === 'rif') return 'rif';
+  if (category === 'cedula') return 'cedula';
+  return 'mercantil';
+}
+
+function invalidMessageFor(category: ValidationResult['category']) {
+  if (category === 'rif') return 'Este archivo no corresponde a RIF.';
+  if (category === 'cedula') return 'Este archivo no corresponde a Cédula.';
+  return 'Este archivo no corresponde a Registro Mercantil/Acta.';
 }
 
 export async function extractTextFromPdf(file: File) {
@@ -665,16 +532,16 @@ export function computeSharpness(input: HTMLCanvasElement | ImageData) {
 function mapRifValidationToSlot(result: ValidationResult): SlotValidationResult {
   const extracted = result.details.extracted;
   return {
-    status: result.status,
+    status: result.status === 'invalid' ? 'error' : 'valid',
     messages:
-      result.status === 'error'
-        ? [`Documento rechazado: ${result.details.reasons[0] ?? 'no corresponde a RIF.'}`]
+      result.status === 'invalid'
+        ? [result.details.reasons[0] ?? 'Este archivo no corresponde a RIF.']
         : ['Documento aceptado.'],
-    warnings: result.details.warnings ?? [],
+    warnings: [],
     extracted: {
       hasText: extracted?.hasText ?? false,
       usedOcr: extracted?.usedOcr ?? false,
-      confidence: result.confidence,
+      confidence: result.confidence === 'high' ? 0.9 : 0.45,
       keywordsFound: extracted?.keywordsFound ?? [],
       datesFound: extracted?.datesFound ?? []
     },
@@ -683,7 +550,7 @@ function mapRifValidationToSlot(result: ValidationResult): SlotValidationResult 
       sharpnessLabel: extracted?.sharpnessLabel ?? 'unknown'
     },
     score: extracted?.score ?? 0,
-    validityStatus: result.status === 'error' ? 'unknown' : result.status === 'warning' ? 'warning' : 'ok'
+    validityStatus: 'unknown'
   };
 }
 
@@ -693,16 +560,16 @@ function mapMercantilValidationToSlot(result: ValidationResult): SlotValidationR
   const reason = result.details.reasons[0] ?? '';
   const errorMessage = reason && reason !== defaultError ? `${defaultError} ${reason}` : defaultError;
   return {
-    status: result.status,
+    status: result.status === 'invalid' ? 'error' : 'valid',
     messages:
-      result.status === 'error'
+      result.status === 'invalid'
         ? [errorMessage]
         : ['Documento aceptado.'],
-    warnings: result.details.warnings ?? [],
+    warnings: [],
     extracted: {
       hasText: extracted?.hasText ?? false,
       usedOcr: extracted?.usedOcr ?? false,
-      confidence: result.confidence,
+      confidence: result.confidence === 'high' ? 0.9 : 0.45,
       keywordsFound: extracted?.keywordsFound ?? [],
       datesFound: extracted?.datesFound ?? []
     },
@@ -711,7 +578,7 @@ function mapMercantilValidationToSlot(result: ValidationResult): SlotValidationR
       sharpnessLabel: extracted?.sharpnessLabel ?? 'unknown'
     },
     score: extracted?.score ?? 0,
-    validityStatus: result.status === 'error' ? 'unknown' : result.status === 'warning' ? 'warning' : 'ok'
+    validityStatus: 'unknown'
   };
 }
 
@@ -720,13 +587,13 @@ function mapCedulaValidationToSlot(result: ValidationResult): SlotValidationResu
   const defaultError = 'Documento no corresponde a una cédula venezolana.';
   const errorMessage = result.details.reasons[0] ?? defaultError;
   return {
-    status: result.status,
-    messages: result.status === 'error' ? [errorMessage] : ['Documento aceptado.'],
-    warnings: result.details.warnings ?? [],
+    status: result.status === 'invalid' ? 'error' : 'valid',
+    messages: result.status === 'invalid' ? [errorMessage] : ['Documento aceptado.'],
+    warnings: [],
     extracted: {
       hasText: extracted?.hasText ?? false,
       usedOcr: extracted?.usedOcr ?? false,
-      confidence: result.confidence,
+      confidence: result.confidence === 'high' ? 0.9 : 0.45,
       keywordsFound: extracted?.keywordsFound ?? [],
       datesFound: extracted?.datesFound ?? []
     },
@@ -735,7 +602,7 @@ function mapCedulaValidationToSlot(result: ValidationResult): SlotValidationResu
       sharpnessLabel: extracted?.sharpnessLabel ?? 'unknown'
     },
     score: extracted?.score ?? 0,
-    validityStatus: result.status === 'error' ? 'unknown' : result.status === 'warning' ? 'warning' : 'ok'
+    validityStatus: 'unknown'
   };
 }
 
@@ -824,8 +691,23 @@ export function classifyTextAsMercantilActa(rawText: string) {
   const dateMatches = findAllDateStrings(text);
   const alphaNumericOnly = text.replace(/\s+/g, '').match(/^[0-9:/.-]+$/);
   const hasAnyKeyword = keywordHits.length > 0 || legalHits.length > 0 || mercantilSignals.length > 0;
+  const hasMercantilCore =
+    (text.includes('REGISTRO') && text.includes('MERCANTIL')) ||
+    text.includes('ACTA CONSTITUTIVA') ||
+    (text.includes('TOMO') && text.includes('FOLIO')) ||
+    text.includes('PROTOCOLO');
 
   if (alphaNumericOnly || !hasAnyKeyword) {
+    if (hasMercantilCore) {
+      return {
+        valid: true,
+        score: 0.42,
+        confidence: 0.42,
+        reason: '',
+        keywordsFound: keywordHits,
+        mercantilSignals
+      };
+    }
     return {
       valid: false,
       score: 0.1,
@@ -854,11 +736,15 @@ export function classifyTextAsMercantilActa(rawText: string) {
   if (legalHits.length >= 1) score += 0.08;
   if (legalHits.length >= 2) score += 0.04;
   if (text.includes('C.A.') || text.includes(' C A ') || text.includes('SOCIEDAD')) score += 0.06;
+  if (hasMercantilCore) score += 0.12;
 
   const penalty = Math.min(cedulaHits.length * 0.25 + rifHits.length * 0.3, 0.7);
   const normalizedScore = clamp01(score - penalty);
   const hasActaFamilySignals = mercantilSignals.length >= 1;
-  const valid = normalizedScore >= 0.35 && hasActaFamilySignals && (keywordHits.length >= 2 || legalHits.length >= 1 || dateMatches.length >= 1);
+  const valid =
+    normalizedScore >= 0.32 &&
+    (hasActaFamilySignals || hasMercantilCore) &&
+    (keywordHits.length >= 1 || legalHits.length >= 1 || dateMatches.length >= 1 || hasMercantilCore);
 
   return {
     valid,
@@ -889,10 +775,12 @@ export function classifyTextAsCedula(rawText: string) {
   const rifPatternHits = findRifMatches(text);
   const cedulaPatternDirect = findCedulaMatches(text);
   const bareNumberWithContext = findCedulaBareNumbersWithContext(text);
+  const cedulaDottedNumber = findCedulaDottedNumber(text);
+  const hasCedulaNumber = cedulaPatternDirect.length > 0 || bareNumberWithContext.length > 0 || cedulaDottedNumber.length > 0;
   const strongSignals = [
-    positiveHits.includes('CEDULA DE IDENTIDAD'),
-    positiveHits.includes('REPUBLICA BOLIVARIANA DE VENEZUELA'),
-    cedulaPatternDirect.length > 0 || bareNumberWithContext.length > 0
+    positiveHits.some((x) => x.includes('CEDULA DE IDENTIDAD')) || text.includes('CEDULA') || text.includes('IDENTIDAD'),
+    positiveHits.some((x) => x.includes('REPUBLICA BOLIVARIANA DE VENEZUELA')) || text.includes('REPUBLICA') || text.includes('VENEZUELA'),
+    hasCedulaNumber
   ].filter(Boolean).length;
 
   if (rifHits.length >= 1 || rifPatternHits.length > 0) {
@@ -920,14 +808,17 @@ export function classifyTextAsCedula(rawText: string) {
   score += Math.min(fieldHits.length, 3) * 0.07;
   if (cedulaPatternDirect.length > 0) score += 0.22;
   if (bareNumberWithContext.length > 0) score += 0.12;
+  if (cedulaDottedNumber.length > 0) score += 0.16;
   if (text.includes('IDENTIDAD')) score += 0.08;
+  if (text.includes('CEDULA')) score += 0.08;
+  if (text.includes('APELLIDOS') || text.includes('NOMBRES')) score += 0.08;
 
   const penalty = Math.min(mercantilHits.length * 0.25 + rifHits.length * 0.3, 0.75);
   const normalizedScore = clamp01(score - penalty);
   const hasIdCore = positiveHits.includes('CEDULA DE IDENTIDAD') || text.includes('IDENTIDAD');
-  const hasDocumentNumber = cedulaPatternDirect.length > 0 || bareNumberWithContext.length > 0;
+  const hasDocumentNumber = hasCedulaNumber;
   const valid =
-    normalizedScore >= 0.35 &&
+    normalizedScore >= 0.28 &&
     (strongSignals >= 2 || (strongSignals >= 1 && hasIdCore && hasDocumentNumber));
 
   return {
@@ -1232,6 +1123,22 @@ function findCedulaBareNumbersWithContext(text: string) {
     }
   }
   return [...new Set(valid)];
+}
+
+function findCedulaDottedNumber(text: string) {
+  const matches = text.match(/\b[VE]?\s?\d{1,2}[.\s]\d{3}[.\s]\d{3}\b/g);
+  if (!matches) return [];
+  const contextHints = ['CEDULA', 'IDENTIDAD', 'VENEZOLANO', 'APELLIDOS', 'NOMBRES'];
+  return [
+    ...new Set(
+      matches.filter((token) => {
+        const idx = text.indexOf(token);
+        if (idx < 0) return false;
+        const context = text.slice(Math.max(0, idx - 50), idx + 50);
+        return contextHints.some((hint) => context.includes(hint));
+      })
+    )
+  ];
 }
 
 function findAllDateStrings(text: string) {

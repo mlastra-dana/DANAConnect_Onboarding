@@ -43,19 +43,19 @@ export async function validateDocumentFile(
   const result = await validateDocumentForSlot(file, type);
   onProgress?.(100);
 
-  const mappedStatus = result.status === 'warning' ? 'warning' : result.status;
+  const mappedStatus = result.status === 'error' ? 'error' : 'valid';
   const userMessage = result.messages[0] ?? 'Documento aceptado.';
 
   return {
     status: mappedStatus,
-    typeStatus: result.status === 'warning' ? 'valid' : result.status,
+    typeStatus: result.status === 'error' ? 'error' : 'valid',
     validityStatus: result.validityStatus,
     checks,
     reasons: result.messages,
     warnings: result.warnings,
     uiStatus: {
       state: result.status === 'error' ? 'error' : 'ok',
-      title: result.status === 'error' ? 'Con errores' : result.status === 'warning' ? 'Advertencia' : 'Validación completada',
+      title: result.status === 'error' ? 'Con errores' : 'Documento aceptado.',
       message: userMessage
     },
     extracted: {

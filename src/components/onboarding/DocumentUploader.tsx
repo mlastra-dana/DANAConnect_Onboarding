@@ -55,6 +55,12 @@ export function DocumentUploader({
     docRecord.validation.uiStatus?.message || 'No pudimos validar este documento. Verifique que sea legible e intente nuevamente.';
   const pendingMessage = docRecord.validation.uiStatus?.message || 'Aún no hay validaciones ejecutadas.';
   const warningMessages = docRecord.validation.warnings ?? [];
+  const fileContainerClass =
+    feedbackStatus === 'valid'
+      ? 'border-green-200 bg-green-50/40'
+      : feedbackStatus === 'error'
+        ? 'border-red-200 bg-red-50/30'
+        : 'border-borderLight';
 
   async function handleFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
@@ -153,7 +159,7 @@ export function DocumentUploader({
       </div>
 
       {docRecord.fileName ? (
-        <div className="rounded-xl border border-borderLight p-3">
+        <div className={`rounded-xl border p-3 ${fileContainerClass}`}>
           <FileAttachmentChip fileName={docRecord.fileName} status={docRecord.validation.status} onRemove={handleRemoveClick} />
           {docRecord.fileType?.includes('pdf') ? (
             previewFile ? (
@@ -179,7 +185,7 @@ export function DocumentUploader({
         {feedbackStatus === 'valid' ? (
           <p className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700">
             <CheckCircle className="h-4 w-4" />
-            <span>Documento válido</span>
+            <span>Documento aceptado.</span>
           </p>
         ) : null}
         {feedbackStatus === 'warning' ? (
