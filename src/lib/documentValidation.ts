@@ -295,22 +295,33 @@ export async function validateRifDocument(file: File): Promise<ValidationResult>
 
 export async function validateMercantilActaDocument(file: File): Promise<ValidationResult> {
   const detected = await detectDocType(file);
-  if (detected === 'RIF' || detected === 'CEDULA' || detected === 'UNKNOWN') {
+  if (detected === 'RIF' || detected === 'CEDULA') {
     const reason =
-      detected === 'UNKNOWN'
-        ? 'No se pudo confirmar que el archivo corresponda a Registro Mercantil/Acta.'
-        : 'Este archivo no corresponde a Registro Mercantil/Acta.';
+      'Este archivo no corresponde a Registro Mercantil/Acta.';
     return {
       status: 'invalid',
       category: 'mercantil_acta',
-      confidence: detected === 'UNKNOWN' ? 'low' : 'high',
+      confidence: 'high',
       details: { reasons: [reason] }
     };
   }
+
+  if (detected === 'UNKNOWN') {
+    return {
+      status: 'valid',
+      category: 'mercantil_acta',
+      confidence: 'low',
+      details: {
+        reasons: ['Documento aceptado.'],
+        warnings: ['No se pudo confirmar completamente el contenido. Se acepta con validación flexible para Registro Mercantil.']
+      }
+    };
+  }
+
   return {
     status: 'valid',
     category: 'mercantil_acta',
-    confidence: detected === 'MERCANTIL' ? 'high' : 'low',
+    confidence: 'high',
     details: { reasons: ['Documento aceptado.'] }
   };
 }
@@ -515,13 +526,25 @@ function mapMercantilValidationToSlot(result: ValidationResult): SlotValidationR
   const defaultError = 'Documento no corresponde a Registro Mercantil/Acta.';
   const reason = result.details.reasons[0] ?? '';
   const errorMessage = reason && reason !== defaultError ? `${defaultError} ${reason}` : defaultError;
+  const warnings = [...(result.details.warnings ?? [])];
+  const status: SlotStatus =
+    result.status === 'invalid'
+      ? 'error'
+      : warnings.length > 0 || result.confidence === 'low'
+        ? 'warning'
+        : 'valid';
+
+  if (status === 'warning' && warnings.length === 0) {
+    warnings.push('Documento aceptado con validación flexible de Registro Mercantil.');
+  }
+
   return {
-    status: result.status === 'invalid' ? 'error' : 'valid',
+    status,
     messages:
       result.status === 'invalid'
         ? [errorMessage]
         : ['Documento aceptado.'],
-    warnings: [],
+    warnings,
     extracted: {
       hasText: extracted?.hasText ?? false,
       usedOcr: extracted?.usedOcr ?? false,
