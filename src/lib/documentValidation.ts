@@ -70,17 +70,13 @@ const RIF_NEGATIVE_ID_KEYWORDS = [
 ] as const;
 const RIF_NEGATIVE_MERCANTIL_KEYWORDS = [
   'REGISTRO MERCANTIL',
-  'ACTA',
-  'ASAMBLEA',
   'JUNTA DIRECTIVA',
   'TOMO',
   'FOLIO'
 ] as const;
 const MERCANTIL_POSITIVE_KEYWORDS = [
   'REGISTRO MERCANTIL',
-  'ACTA CONSTITUTIVA',
-  'ACTA',
-  'ASAMBLEA',
+  'DOCUMENTO CONSTITUTIVO',
   'JUNTA DIRECTIVA',
   'CERTIFICA',
   'PROTOCOLO',
@@ -97,7 +93,7 @@ const MERCANTIL_POSITIVE_KEYWORDS = [
   'COMPANIA'
 ] as const;
 const MERCANTIL_LEGAL_KEYWORDS = ['ARTICULO', 'CLAUSULA', 'ESTATUTOS'] as const;
-const MERCANTIL_ACTA_SIGNALS = ['ACTA', 'ASAMBLEA', 'JUNTA DIRECTIVA', 'ACTA CONSTITUTIVA', 'REGISTRO MERCANTIL'] as const;
+const MERCANTIL_ACTA_SIGNALS = ['REGISTRO MERCANTIL', 'DOCUMENTO CONSTITUTIVO', 'ESTATUTOS', 'PROTOCOLO', 'TOMO', 'FOLIO', 'REGISTRADOR'] as const;
 const MERCANTIL_NEGATIVE_CEDULA_KEYWORDS = ['CEDULA DE IDENTIDAD', 'REPUBLICA BOLIVARIANA', 'VENEZOLANO', 'HUELLA', 'APELLIDOS'] as const;
 const MERCANTIL_NEGATIVE_RIF_KEYWORDS = ['SENIAT', 'REGISTRO DE INFORMACION FISCAL', 'REGISTRO UNICO DE INFORMACION FISCAL'] as const;
 const CEDULA_POSITIVE_KEYWORDS = [
@@ -109,7 +105,7 @@ const CEDULA_POSITIVE_KEYWORDS = [
 ] as const;
 const CEDULA_FIELD_KEYWORDS = ['F NACIMIENTO', 'FECHA DE NACIMIENTO', 'F EXPEDICION', 'FECHA DE EXPEDICION', 'F VENCIMIENTO', 'FECHA DE VENCIMIENTO'] as const;
 const CEDULA_NEGATIVE_RIF_KEYWORDS = ['SENIAT', 'REGISTRO DE INFORMACION FISCAL', 'REGISTRO UNICO DE INFORMACION FISCAL', 'RIF'] as const;
-const CEDULA_NEGATIVE_MERCANTIL_KEYWORDS = ['REGISTRO MERCANTIL', 'ACTA', 'ASAMBLEA', 'TOMO', 'FOLIO'] as const;
+const CEDULA_NEGATIVE_MERCANTIL_KEYWORDS = ['REGISTRO MERCANTIL', 'DOCUMENTO CONSTITUTIVO', 'TOMO', 'FOLIO'] as const;
 
 const SLOT_KEYWORDS = {
   rif: {
@@ -118,21 +114,21 @@ const SLOT_KEYWORDS = {
     expiryHints: ['VENCE', 'VENCIMIENTO', 'HASTA', 'CADUCA', 'FECHA DE VENCIMIENTO', 'FECHA']
   },
   registroMercantil: {
-    strong: ['REGISTRO MERCANTIL', 'ACTA CONSTITUTIVA', 'DOCUMENTO CONSTITUTIVO', 'ESTATUTOS'],
-    accepted: ['ASAMBLEA', 'ACTA DE ASAMBLEA', 'JUNTA DIRECTIVA', 'RATIFICA', 'CONSTITUCION', 'TOMO', 'FOLIO', 'PROTOCOLO'],
+    strong: ['REGISTRO MERCANTIL', 'DOCUMENTO CONSTITUTIVO', 'ESTATUTOS'],
+    accepted: ['JUNTA DIRECTIVA', 'RATIFICA', 'CONSTITUCION', 'TOMO', 'FOLIO', 'PROTOCOLO', 'REGISTRADOR'],
     anti: ['SENIAT', 'RIF', 'CEDULA DE IDENTIDAD', 'SAIME'],
     emissionHints: ['FECHA', 'OTORGADO', 'REGISTRADO']
   },
   cedulaRepresentante: {
     strong: ['REPUBLICA BOLIVARIANA DE VENEZUELA', 'CEDULA DE IDENTIDAD', 'SAIME'],
-    anti: ['SENIAT', 'RIF', 'REGISTRO MERCANTIL', 'ACTA CONSTITUTIVA'],
+    anti: ['SENIAT', 'RIF', 'REGISTRO MERCANTIL', 'DOCUMENTO CONSTITUTIVO'],
     expiryHints: ['VENCE', 'VENCIMIENTO', 'FECHA DE VENCIMIENTO']
   }
 } as const;
 
 const FILE_HINTS: Record<DocumentType, RegExp[]> = {
   rif: [/rif/i, /seniat/i],
-  registroMercantil: [/acta/i, /mercantil/i, /asamblea/i, /constitutiv/i],
+  registroMercantil: [/mercantil/i, /constitutiv/i, /estatuto/i, /registro/i],
   cedulaRepresentante: [/cedula/i, /saime/i, /identidad/i]
 };
 
@@ -307,7 +303,7 @@ export async function validateMercantilActaDocument(file: File): Promise<Validat
   }
 
   if (detected === 'UNKNOWN') {
-    const mercantilWarning = await buildMercantilFlexibleWarning(file);
+    const mercantilWarning = await buildMercantilQualityWarning(file);
     return {
       status: 'valid',
       category: 'mercantil_acta',
@@ -327,10 +323,10 @@ export async function validateMercantilActaDocument(file: File): Promise<Validat
   };
 }
 
-async function buildMercantilFlexibleWarning(file: File): Promise<string> {
+async function buildMercantilQualityWarning(file: File): Promise<string> {
   const isPdf = file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf');
   const isImage = file.type.startsWith('image/');
-  if (!isPdf && !isImage) return 'Validación flexible: lectura limitada.';
+  if (!isPdf && !isImage) return 'Se identifica como Registro Mercantil con lectura parcial.';
 
   try {
     const canvas = isPdf
@@ -338,13 +334,13 @@ async function buildMercantilFlexibleWarning(file: File): Promise<string> {
       : await buildImageCanvas(file, MAX_IMAGE_WIDTH);
     const sharpness = computeSharpness(canvas);
     if (classifySharpness(sharpness) === 'warning') {
-      return 'Validación flexible por calidad baja.';
+      return 'Se identifica como Registro Mercantil, pero la calidad es baja.';
     }
   } catch {
     // Fallback to generic cause when quality cannot be measured.
   }
 
-  return 'Validación flexible por lectura limitada.';
+  return 'Se identifica como Registro Mercantil con lectura parcial.';
 }
 
 export async function validateCedulaDocument(file: File): Promise<ValidationResult> {
@@ -417,8 +413,7 @@ function classifyDocTypeFromText(text: string): DetectedDocType {
 
   const hasMercantil =
     text.includes('REGISTRO MERCANTIL') ||
-    text.includes('ACTA') ||
-    text.includes('ASAMBLEA') ||
+    text.includes('DOCUMENTO CONSTITUTIVO') ||
     text.includes('JUNTA DIRECTIVA') ||
     text.includes('TOMO') ||
     text.includes('FOLIO') ||
@@ -556,7 +551,7 @@ function mapMercantilValidationToSlot(result: ValidationResult): SlotValidationR
         : 'valid';
 
   if (status === 'warning' && warnings.length === 0) {
-    warnings.push('Validación flexible por lectura limitada.');
+    warnings.push('Se identifica como Registro Mercantil con lectura parcial.');
   }
 
   return {
@@ -646,7 +641,7 @@ export function classifyTextAsRif(rawText: string) {
   if (idHits.length >= 2 || mercantilHits.length >= 3 || (negativeScore >= 6 && score <= 2)) {
     const reason = idHits.length > mercantilHits.length
       ? 'El archivo corresponde a una cédula, no a un RIF.'
-      : 'El archivo corresponde a un acta o registro mercantil, no a un RIF.';
+      : 'El archivo corresponde a un documento mercantil, no a un RIF.';
     return {
       valid: false,
       score,
@@ -693,7 +688,7 @@ export function classifyTextAsMercantilActa(rawText: string) {
   const hasAnyKeyword = keywordHits.length > 0 || legalHits.length > 0 || mercantilSignals.length > 0;
   const hasMercantilCore =
     (text.includes('REGISTRO') && text.includes('MERCANTIL')) ||
-    text.includes('ACTA CONSTITUTIVA') ||
+    text.includes('DOCUMENTO CONSTITUTIVO') ||
     (text.includes('TOMO') && text.includes('FOLIO')) ||
     text.includes('PROTOCOLO');
 
@@ -846,10 +841,10 @@ function classifyBySlot(slot: DocumentType, text: string) {
     const keywordsFound: string[] = [];
 
     score += addScore(text, ['REGISTRO MERCANTIL'], 3, keywordsFound);
-    score += addScore(text, ['ACTA CONSTITUTIVA'], 3, keywordsFound);
-    score += addScore(text, ['ASAMBLEA', 'ACTA DE ASAMBLEA'], 2, keywordsFound);
+    score += addScore(text, ['DOCUMENTO CONSTITUTIVO'], 3, keywordsFound);
+    score += addScore(text, ['ESTATUTOS'], 2, keywordsFound);
     score += addScore(text, ['JUNTA DIRECTIVA', 'RATIFICA', 'CONSTITUCION'], 1, keywordsFound);
-    score += addScore(text, ['TOMO', 'FOLIO', 'PROTOCOLO'], 1, keywordsFound);
+    score += addScore(text, ['TOMO', 'FOLIO', 'PROTOCOLO', 'REGISTRADOR'], 1, keywordsFound);
 
     if (score === 0 && hasAny(text, SLOT_KEYWORDS.registroMercantil.anti)) {
       return { valid: false, reason: 'el archivo parece no corresponder a Registro/Acta.', score, keywordsFound };
