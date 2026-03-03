@@ -171,7 +171,7 @@ export async function validateDocumentForSlot(file: File, slot: DocumentType): P
   const sharpnessScore = analysisCanvas ? computeSharpness(analysisCanvas) : 0;
   const sharpnessLabel = classifySharpness(sharpnessScore);
   if (sharpnessLabel === 'warning') {
-    warnings.push('Documento con baja nitidez.');
+    warnings.push('Calidad baja del archivo.');
   }
 
   const textResult = isPdf ? await extractTextFromPdf(file) : await extractTextFromImage(file);
@@ -180,9 +180,9 @@ export async function validateDocumentForSlot(file: File, slot: DocumentType): P
   if (!textResult.hasText) {
     const hintMatch = FILE_HINTS[slotKey].some((hint) => hint.test(file.name));
     if (hintMatch && (isPdf || isImage)) {
-      warnings.push('No se pudo confirmar completamente el contenido. Revise que el documento corresponda al tipo solicitado.');
+      warnings.push('Lectura limitada del contenido.');
       if (sharpnessLabel === 'warning') {
-        warnings.push('La imagen se ve borrosa, podría afectar la lectura.');
+        warnings.push('Motivo: calidad baja del archivo.');
       }
       return {
         status: 'warning',
@@ -307,13 +307,14 @@ export async function validateMercantilActaDocument(file: File): Promise<Validat
   }
 
   if (detected === 'UNKNOWN') {
+    const mercantilWarning = await buildMercantilFlexibleWarning(file);
     return {
       status: 'valid',
       category: 'mercantil_acta',
       confidence: 'low',
       details: {
         reasons: ['Documento aceptado.'],
-        warnings: ['No se pudo confirmar completamente el contenido. Se acepta con validación flexible para Registro Mercantil.']
+        warnings: [mercantilWarning]
       }
     };
   }
@@ -324,6 +325,26 @@ export async function validateMercantilActaDocument(file: File): Promise<Validat
     confidence: 'high',
     details: { reasons: ['Documento aceptado.'] }
   };
+}
+
+async function buildMercantilFlexibleWarning(file: File): Promise<string> {
+  const isPdf = file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf');
+  const isImage = file.type.startsWith('image/');
+  if (!isPdf && !isImage) return 'Validación flexible: lectura limitada.';
+
+  try {
+    const canvas = isPdf
+      ? await buildPdfCanvas(file, 1, MAX_IMAGE_WIDTH)
+      : await buildImageCanvas(file, MAX_IMAGE_WIDTH);
+    const sharpness = computeSharpness(canvas);
+    if (classifySharpness(sharpness) === 'warning') {
+      return 'Validación flexible por calidad baja.';
+    }
+  } catch {
+    // Fallback to generic cause when quality cannot be measured.
+  }
+
+  return 'Validación flexible por lectura limitada.';
 }
 
 export async function validateCedulaDocument(file: File): Promise<ValidationResult> {
@@ -535,7 +556,7 @@ function mapMercantilValidationToSlot(result: ValidationResult): SlotValidationR
         : 'valid';
 
   if (status === 'warning' && warnings.length === 0) {
-    warnings.push('Documento aceptado con validación flexible de Registro Mercantil.');
+    warnings.push('Validación flexible por lectura limitada.');
   }
 
   return {
