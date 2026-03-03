@@ -25,6 +25,7 @@ export type ValidationResult = {
 };
 
 type DetectedKind = 'rif' | 'cedula' | 'mercantil' | 'unknown';
+type DetectedDocType = 'RIF' | 'CEDULA' | 'MERCANTIL' | 'UNKNOWN';
 
 export type SlotValidationResult = {
   status: SlotStatus;
@@ -271,112 +272,68 @@ export async function validateDocumentForSlot(file: File, slot: DocumentType): P
 }
 
 export async function validateRifDocument(file: File): Promise<ValidationResult> {
-  return validateDemoBySlot(file, 'rif');
+  const detected = await detectDocType(file);
+  if (detected === 'CEDULA' || detected === 'MERCANTIL') {
+    return {
+      status: 'invalid',
+      category: 'rif',
+      confidence: 'high',
+      details: { reasons: ['Este archivo no corresponde a un RIF.'] }
+    };
+  }
+  return {
+    status: 'valid',
+    category: 'rif',
+    confidence: detected === 'RIF' ? 'high' : 'low',
+    details: { reasons: ['Documento aceptado.'] }
+  };
 }
 
 export async function validateMercantilActaDocument(file: File): Promise<ValidationResult> {
-  return validateDemoBySlot(file, 'mercantil_acta');
+  const detected = await detectDocType(file);
+  if (detected === 'RIF' || detected === 'CEDULA') {
+    return {
+      status: 'invalid',
+      category: 'mercantil_acta',
+      confidence: 'high',
+      details: { reasons: ['Este archivo no corresponde a Registro Mercantil/Acta.'] }
+    };
+  }
+  return {
+    status: 'valid',
+    category: 'mercantil_acta',
+    confidence: detected === 'MERCANTIL' ? 'high' : 'low',
+    details: { reasons: ['Documento aceptado.'] }
+  };
 }
 
 export async function validateCedulaDocument(file: File): Promise<ValidationResult> {
-  return validateDemoBySlot(file, 'cedula');
-}
-
-async function validateDemoBySlot(file: File, expected: ValidationResult['category']): Promise<ValidationResult> {
-  const isPdf = file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf');
-  const isImage = file.type.startsWith('image/');
-  if (!isPdf && !isImage) {
+  const detected = await detectDocType(file);
+  if (detected === 'RIF' || detected === 'MERCANTIL') {
     return {
       status: 'invalid',
-      category: expected,
+      category: 'cedula',
       confidence: 'high',
-      details: {
-        reasons: [invalidMessageFor(expected)]
-      }
+      details: { reasons: ['Este archivo no corresponde a Cédula.'] }
     };
   }
+  return {
+    status: 'valid',
+    category: 'cedula',
+    confidence: detected === 'CEDULA' ? 'high' : 'low',
+    details: { reasons: ['Documento aceptado.'] }
+  };
+}
+
+export async function detectDocType(file: File): Promise<DetectedDocType> {
+  const isPdf = file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf');
+  const isImage = file.type.startsWith('image/');
+  if (!isPdf && !isImage) return 'UNKNOWN';
 
   const extracted = await extractSupportTextForDemo(file);
   const normalized = normalize(extracted.text);
-
-  if (!normalized.trim()) {
-    return {
-      status: 'valid',
-      category: expected,
-      confidence: 'low',
-      details: {
-        reasons: ['Documento aceptado.'],
-        extracted: {
-          text: '',
-          hasText: false,
-          usedOcr: extracted.usedOcr,
-          keywordsFound: [],
-          datesFound: []
-        }
-      }
-    };
-  }
-
-  const detected = detectStrongDocumentKind(normalized);
-  if (expected === 'rif' && detected === 'unknown') {
-    const cedulaEvidence = findPhraseMatches(normalized, ['CEDULA', 'IDENTIDAD', 'REPUBLICA BOLIVARIANA', 'VENEZOLANO', 'APELLIDOS', 'NOMBRES'], 0.5);
-    const mercantilEvidence = findPhraseMatches(
-      normalized,
-      ['REGISTRO MERCANTIL', 'ACTA', 'ASAMBLEA', 'JUNTA DIRECTIVA', 'TOMO', 'FOLIO', 'NOTARIA'],
-      0.5
-    );
-    if (cedulaEvidence.length >= 2 || mercantilEvidence.length >= 2) {
-      return {
-        status: 'invalid',
-        category: expected,
-        confidence: 'high',
-        details: {
-          reasons: [invalidMessageFor(expected)],
-          extracted: {
-            text: extracted.text.slice(0, 320),
-            hasText: true,
-            usedOcr: extracted.usedOcr,
-            keywordsFound: [],
-            datesFound: findAllDateStrings(extracted.text)
-          }
-        }
-      };
-    }
-  }
-  if (detected !== 'unknown' && detected !== kindForCategory(expected)) {
-    return {
-      status: 'invalid',
-      category: expected,
-      confidence: 'high',
-      details: {
-        reasons: [invalidMessageFor(expected)],
-        extracted: {
-          text: extracted.text.slice(0, 320),
-          hasText: true,
-          usedOcr: extracted.usedOcr,
-          keywordsFound: [],
-          datesFound: findAllDateStrings(extracted.text)
-        }
-      }
-    };
-  }
-
-  const confidence: 'high' | 'low' = detected === kindForCategory(expected) ? 'high' : 'low';
-  return {
-    status: 'valid',
-    category: expected,
-    confidence,
-    details: {
-      reasons: ['Documento aceptado.'],
-      extracted: {
-        text: extracted.text.slice(0, 320),
-        hasText: true,
-        usedOcr: extracted.usedOcr,
-        keywordsFound: [],
-        datesFound: findAllDateStrings(extracted.text)
-      }
-    }
-  };
+  if (!normalized.trim()) return 'UNKNOWN';
+  return classifyDocTypeFromText(normalized);
 }
 
 async function extractSupportTextForDemo(file: File) {
@@ -400,44 +357,31 @@ async function extractSupportTextForDemo(file: File) {
   return { text, usedOcr };
 }
 
-function detectStrongDocumentKind(text: string): DetectedKind {
-  const cedulaHits = findPhraseMatches(
-    text,
-    ['CEDULA DE IDENTIDAD', 'REPUBLICA BOLIVARIANA', 'VENEZOLANO', 'APELLIDOS', 'NOMBRES', 'IDENTIDAD'],
-    0.5
-  );
-  const isCedula = cedulaHits.length >= 2 || (cedulaHits.some((x) => x.includes('APELLIDOS')) && cedulaHits.some((x) => x.includes('NOMBRES')));
-  if (isCedula) return 'cedula';
+function classifyDocTypeFromText(text: string): DetectedDocType {
+  const hasCedula =
+    text.includes('CEDULA DE IDENTIDAD') ||
+    text.includes('REPUBLICA BOLIVARIANA') ||
+    text.includes('VENEZOLANO') ||
+    (text.includes('APELLIDOS') && text.includes('NOMBRES'));
+  if (hasCedula) return 'CEDULA';
 
-  const rifHits = findPhraseMatches(
-    text,
-    ['SENIAT', 'REGISTRO DE INFORMACION FISCAL', 'REGISTRO UNICO DE INFORMACION FISCAL', 'COMPROBANTE DE INSCRIPCION', 'RIF'],
-    0.6
-  );
-  const isRif = rifHits.length >= 2 || /\b[JVEGPC]\s*[-]?\s*\d{7,9}\s*[-]?\s*\d\b/.test(text);
-  if (isRif) return 'rif';
+  const hasRif =
+    text.includes('SENIAT') ||
+    text.includes('REGISTRO DE INFORMACION FISCAL') ||
+    /\b[VEJGPC]-?\d{7,9}-?\d\b/.test(text.replace(/\s+/g, ''));
+  if (hasRif) return 'RIF';
 
-  const mercantilHits = findPhraseMatches(
-    text,
-    ['REGISTRO MERCANTIL', 'ACTA', 'ASAMBLEA', 'JUNTA DIRECTIVA', 'TOMO', 'FOLIO', 'NOTARIA', 'PROTOCOLO'],
-    0.5
-  );
-  const isMercantil = mercantilHits.length >= 2;
-  if (isMercantil) return 'mercantil';
+  const hasMercantil =
+    text.includes('REGISTRO MERCANTIL') ||
+    text.includes('ACTA') ||
+    text.includes('ASAMBLEA') ||
+    text.includes('JUNTA DIRECTIVA') ||
+    text.includes('TOMO') ||
+    text.includes('FOLIO') ||
+    text.includes('NOTARIA');
+  if (hasMercantil) return 'MERCANTIL';
 
-  return 'unknown';
-}
-
-function kindForCategory(category: ValidationResult['category']): Exclude<DetectedKind, 'unknown'> {
-  if (category === 'rif') return 'rif';
-  if (category === 'cedula') return 'cedula';
-  return 'mercantil';
-}
-
-function invalidMessageFor(category: ValidationResult['category']) {
-  if (category === 'rif') return 'Este archivo no corresponde a RIF.';
-  if (category === 'cedula') return 'Este archivo no corresponde a Cédula.';
-  return 'Este archivo no corresponde a Registro Mercantil/Acta.';
+  return 'UNKNOWN';
 }
 
 export async function extractTextFromPdf(file: File) {
