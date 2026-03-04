@@ -1,7 +1,7 @@
 import { PropsWithChildren, createContext, useContext, useEffect, useMemo, useReducer } from 'react';
 import { TenantConfig } from '../data/tenants';
 import { DocumentRecord, OnboardingState, RepresentativeRecord, RequiredDocumentType, SubmissionState } from './types';
-import { clearState, createInitialState, loadState, saveState } from './state';
+import { clearState, createEmptyDocument, createInitialState, loadState, saveState } from './state';
 
 type Action =
   | { type: 'set_document'; payload: { docType: RequiredDocumentType; record: DocumentRecord } }
@@ -45,7 +45,13 @@ function reducer(state: OnboardingState, action: Action): OnboardingState {
       return {
         ...state,
         representatives: state.representatives.map((item) =>
-          item.id === action.payload.id ? { ...item, enabled: action.payload.enabled } : item
+          item.id === action.payload.id
+            ? {
+                ...item,
+                enabled: action.payload.enabled,
+                document: action.payload.enabled ? item.document : createEmptyDocument('cedulaRepresentante')
+              }
+            : item
         ) as OnboardingState['representatives']
       };
     case 'set_submission':
@@ -85,13 +91,19 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
   }, [state]);
 
   const value = useMemo<ContextValue>(() => {
-    const isAccepted = (status?: string) => status === 'valid' || status === 'warning';
-    const baseDocumentsValid = Object.values(state.documents).every((doc) => isAccepted(doc.validation.status));
     const representative1 = state.representatives.find((rep) => rep.id === 1);
     const representative2 = state.representatives.find((rep) => rep.id === 2);
-    const representative1Valid = isAccepted(representative1?.document.validation.status);
-    const representative2Valid = !representative2?.enabled || isAccepted(representative2.document.validation.status);
-    const allDocumentsValid = Boolean(baseDocumentsValid && representative1Valid && representative2Valid);
+    const requiredDocs = [
+      state.documents.rif.validation.status,
+      state.documents.registroMercantil.validation.status,
+      representative1?.document.validation.status
+    ];
+
+    if (representative2?.enabled) {
+      requiredDocs.push(representative2.document.validation.status);
+    }
+
+    const allDocumentsValid = requiredDocs.every((status) => status === 'valid');
 
     return {
       state,

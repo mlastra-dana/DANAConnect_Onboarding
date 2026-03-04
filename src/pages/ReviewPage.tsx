@@ -12,6 +12,16 @@ export function ReviewPage({ companyId }: { companyId: string }) {
   const { state, canSubmit, setSubmission } = useOnboarding();
   const [errorToast, setErrorToast] = useState<string | null>(null);
   const navigate = useNavigate();
+  const representative1 = state.representatives.find((rep) => rep.id === 1)!;
+  const representative2 = state.representatives.find((rep) => rep.id === 2)!;
+  const requiredDocuments = [
+    state.documents.rif.fileName,
+    state.documents.registroMercantil.fileName,
+    representative1.document.fileName,
+    ...(representative2.enabled ? [representative2.document.fileName] : [])
+  ];
+  const receivedDocumentsCount = requiredDocuments.filter(Boolean).length;
+  const requiredDocumentsCount = requiredDocuments.length;
 
   async function submit() {
     setErrorToast(null);
@@ -77,6 +87,9 @@ export function ReviewPage({ companyId }: { companyId: string }) {
 
       <Card>
         <h2 className="text-lg font-semibold text-dark">Resumen documental</h2>
+        <p className="mt-1 text-sm text-grayText">
+          Documentos recibidos: {receivedDocumentsCount}/{requiredDocumentsCount}
+        </p>
         <ul className="mt-3 space-y-2">
           {Object.values(state.documents).map((doc, idx) => (
             <li key={`${doc.type}-${idx}`} className="flex items-center justify-between rounded-lg border border-borderLight p-3">
@@ -87,17 +100,32 @@ export function ReviewPage({ companyId }: { companyId: string }) {
               <StatusBadge status={doc.validation.status} />
             </li>
           ))}
-          {state.representatives.map((rep) => (
-            <li key={`rep-${rep.id}`} className="flex items-center justify-between rounded-lg border border-borderLight p-3">
-              <div>
-                <p className="font-medium text-dark">Cédula del Representante {rep.id}</p>
-                <p className="text-xs text-grayText">
-                  {rep.enabled ? rep.document.fileName ?? 'Sin archivo' : 'No aplica'}
-                </p>
-              </div>
-              <StatusBadge status={rep.enabled ? rep.document.validation.status : 'valid'} />
-            </li>
-          ))}
+          <li className="flex items-center justify-between rounded-lg border border-borderLight p-3">
+            <div>
+              <p className="font-medium text-dark">Cédula del Representante 1</p>
+              <p className="text-xs text-grayText">{representative1.document.fileName ?? 'Sin archivo'}</p>
+            </div>
+            <StatusBadge status={representative1.document.validation.status} />
+          </li>
+          <li className="flex items-center justify-between rounded-lg border border-borderLight p-3">
+            <div>
+              <p className="font-medium text-dark">Cédula del Representante 2</p>
+              <p className="text-xs text-grayText">
+                {!representative2.enabled
+                  ? 'No aplica'
+                  : representative2.document.fileName ?? 'Pendiente'}
+              </p>
+            </div>
+            <StatusBadge
+              status={
+                !representative2.enabled
+                  ? 'na'
+                  : representative2.document.fileName
+                    ? representative2.document.validation.status
+                    : 'pending'
+              }
+            />
+          </li>
         </ul>
       </Card>
 

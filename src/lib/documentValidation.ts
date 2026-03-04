@@ -372,7 +372,9 @@ export async function detectDocType(file: File): Promise<DetectedDocType> {
 
   const extracted = await extractSupportTextForDemo(file);
   const normalized = normalize(extracted.text);
-  if (!normalized.trim()) return 'UNKNOWN';
+  if (!normalized.trim()) {
+    return inferDocTypeFromFileName(file.name);
+  }
   return classifyDocTypeFromText(normalized);
 }
 
@@ -419,6 +421,29 @@ function classifyDocTypeFromText(text: string): DetectedDocType {
     text.includes('FOLIO') ||
     text.includes('NOTARIA');
   if (hasMercantil) return 'MERCANTIL';
+
+  return 'UNKNOWN';
+}
+
+function inferDocTypeFromFileName(fileName: string): DetectedDocType {
+  const normalizedName = normalize(fileName).replace(/[^A-Z0-9]+/g, ' ').trim();
+
+  if (normalizedName.includes('RIF') || normalizedName.includes('SENIAT')) {
+    return 'RIF';
+  }
+
+  if (normalizedName.includes('CEDULA') || normalizedName.includes('IDENTIDAD') || normalizedName.includes('SAIME')) {
+    return 'CEDULA';
+  }
+
+  if (
+    normalizedName.includes('MERCANTIL') ||
+    normalizedName.includes('ACTA') ||
+    normalizedName.includes('CONSTITUTIV') ||
+    normalizedName.includes('ESTATUT')
+  ) {
+    return 'MERCANTIL';
+  }
 
   return 'UNKNOWN';
 }

@@ -1,13 +1,14 @@
 import { AlertTriangle, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { ValidationStatus } from '../../app/types';
 
-type BadgeStatus = 'valid' | 'error' | 'pending' | 'warning' | 'review';
+type BadgeStatus = 'valid' | 'error' | 'pending' | 'warning' | 'review' | 'na';
 
 function normalizeStatus(status: ValidationStatus | BadgeStatus): BadgeStatus {
   if (status === 'valid') return 'valid';
   if (status === 'error') return 'error';
   if (status === 'warning') return 'warning';
   if (status === 'review') return 'review';
+  if (status === 'na') return 'na';
   return 'pending';
 }
 
@@ -18,7 +19,7 @@ const statusConfig: Record<BadgeStatus, { label: string; className: string; Icon
     Icon: CheckCircle
   },
   error: {
-    label: 'Con errores',
+    label: 'Documento inválido',
     className: 'bg-red-50 text-red-700 border border-red-200',
     Icon: XCircle
   },
@@ -35,6 +36,11 @@ const statusConfig: Record<BadgeStatus, { label: string; className: string; Icon
   review: {
     label: 'Revisión requerida',
     className: 'bg-amber-50 text-amber-700 border border-amber-200',
+    Icon: Clock
+  },
+  na: {
+    label: 'No aplica',
+    className: 'bg-slate-100 text-slate-600 border border-slate-200',
     Icon: Clock
   }
 };
