@@ -303,14 +303,12 @@ export async function validateMercantilActaDocument(file: File): Promise<Validat
   }
 
   if (detected === 'UNKNOWN') {
-    const mercantilWarning = await buildMercantilQualityWarning(file);
     return {
-      status: 'valid',
+      status: 'invalid',
       category: 'mercantil_acta',
       confidence: 'low',
       details: {
-        reasons: ['Documento aceptado.'],
-        warnings: [mercantilWarning]
+        reasons: ['No se pudo confirmar que el archivo corresponda a Registro Mercantil/Acta.']
       }
     };
   }
