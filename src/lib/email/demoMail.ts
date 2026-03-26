@@ -41,6 +41,7 @@ export function buildDemoEmail(state: OnboardingState, companyId: string, extern
     `- Cédula Representante 2: ${
       state.representatives[1].enabled ? statusLabel(state.representatives[1].document.validation.status) : 'No aplica'
     }`,
+    `- Biometría: ${biometricStatusLabel(state.biometrics.status)}`,
     '',
     'Gracias.'
   ].join('\n');
@@ -58,6 +59,7 @@ export function buildFriendlySummaryLines(state: OnboardingState) {
   if (state.representatives[1].enabled) {
     lines.push(`Cédula segundo representante: ${statusToFriendly(state.representatives[1].document.validation.status)}`);
   }
+  lines.push(`Biometría: ${biometricStatusToFriendly(state.biometrics.status)}`);
 
   return lines;
 }
@@ -136,4 +138,17 @@ function statusToFriendly(status: string) {
   if (status === 'warning') return 'Recibido con advertencia';
   if (status === 'review') return 'Revisión requerida';
   return status === 'valid' ? 'Recibido' : 'Pendiente';
+}
+
+function biometricStatusLabel(status: 'pending' | 'processing' | 'passed' | 'failed') {
+  if (status === 'passed') return 'Válida';
+  if (status === 'failed') return 'Fallida';
+  if (status === 'processing') return 'En proceso';
+  return 'Pendiente';
+}
+
+function biometricStatusToFriendly(status: 'pending' | 'processing' | 'passed' | 'failed') {
+  if (status === 'passed') return 'Completada';
+  if (status === 'failed') return 'Requiere reintento';
+  return 'Pendiente';
 }

@@ -59,7 +59,8 @@ export function ReviewPage({ companyId }: { companyId: string }) {
         registrationId: email.trackingId,
         submittedAt: email.submittedAtISO,
         to: sendResult.to ?? 'mlastra@danaconnect.com (mailto)',
-        documents: state.documents
+        documents: state.documents,
+        biometrics: state.biometrics
       };
 
       localStorage.setItem(`onboarding_submission:${companyId}:${email.trackingId}`, JSON.stringify(payload));
@@ -126,11 +127,18 @@ export function ReviewPage({ companyId }: { companyId: string }) {
               }
             />
           </li>
+          <li className="flex items-center justify-between rounded-lg border border-borderLight p-3">
+            <div>
+              <p className="font-medium text-dark">Biometría</p>
+              <p className="text-xs text-grayText">{biometricStatusLabel(state.biometrics.status)}</p>
+            </div>
+            <StatusBadge status={toBadgeStatus(state.biometrics.status)} />
+          </li>
         </ul>
       </Card>
 
       <div className="flex flex-wrap justify-between gap-3">
-        <Link to={`/onboarding/${companyId}/documents`}>
+        <Link to={`/onboarding/${companyId}/biometria`}>
           <Button variant="ghost">Volver</Button>
         </Link>
         <Button onClick={() => void submit()} disabled={!canSubmit || state.submission.status === 'loading'}>
@@ -141,9 +149,22 @@ export function ReviewPage({ companyId }: { companyId: string }) {
       {!canSubmit ? (
         <Toast
           type="error"
-          message="No puede enviar todavía: verifique que todos los documentos requeridos estén válidos."
+          message="No puede enviar todavía: complete documentos y biometría en estado válido."
         />
       ) : null}
     </div>
   );
+}
+
+function toBadgeStatus(status: 'pending' | 'processing' | 'passed' | 'failed'): 'valid' | 'error' | 'pending' {
+  if (status === 'passed') return 'valid';
+  if (status === 'failed') return 'error';
+  return 'pending';
+}
+
+function biometricStatusLabel(status: 'pending' | 'processing' | 'passed' | 'failed') {
+  if (status === 'passed') return 'Validación completada';
+  if (status === 'processing') return 'Validación en curso';
+  if (status === 'failed') return 'Validación fallida';
+  return 'Pendiente';
 }

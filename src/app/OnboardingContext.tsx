@@ -1,12 +1,20 @@
 import { PropsWithChildren, createContext, useContext, useEffect, useMemo, useReducer } from 'react';
 import { TenantConfig } from '../data/tenants';
-import { DocumentRecord, OnboardingState, RepresentativeRecord, RequiredDocumentType, SubmissionState } from './types';
+import {
+  BiometricValidationRecord,
+  DocumentRecord,
+  OnboardingState,
+  RepresentativeRecord,
+  RequiredDocumentType,
+  SubmissionState
+} from './types';
 import { clearState, createEmptyDocument, createInitialState, loadState, saveState } from './state';
 
 type Action =
   | { type: 'set_document'; payload: { docType: RequiredDocumentType; record: DocumentRecord } }
   | { type: 'set_representative'; payload: { id: 1 | 2; representative: RepresentativeRecord } }
   | { type: 'set_representative_enabled'; payload: { id: 2; enabled: boolean } }
+  | { type: 'set_biometric'; payload: BiometricValidationRecord }
   | { type: 'set_submission'; payload: SubmissionState }
   | { type: 'reset'; payload: OnboardingState };
 
@@ -15,10 +23,12 @@ type ContextValue = {
   setDocument: (docType: RequiredDocumentType, record: DocumentRecord) => void;
   setRepresentative: (id: 1 | 2, representative: RepresentativeRecord) => void;
   setRepresentativeEnabled: (id: 2, enabled: boolean) => void;
+  setBiometric: (record: BiometricValidationRecord) => void;
   setSubmission: (submission: SubmissionState) => void;
   resetOnboarding: () => void;
   resetOnboardingState: () => void;
   allDocumentsValid: boolean;
+  allBiometricsPassed: boolean;
   canSubmit: boolean;
 };
 
@@ -59,6 +69,11 @@ function reducer(state: OnboardingState, action: Action): OnboardingState {
         ...state,
         submission: action.payload
       };
+    case 'set_biometric':
+      return {
+        ...state,
+        biometrics: action.payload
+      };
     case 'reset':
       return action.payload;
     default:
@@ -69,6 +84,7 @@ function reducer(state: OnboardingState, action: Action): OnboardingState {
 export function OnboardingProvider({ companyId, tenant, children }: PropsWithChildren<{ companyId: string; tenant: TenantConfig }>) {
   const restored = loadState(companyId);
   const initial = createInitialState(companyId, tenant);
+  const restoredBiometric = normalizeBiometricFromStorage(restored?.biometrics, initial.biometrics);
   const hydrated =
     restored == null
       ? initial
@@ -79,6 +95,7 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
             ...initial.documents,
             ...restored.documents
           },
+          biometrics: restoredBiometric,
           representatives:
             restored.representatives && restored.representatives.length === 2
               ? (restored.representatives as OnboardingState['representatives'])
@@ -104,12 +121,14 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
     }
 
     const allDocumentsValid = requiredDocs.every((status) => status === 'valid');
+    const allBiometricsPassed = state.biometrics.status === 'passed';
 
     return {
       state,
       setDocument: (docType, record) => dispatch({ type: 'set_document', payload: { docType, record } }),
       setRepresentative: (id, representative) => dispatch({ type: 'set_representative', payload: { id, representative } }),
       setRepresentativeEnabled: (id, enabled) => dispatch({ type: 'set_representative_enabled', payload: { id, enabled } }),
+      setBiometric: (record) => dispatch({ type: 'set_biometric', payload: record }),
       setSubmission: (submission) => dispatch({ type: 'set_submission', payload: submission }),
       resetOnboarding: () => {
         clearState(companyId);
@@ -120,7 +139,8 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
         dispatch({ type: 'reset', payload: createInitialState(companyId, tenant) });
       },
       allDocumentsValid,
-      canSubmit: allDocumentsValid
+      allBiometricsPassed,
+      canSubmit: allDocumentsValid && allBiometricsPassed
     };
   }, [companyId, state, tenant]);
 
@@ -133,4 +153,29 @@ export function useOnboarding() {
     throw new Error('useOnboarding debe usarse dentro de OnboardingProvider');
   }
   return context;
+}
+
+function normalizeBiometricFromStorage(value: unknown, fallback: BiometricValidationRecord): BiometricValidationRecord {
+  if (!value || typeof value !== 'object') return fallback;
+
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.status === 'string') {
+    return {
+      ...fallback,
+      ...candidate
+    } as BiometricValidationRecord;
+  }
+
+  const legacyStage2 = candidate.stage2 as Record<string, unknown> | undefined;
+  const legacyStage1 = candidate.stage1 as Record<string, unknown> | undefined;
+  const legacy = legacyStage2 ?? legacyStage1;
+
+  if (legacy && typeof legacy.status === 'string') {
+    return {
+      ...fallback,
+      ...legacy
+    } as BiometricValidationRecord;
+  }
+
+  return fallback;
 }

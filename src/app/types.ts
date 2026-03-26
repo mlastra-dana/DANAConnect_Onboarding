@@ -59,6 +59,13 @@ export type RepresentativeRecord = {
   document: DocumentRecord;
 };
 
+export type BiometricValidationRecord = {
+  status: 'pending' | 'processing' | 'passed' | 'failed';
+  completedAt?: string;
+  score?: number;
+  note?: string;
+};
+
 export type SubmissionState = {
   status: 'idle' | 'loading' | 'success' | 'error';
   registrationId?: string;
@@ -74,5 +81,6 @@ export type OnboardingState = {
   tenant: TenantConfig;
   documents: Record<RequiredDocumentType, DocumentRecord>;
   representatives: [RepresentativeRecord, RepresentativeRecord];
+  biometrics: BiometricValidationRecord;
   submission: SubmissionState;
 };

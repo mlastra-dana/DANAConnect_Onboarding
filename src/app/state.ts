@@ -27,6 +27,12 @@ export function createEmptyRepresentative(id: 1 | 2, enabled: boolean): Represen
   };
 }
 
+export function createEmptyBiometric() {
+  return {
+    status: 'pending' as const
+  };
+}
+
 export function createInitialState(companyId: string, tenant: TenantConfig): OnboardingState {
   return {
     companyId,
@@ -36,6 +42,7 @@ export function createInitialState(companyId: string, tenant: TenantConfig): Onb
       registroMercantil: createEmptyDocument('registroMercantil')
     },
     representatives: [createEmptyRepresentative(1, true), createEmptyRepresentative(2, false)],
+    biometrics: createEmptyBiometric(),
     submission: {
       status: 'idle'
     }

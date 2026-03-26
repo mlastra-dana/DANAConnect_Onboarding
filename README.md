@@ -16,7 +16,7 @@ API local de correo: `http://localhost:8787`
 
 - Re-brand completo con acento naranja DanaConnect (`#DD5736`) y tipografía Inter.
 - Home con hero naranja full-bleed, un solo CTA principal y 3 feature cards.
-- Flujo simplificado sin Excel: `Bienvenida -> Documentos -> Revisión -> Final`.
+- Flujo actualizado: `Bienvenida -> Documentos -> Biometría -> Revisión -> Final`.
 - Navbar limpia con logo, enlaces clave y botón `Salir` visible durante todo el onboarding.
 - Reset global al usar `Inicio`, `Salir` o `Volver al inicio` (archivos, previews, validaciones y envío).
 - Uploads unificados con `FileUploadCard`, drag & drop y selector de archivo confiable.

@@ -24,7 +24,8 @@ export function buildReceiptData(state: OnboardingState): ReceiptData {
       {
         label: 'Representante 2',
         fileName: state.representatives[1].enabled ? state.representatives[1].document.fileName : 'No aplica'
-      }
+      },
+      { label: 'Biometría', fileName: biometricToFileLabel(state.biometrics.status) }
     ]
   };
 }
@@ -126,4 +127,11 @@ function escapeHtml(value: string) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function biometricToFileLabel(status: 'pending' | 'processing' | 'passed' | 'failed') {
+  if (status === 'passed') return 'Validada';
+  if (status === 'failed') return 'Fallida';
+  if (status === 'processing') return 'En proceso';
+  return 'Pendiente';
 }

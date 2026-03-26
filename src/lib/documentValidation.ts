@@ -63,7 +63,6 @@ const RIF_STRONG_KEYWORDS = [
 ] as const;
 const RIF_NEGATIVE_ID_KEYWORDS = [
   'CEDULA DE IDENTIDAD',
-  'REPUBLICA BOLIVARIANA',
   'VENEZOLANO',
   'APELLIDOS',
   'NOMBRES'
@@ -373,7 +372,14 @@ export async function detectDocType(file: File): Promise<DetectedDocType> {
   if (!normalized.trim()) {
     return inferDocTypeFromFileName(file.name);
   }
-  return classifyDocTypeFromText(normalized);
+  const detectedFromText = classifyDocTypeFromText(normalized);
+  if (detectedFromText !== 'UNKNOWN') {
+    return detectedFromText;
+  }
+
+  // If OCR/text extraction yields noisy text, fall back to filename hints
+  // before rejecting as UNKNOWN.
+  return inferDocTypeFromFileName(file.name);
 }
 
 async function extractSupportTextForDemo(file: File) {
@@ -398,18 +404,25 @@ async function extractSupportTextForDemo(file: File) {
 }
 
 function classifyDocTypeFromText(text: string): DetectedDocType {
-  const hasCedula =
-    text.includes('CEDULA DE IDENTIDAD') ||
-    text.includes('REPUBLICA BOLIVARIANA') ||
-    text.includes('VENEZOLANO') ||
-    (text.includes('APELLIDOS') && text.includes('NOMBRES'));
-  if (hasCedula) return 'CEDULA';
-
-  const hasRif =
+  const hasRifStrong =
     text.includes('SENIAT') ||
     text.includes('REGISTRO DE INFORMACION FISCAL') ||
-    /\b[VEJGPC]-?\d{7,9}-?\d\b/.test(text.replace(/\s+/g, ''));
-  if (hasRif) return 'RIF';
+    text.includes('REGISTRO UNICO DE INFORMACION FISCAL') ||
+    text.includes('COMPROBANTE DIGITAL RIF') ||
+    text.includes('(RIF)');
+  const hasRifPattern = /\b[VEJGPC]-?\d{7,9}-?\d\b/.test(text.replace(/\s+/g, ''));
+  const hasRif = hasRifStrong || hasRifPattern;
+
+  const hasCedulaStrong =
+    text.includes('CEDULA DE IDENTIDAD') ||
+    text.includes('SAIME') ||
+    (text.includes('APELLIDOS') && text.includes('NOMBRES'));
+  const hasCedulaWeak = text.includes('REPUBLICA BOLIVARIANA') || text.includes('VENEZOLANO');
+
+  // Prioritize RIF when the document has strong fiscal signals.
+  // This avoids rejecting valid natural-person RIFs that may contain personal-name fields.
+  if (hasRifStrong || (hasRif && !hasCedulaStrong)) return 'RIF';
+  if (hasCedulaStrong || hasCedulaWeak) return 'CEDULA';
 
   const hasMercantil =
     text.includes('REGISTRO MERCANTIL') ||
