@@ -11,6 +11,7 @@ import { Toast } from '../components/ui/Toast';
 type CameraStatus = 'idle' | 'requesting' | 'active' | 'error';
 type Gesture = 'center' | 'turn_left' | 'turn_right';
 type DetectionMode = 'auto' | 'manual';
+type GeoStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'error' | 'resolving';
 type FaceMetrics = {
   centerX: number;
   centerY: number;
@@ -36,12 +37,14 @@ export function BiometricPage({ companyId }: { companyId: string }) {
   const captureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const manualPrevFrameRef = useRef<ImageData | null>(null);
   const manualStableCounterRef = useRef(0);
+  const manualGestureCounterRef = useRef(0);
   const runningChallengeRef = useRef(false);
   const challengeIndexRef = useRef(0);
   const holdCounterRef = useRef(0);
   const baselineRef = useRef<FaceMetrics | null>(null);
   const missedFaceDetectionsRef = useRef(0);
   const autoStartTriedRef = useRef(false);
+  const geoAutoCaptureTriedRef = useRef(false);
 
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('idle');
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -53,6 +56,10 @@ export function BiometricPage({ companyId }: { companyId: string }) {
   const [lastMetrics, setLastMetrics] = useState<FaceMetrics | null>(null);
   const [detectionMode, setDetectionMode] = useState<DetectionMode>('auto');
   const [manualHint, setManualHint] = useState<string | null>(null);
+  const [geoStatus, setGeoStatus] = useState<GeoStatus>('idle');
+  const [geo, setGeo] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
+  const [geoAddress, setGeoAddress] = useState<string | null>(null);
+  const [geoError, setGeoError] = useState<string | null>(null);
   const [completedGestures, setCompletedGestures] = useState<Record<Gesture, boolean>>({
     center: false,
     turn_left: false,
@@ -100,6 +107,13 @@ export function BiometricPage({ companyId }: { companyId: string }) {
     autoStartTriedRef.current = true;
     void activateCamera();
   }, []);
+
+  useEffect(() => {
+    if (cameraStatus !== 'active') return;
+    if (geoAutoCaptureTriedRef.current) return;
+    geoAutoCaptureTriedRef.current = true;
+    void captureGeolocation();
+  }, [cameraStatus]);
 
   async function activateCamera() {
     if (cameraStatus === 'active' || cameraStatus === 'requesting') return;
@@ -172,6 +186,7 @@ export function BiometricPage({ companyId }: { companyId: string }) {
     baselineRef.current = null;
     manualPrevFrameRef.current = null;
     manualStableCounterRef.current = 0;
+    manualGestureCounterRef.current = 0;
     missedFaceDetectionsRef.current = 0;
     setManualHint(null);
     setCompletedGestures({
@@ -179,6 +194,9 @@ export function BiometricPage({ companyId }: { companyId: string }) {
       turn_left: false,
       turn_right: false
     });
+    if (!geo && geoStatus !== 'requesting' && geoStatus !== 'resolving') {
+      void captureGeolocation();
+    }
 
     stopDetectionLoop();
     loopTimerRef.current = window.setInterval(() => {
@@ -273,9 +291,53 @@ export function BiometricPage({ companyId }: { companyId: string }) {
     setLastMetrics(null);
     manualPrevFrameRef.current = null;
     manualStableCounterRef.current = 0;
+    manualGestureCounterRef.current = 0;
     missedFaceDetectionsRef.current = 0;
     setManualHint(null);
+    setGeoStatus('idle');
+    setGeo(null);
+    setGeoAddress(null);
+    setGeoError(null);
+    geoAutoCaptureTriedRef.current = false;
     setBiometric({ status: 'pending' });
+  }
+
+  async function captureGeolocation() {
+    if (!navigator.geolocation) {
+      setGeoStatus('error');
+      setGeoError('Geolocalización no soportada por el navegador.');
+      return;
+    }
+
+    setGeoStatus('requesting');
+    setGeoError(null);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        setGeo({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        });
+        setGeoStatus('resolving');
+        const address = await reverseGeocode(position.coords.latitude, position.coords.longitude);
+        setGeoAddress(address);
+        setGeoStatus('granted');
+      },
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) {
+          setGeoStatus('denied');
+          setGeoError('Permiso de ubicación denegado.');
+          return;
+        }
+        setGeoStatus('error');
+        setGeoError(error.message || 'No se pudo obtener la ubicación.');
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+      }
+    );
   }
 
   async function runAutomaticFallbackStep() {
@@ -300,15 +362,37 @@ export function BiometricPage({ companyId }: { companyId: string }) {
         manualStableCounterRef.current = 0;
       }
 
-      if (manualStableCounterRef.current < 3) return;
+      if (manualStableCounterRef.current < 2) return;
       manualStableCounterRef.current = 0;
+      manualGestureCounterRef.current = 0;
       acceptFallbackStep();
       return;
     }
 
-    if (delta.motion < 0.045) return;
-    if (gesture === 'turn_left' && delta.centerX >= 0.54) return;
-    if (gesture === 'turn_right' && delta.centerX <= 0.46) return;
+    if (delta.motion < 0.03) {
+      manualGestureCounterRef.current = 0;
+      return;
+    }
+
+    if (gesture === 'turn_left') {
+      if (delta.centerX >= 0.49) {
+        manualGestureCounterRef.current = 0;
+        return;
+      }
+      manualGestureCounterRef.current += 1;
+      if (manualGestureCounterRef.current < 1) return;
+    }
+
+    if (gesture === 'turn_right') {
+      if (delta.centerX <= 0.51) {
+        manualGestureCounterRef.current = 0;
+        return;
+      }
+      manualGestureCounterRef.current += 1;
+      if (manualGestureCounterRef.current < 1) return;
+    }
+
+    manualGestureCounterRef.current = 0;
     acceptFallbackStep();
   }
 
@@ -317,6 +401,7 @@ export function BiometricPage({ companyId }: { companyId: string }) {
     const nextProgress = Math.round((nextIndex / GESTURE_PLAN.length) * 100);
     holdCounterRef.current = 0;
     setHoldCounter(0);
+    manualGestureCounterRef.current = 0;
     if (nextIndex >= GESTURE_PLAN.length) {
       finalizeSuccess(nextProgress);
       return;
@@ -410,10 +495,6 @@ export function BiometricPage({ companyId }: { companyId: string }) {
               Reiniciar
             </Button>
 
-            <Button onClick={() => void startChallenge()} disabled={cameraStatus !== 'active' || runningChallenge || isPassed}>
-              {runningChallenge ? 'Validando...' : 'Iniciar prueba'}
-            </Button>
-
             <Link to={`/onboarding/${companyId}/review`}>
               <Button disabled={!isPassed}>Continuar</Button>
             </Link>
@@ -438,9 +519,35 @@ export function BiometricPage({ companyId }: { companyId: string }) {
             <span className="font-medium text-dark">Fecha:</span>{' '}
             {current.completedAt ? new Date(current.completedAt).toLocaleString('es-VE') : 'Sin registro'}
           </p>
-          {lastMetrics ? (
-            <p className="mt-2 text-xs text-grayText">Lectura facial en vivo activa.</p>
+          <p className="mt-2">
+            <span className="font-medium text-dark">Geolocalización:</span>{' '}
+            {geoAddress
+              ? geoAddress
+              : geoStatus === 'denied'
+                ? 'Permiso denegado'
+                : geoStatus === 'resolving'
+                  ? 'Resolviendo dirección...'
+                : geoStatus === 'requesting'
+                  ? 'Obteniendo ubicación...'
+                  : geoStatus === 'error'
+                    ? geoError ?? 'No se pudo obtener ubicación'
+                  : geo
+                    ? 'Ubicación capturada, sin dirección legible'
+                    : 'Sin capturar'}
+          </p>
+          {!geoAddress && geoStatus !== 'requesting' && geoStatus !== 'resolving' ? (
+            <div className="mt-2">
+              <Button variant="secondary" onClick={() => void captureGeolocation()}>
+                Reintentar ubicación
+              </Button>
+            </div>
           ) : null}
+        </div>
+
+        <div className="mt-4">
+          <Button onClick={() => void startChallenge()} disabled={cameraStatus !== 'active' || runningChallenge || isPassed} fullWidth>
+            {runningChallenge ? 'Validando...' : 'Iniciar prueba'}
+          </Button>
         </div>
 
         <div className="mt-5 flex items-start gap-2 rounded-lg border border-[#F9D1C9] bg-[#FFF4F1] p-3 text-sm text-dark">
@@ -478,9 +585,9 @@ function evaluateGesture(gesture: Gesture, face: FaceMetrics, baseline: FaceMetr
     return Math.abs(face.centerX - 0.5) <= 0.22 && Math.abs(face.centerY - 0.5) <= 0.26;
   }
   if (gesture === 'turn_left') {
-    return face.centerX <= baseline.centerX - 0.02;
+    return face.centerX <= baseline.centerX - 0.035;
   }
-  return face.centerX >= baseline.centerX + 0.02;
+  return face.centerX >= baseline.centerX + 0.035;
 }
 
 function mapBiometricStatus(status: 'pending' | 'processing' | 'passed' | 'failed') {
@@ -541,4 +648,32 @@ function computeFrameMotion(a: ImageData, b: ImageData) {
   const motion = sumDiff / count / 255;
   const centerX = active ? weightedX / active / width : 0.5;
   return { motion, centerX };
+}
+
+async function reverseGeocode(lat: number, lng: number) {
+  try {
+    const endpoint = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&zoom=18&addressdetails=1`;
+    const response = await fetch(endpoint, {
+      headers: {
+        Accept: 'application/json'
+      }
+    });
+    if (!response.ok) return null;
+
+    const data = (await response.json()) as {
+      display_name?: string;
+      address?: Record<string, string | undefined>;
+    };
+
+    if (data.display_name) return data.display_name;
+    if (!data.address) return null;
+
+    const a = data.address;
+    const line = [a.road, a.house_number].filter(Boolean).join(' ').trim();
+    const area = [a.suburb, a.city || a.town || a.village, a.state, a.country].filter(Boolean).join(', ');
+    const composed = [line, area].filter(Boolean).join(', ');
+    return composed || null;
+  } catch {
+    return null;
+  }
 }
