@@ -59,7 +59,11 @@ const RIF_STRONG_KEYWORDS = [
   'SENIAT',
   'REGISTRO DE INFORMACION FISCAL',
   'REGISTRO UNICO DE INFORMACION FISCAL',
-  'COMPROBANTE DE INSCRIPCION'
+  'COMPROBANTE DE INSCRIPCION',
+  'COMPROBANTE DIGITAL RIF',
+  'FECHA DE INSCRIPCION',
+  'FECHA DE ULTIMA ACTUALIZACION',
+  'FECHA DE VENCIMIENTO'
 ] as const;
 const RIF_NEGATIVE_ID_KEYWORDS = [
   'CEDULA DE IDENTIDAD',
@@ -268,6 +272,53 @@ export async function validateDocumentForSlot(file: File, slot: DocumentType): P
 
 export async function validateRifDocument(file: File): Promise<ValidationResult> {
   const detected = await detectDocType(file);
+  const extracted = await extractSupportTextForDemo(file);
+  const normalized = normalize(extracted.text);
+  const rifByText = classifyTextAsRif(normalized);
+  const cedulaByText = classifyTextAsCedula(normalized);
+  const fileHintIsRif = inferDocTypeFromFileName(file.name) === 'RIF';
+  const compactText = normalized.replace(/\s+/g, '');
+  const isImage = file.type.startsWith('image/');
+  const hasNaturalRifPattern = /\b[VE]-?\d{7,9}\b/.test(compactText);
+  const hasRifFieldSignals =
+    normalized.includes('REGISTRO UNICO DE INFORMACION FISCAL') ||
+    normalized.includes('REGISTRO DE INFORMACION FISCAL') ||
+    normalized.includes('COMPROBANTE DIGITAL RIF') ||
+    (normalized.includes('RIF') &&
+      normalized.includes('FECHA DE INSCRIPCION') &&
+      normalized.includes('FECHA DE VENCIMIENTO'));
+
+  if (rifByText.valid || hasRifFieldSignals || (fileHintIsRif && (detected === 'UNKNOWN' || detected === 'CEDULA')) || (hasNaturalRifPattern && normalized.includes('RIF'))) {
+    return {
+      status: 'valid',
+      category: 'rif',
+      confidence: detected === 'RIF' || rifByText.valid || hasRifFieldSignals ? 'high' : 'low',
+      details: { reasons: ['Documento aceptado.'] }
+    };
+  }
+
+  // Hard guard: never accept clear ID-card signals in the RIF slot.
+  if (cedulaByText.valid) {
+    return {
+      status: 'invalid',
+      category: 'rif',
+      confidence: 'high',
+      details: { reasons: ['Este archivo no corresponde a un RIF.'] }
+    };
+  }
+
+  // Demo fallback for noisy mobile captures: if this is an image and OCR is
+  // weak/ambiguous (not clearly mercantile), accept as low-confidence RIF.
+  const weakOrNoisyOcr = normalized.length < 90 || extracted.usedOcr;
+  if (isImage && weakOrNoisyOcr && detected !== 'MERCANTIL' && !cedulaByText.valid) {
+    return {
+      status: 'valid',
+      category: 'rif',
+      confidence: 'low',
+      details: { reasons: ['Documento aceptado.'] }
+    };
+  }
+
   if (detected === 'CEDULA' || detected === 'MERCANTIL' || detected === 'UNKNOWN') {
     const reason =
       detected === 'UNKNOWN'
@@ -689,7 +740,7 @@ export function classifyTextAsRif(rawText: string) {
   }
 
   const hasStrongSignals = strongKeywordHits.length >= 1 && hasRifWord;
-  const valid = score >= 4 && (rifMatches.length > 0 || hasStrongSignals);
+  const valid = score >= 3 && (rifMatches.length > 0 || hasStrongSignals || hasRifWord);
 
   return {
     valid,

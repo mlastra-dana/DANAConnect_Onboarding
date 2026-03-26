@@ -239,6 +239,8 @@ export function BiometricPage({ companyId }: { companyId: string }) {
 
   function finalizeSuccess(nextProgress: number) {
     stopDetectionLoop();
+    stopCamera();
+    setCameraStatus('idle');
     setRunningChallenge(false);
     runningChallengeRef.current = false;
     setProgress(nextProgress);
