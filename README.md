@@ -35,3 +35,16 @@ API local de correo: `http://localhost:8787`
 - pdfjs-dist
 - zod
 - lucide-react
+
+## Lambda Demo
+
+Se agrego un ejemplo de Lambda en Python para validacion documental con Function URL:
+
+- [handler.py](/Users/marialastra/Documents/DANAConnect_Onboarding/lambda/document_validation/handler.py)
+- [requirements.txt](/Users/marialastra/Documents/DANAConnect_Onboarding/lambda/document_validation/requirements.txt)
+- [README.md](/Users/marialastra/Documents/DANAConnect_Onboarding/lambda/document_validation/README.md)
+
+La idea es usar:
+
+- Amazon Textract para extraer texto del archivo
+- Claude Sonnet 4 via Amazon Bedrock para clasificar el documento
