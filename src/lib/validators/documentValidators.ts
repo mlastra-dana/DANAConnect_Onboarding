@@ -46,17 +46,18 @@ export async function validateDocumentFile(
 
   const mappedStatus = result.status;
   const userMessage = result.messages[0] ?? 'Documento aceptado.';
+  const isWarning = result.status === 'warning';
 
   return {
     status: mappedStatus,
-    typeStatus: result.status === 'error' ? 'error' : 'valid',
+    typeStatus: result.status === 'error' ? 'error' : result.status === 'warning' ? 'review' : 'valid',
     validityStatus: result.validityStatus,
     checks,
     reasons: result.messages,
     warnings: result.warnings,
     uiStatus: {
       state: result.status === 'error' ? 'error' : 'ok',
-      title: result.status === 'error' ? 'Con errores' : 'Documento aceptado.',
+      title: result.status === 'error' ? 'Con errores' : isWarning ? 'Aceptado con revision recomendada' : 'Documento aceptado.',
       message: userMessage
     },
     extracted: {

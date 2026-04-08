@@ -193,7 +193,7 @@ export function DocumentUploader({
         {feedbackStatus === 'warning' ? (
           <p className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-700">
             <AlertTriangle className="h-4 w-4" />
-            <span>Válido con advertencias</span>
+            <span>Aceptado con revision recomendada</span>
           </p>
         ) : null}
         {feedbackStatus === 'error' ? (

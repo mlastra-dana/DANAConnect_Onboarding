@@ -47,9 +47,11 @@ export type SlotValidationResult = {
 };
 
 const TEXT_MIN_LENGTH = 24;
-const OCR_TIMEOUT_MS = 8000;
+const OCR_TIMEOUT_MS = 12000;
 const OCR_MAX_BYTES = 9 * 1024 * 1024;
-const MAX_IMAGE_WIDTH = 1500;
+const MAX_IMAGE_WIDTH = 1800;
+const PDF_OCR_SCALE = 2.2;
+const PDF_ANALYSIS_SCALE = 1.9;
 const SHARPNESS_WARN = 85;
 
 const RIF_REGEX = /\b([JVEGPC])\s*-?\s*(\d{7,9})\s*-?\s*(\d)\b/i;
@@ -173,7 +175,7 @@ export async function validateDocumentForSlot(
 
   let analysisCanvas: HTMLCanvasElement | null = null;
   if (isPdf) {
-    analysisCanvas = await renderPdfPageToCanvas(file, 1, 1.45);
+    analysisCanvas = await renderPdfPageToCanvas(file, 1, PDF_ANALYSIS_SCALE);
   } else {
     analysisCanvas = await buildImageCanvas(file, MAX_IMAGE_WIDTH);
   }
@@ -190,13 +192,13 @@ export async function validateDocumentForSlot(
   if (!textResult.hasText) {
     const hintMatch = FILE_HINTS[slotKey].some((hint) => hint.test(file.name));
     if (hintMatch && (isPdf || isImage)) {
-      warnings.push('Lectura limitada del contenido.');
+      warnings.push('No pudimos leer con claridad todo el contenido, pero el archivo parece corresponder al documento solicitado.');
       if (sharpnessLabel === 'warning') {
-        warnings.push('Motivo: calidad baja del archivo.');
+        warnings.push('La calidad de la imagen puede estar afectando la lectura.');
       }
       return {
         status: 'warning',
-        messages: ['Documento aceptado.'],
+        messages: ['Documento aceptado con revision recomendada.'],
         warnings,
         extracted: {
           hasText: false,
@@ -289,7 +291,7 @@ async function validatePeruvianDocumentForSlot(file: File, slot: DocumentType): 
     return buildError('Documento rechazado: formato no permitido.');
   }
 
-  const analysisCanvas = isPdf ? await renderPdfPageToCanvas(file, 1, 1.45) : await buildImageCanvas(file, MAX_IMAGE_WIDTH);
+  const analysisCanvas = isPdf ? await renderPdfPageToCanvas(file, 1, PDF_ANALYSIS_SCALE) : await buildImageCanvas(file, MAX_IMAGE_WIDTH);
   const sharpnessScore = analysisCanvas ? computeSharpness(analysisCanvas) : 0;
   const sharpnessLabel = classifySharpness(sharpnessScore);
   const warnings: string[] = [];
@@ -300,14 +302,18 @@ async function validatePeruvianDocumentForSlot(file: File, slot: DocumentType): 
 
   const textResult = isPdf ? await extractTextFromPdf(file) : await extractTextFromImage(file);
   const normalized = normalize(textResult.text);
+  const hintMatch = getPeruFileHints(slot).some((hint) => hint.test(file.name));
+  const weakRead =
+    !textResult.hasText ||
+    normalized.replace(/\s+/g, '').length < 60 ||
+    Boolean(textResult.usedOcr && (textResult.confidence == null || textResult.confidence < 72));
 
   if (!textResult.hasText) {
-    const hintMatch = getPeruFileHints(slot).some((hint) => hint.test(file.name));
     if (hintMatch) {
-      warnings.push('Lectura limitada del contenido.');
+      warnings.push('No pudimos leer con claridad todo el contenido, pero el archivo parece corresponder al documento solicitado.');
       return {
         status: 'warning',
-        messages: ['Documento aceptado.'],
+        messages: ['Documento aceptado con revision recomendada.'],
         warnings,
         extracted: {
           hasText: false,
@@ -347,6 +353,28 @@ async function validatePeruvianDocumentForSlot(file: File, slot: DocumentType): 
 
   const classification = classifyPeruvianBySlot(slot, normalized);
   if (!classification.valid) {
+    if (hintMatch && weakRead) {
+      warnings.push('La lectura del contenido fue parcial, pero el archivo parece corresponder al documento solicitado.');
+      return {
+        status: 'warning',
+        messages: ['Documento aceptado con revision recomendada.'],
+        warnings,
+        extracted: {
+          hasText: textResult.hasText,
+          usedOcr: textResult.usedOcr,
+          confidence: textResult.confidence,
+          keywordsFound: classification.keywordsFound,
+          datesFound: findAllDateStrings(textResult.text)
+        },
+        quality: {
+          sharpnessScore: round(sharpnessScore),
+          sharpnessLabel
+        },
+        score: classification.score,
+        validityStatus: 'unknown'
+      };
+    }
+
     return {
       status: 'error',
       messages: [`Documento rechazado: ${classification.reason}`],
@@ -634,17 +662,12 @@ export async function extractTextFromPdf(file: File) {
   const firstPage = await extractPdfText(file, 1);
   let text = firstPage ?? '';
 
-  if (normalize(text).length < TEXT_MIN_LENGTH) {
-    const secondPass = await extractPdfText(file, 2);
-    text = secondPass ?? text;
-  }
-
   let usedOcr = false;
   let confidence: number | undefined;
   let hasText = normalize(text).length >= TEXT_MIN_LENGTH;
 
   if (!hasText && file.size <= OCR_MAX_BYTES) {
-    const pageCanvas = await renderPdfPageToCanvas(file, 1, 1.4);
+    const pageCanvas = await renderPdfPageToCanvas(file, 1, PDF_OCR_SCALE);
     const ocr = await runOcrLight(pageCanvas, OCR_TIMEOUT_MS);
     usedOcr = true;
     confidence = ocr.confidence;
