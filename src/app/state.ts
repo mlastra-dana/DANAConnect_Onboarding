@@ -36,6 +36,7 @@ export function createEmptyBiometric() {
 export function createInitialState(companyId: string, tenant: TenantConfig): OnboardingState {
   return {
     companyId,
+    country: 've',
     tenant,
     documents: {
       rif: createEmptyDocument('rif'),

@@ -1,10 +1,11 @@
-import { DocumentType, DocumentValidationResult } from '../../app/types';
+import { CountryCode, DocumentType, DocumentValidationResult } from '../../app/types';
 import { validateBasicFile } from './fileValidators';
 import { validateDocumentForSlot } from '../documentValidation';
 
 export async function validateDocumentFile(
   type: DocumentType,
   file: File,
+  country: CountryCode,
   onProgress?: (progress: number) => void
 ): Promise<DocumentValidationResult> {
   const checks: DocumentValidationResult['checks'] = [];
@@ -40,10 +41,10 @@ export async function validateDocumentFile(
   }
 
   onProgress?.(30);
-  const result = await validateDocumentForSlot(file, type);
+  const result = await validateDocumentForSlot(file, type, country);
   onProgress?.(100);
 
-  const mappedStatus = result.status === 'error' ? 'error' : 'valid';
+  const mappedStatus = result.status;
   const userMessage = result.messages[0] ?? 'Documento aceptado.';
 
   return {

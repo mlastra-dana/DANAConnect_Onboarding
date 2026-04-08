@@ -1,4 +1,5 @@
 import { OnboardingState } from '../app/types';
+import { getCountryConfig, getDocumentLabel } from '../config/onboardingCountries';
 
 type ReceiptData = {
   companyName: string;
@@ -11,6 +12,7 @@ type ReceiptData = {
 export function buildReceiptData(state: OnboardingState): ReceiptData {
   const submittedAt = state.submission.submittedAt ? new Date(state.submission.submittedAt) : new Date();
   const code = shortRequestCode(state.submission.registrationId);
+  const country = getCountryConfig(state.country);
 
   return {
     companyName: state.tenant.name,
@@ -18,11 +20,11 @@ export function buildReceiptData(state: OnboardingState): ReceiptData {
     requestCode: code,
     submittedAt,
     documents: [
-      { label: 'RIF', fileName: state.documents.rif.fileName },
-      { label: 'Registro Mercantil / Acta', fileName: state.documents.registroMercantil.fileName },
-      { label: 'Representante 1', fileName: state.representatives[0].document.fileName },
+      { label: getDocumentLabel(state.country, 'rif'), fileName: state.documents.rif.fileName },
+      { label: getDocumentLabel(state.country, 'registroMercantil'), fileName: state.documents.registroMercantil.fileName },
+      { label: country.reviewRepresentativePrimaryLabel, fileName: state.representatives[0].document.fileName },
       {
-        label: 'Representante 2',
+        label: country.reviewRepresentativeSecondaryLabel,
         fileName: state.representatives[1].enabled ? state.representatives[1].document.fileName : 'No aplica'
       },
       { label: 'Biometría', fileName: biometricToFileLabel(state.biometrics.status) }

@@ -1,5 +1,6 @@
 import { TenantConfig } from '../data/tenants';
 
+export type CountryCode = 've' | 'pe';
 export type DocumentType = 'rif' | 'registroMercantil' | 'cedulaRepresentante';
 export type DocumentRecordType = DocumentType;
 export type RequiredDocumentType = 'rif' | 'registroMercantil';
@@ -78,6 +79,7 @@ export type SubmissionState = {
 
 export type OnboardingState = {
   companyId: string;
+  country: CountryCode;
   tenant: TenantConfig;
   documents: Record<RequiredDocumentType, DocumentRecord>;
   representatives: [RepresentativeRecord, RepresentativeRecord];

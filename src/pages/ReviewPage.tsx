@@ -4,9 +4,9 @@ import { useOnboarding } from '../app/OnboardingContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/ui/Badge';
-import { DOCUMENT_LABELS } from '../app/state';
 import { Toast } from '../components/ui/Toast';
 import { buildDemoEmail, openMailto, sendEmailViaApi } from '../lib/email/demoMail';
+import { getCountryConfig, getDocumentLabel } from '../config/onboardingCountries';
 
 export function ReviewPage({ companyId }: { companyId: string }) {
   const { state, canSubmit, setSubmission } = useOnboarding();
@@ -14,6 +14,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
   const navigate = useNavigate();
   const representative1 = state.representatives.find((rep) => rep.id === 1)!;
   const representative2 = state.representatives.find((rep) => rep.id === 2)!;
+  const countryConfig = getCountryConfig(state.country);
   const requiredDocuments = [
     state.documents.rif.fileName,
     state.documents.registroMercantil.fileName,
@@ -95,7 +96,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
           {Object.values(state.documents).map((doc, idx) => (
             <li key={`${doc.type}-${idx}`} className="flex items-center justify-between rounded-lg border border-borderLight p-3">
               <div>
-                <p className="font-medium text-dark">{DOCUMENT_LABELS[doc.type]}</p>
+                <p className="font-medium text-dark">{getDocumentLabel(state.country, doc.type)}</p>
                 <p className="text-xs text-grayText">{doc.fileName ?? 'Sin archivo'}</p>
               </div>
               <StatusBadge status={doc.validation.status} />
@@ -103,14 +104,14 @@ export function ReviewPage({ companyId }: { companyId: string }) {
           ))}
           <li className="flex items-center justify-between rounded-lg border border-borderLight p-3">
             <div>
-              <p className="font-medium text-dark">Cédula del Representante 1</p>
+              <p className="font-medium text-dark">{countryConfig.reviewRepresentativePrimaryLabel}</p>
               <p className="text-xs text-grayText">{representative1.document.fileName ?? 'Sin archivo'}</p>
             </div>
             <StatusBadge status={representative1.document.validation.status} />
           </li>
           <li className="flex items-center justify-between rounded-lg border border-borderLight p-3">
             <div>
-              <p className="font-medium text-dark">Cédula del Representante 2</p>
+              <p className="font-medium text-dark">{countryConfig.reviewRepresentativeSecondaryLabel}</p>
               <p className="text-xs text-grayText">
                 {!representative2.enabled
                   ? 'No aplica'

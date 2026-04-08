@@ -1,4 +1,4 @@
-import { DocumentType, SharpnessLabel } from '../app/types';
+import { CountryCode, DocumentType, SharpnessLabel } from '../app/types';
 import { extractPdfText, renderPdfPageToCanvas } from './pdf/pdfUtils';
 
 export type SlotStatus = 'valid' | 'error' | 'warning';
@@ -54,6 +54,9 @@ const SHARPNESS_WARN = 85;
 
 const RIF_REGEX = /\b([JVEGPC])\s*-?\s*(\d{7,9})\s*-?\s*(\d)\b/i;
 const CEDULA_REGEX = /\bV\s?-?\s?\d{5,9}\b|\bE\s?-?\s?\d{5,9}\b/i;
+const PERU_RUC_REGEX = /\b(?:10|15|16|17|20)\d{9}\b/;
+const PERU_DNI_REGEX = /\b\d{8}\b/;
+const PERU_CE_REGEX = /\b(?:CE|CARNET DE EXTRANJERIA|CARNET EXTRANJERIA)(?:\s*(?:NRO|NO|NUMERO|N)?[:.\- ]*)?\d{8,12}\b/;
 const DATE_REGEX = /\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}[/-]\d{1,2}[/-]\d{1,2})\b/g;
 const RIF_STRONG_KEYWORDS = [
   'SENIAT',
@@ -135,7 +138,15 @@ const FILE_HINTS: Record<DocumentType, RegExp[]> = {
   cedulaRepresentante: [/cedula/i, /saime/i, /identidad/i]
 };
 
-export async function validateDocumentForSlot(file: File, slot: DocumentType): Promise<SlotValidationResult> {
+export async function validateDocumentForSlot(
+  file: File,
+  slot: DocumentType,
+  country: CountryCode = 've'
+): Promise<SlotValidationResult> {
+  if (country === 'pe') {
+    return validatePeruvianDocumentForSlot(file, slot);
+  }
+
   const slotKey = slot;
   if (slot === 'rif') {
     const rifResult = await validateRifDocument(file);
@@ -253,6 +264,115 @@ export async function validateDocumentForSlot(file: File, slot: DocumentType): P
   return {
     status: finalStatus,
     messages,
+    warnings,
+    extracted: {
+      hasText: true,
+      usedOcr: textResult.usedOcr,
+      confidence: textResult.confidence,
+      keywordsFound: classification.keywordsFound,
+      datesFound: findAllDateStrings(textResult.text)
+    },
+    quality: {
+      sharpnessScore: round(sharpnessScore),
+      sharpnessLabel
+    },
+    score: classification.score,
+    validityStatus: validity.status
+  };
+}
+
+async function validatePeruvianDocumentForSlot(file: File, slot: DocumentType): Promise<SlotValidationResult> {
+  const isPdf = file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf');
+  const isImage = file.type.startsWith('image/');
+
+  if (!isPdf && !isImage) {
+    return buildError('Documento rechazado: formato no permitido.');
+  }
+
+  const analysisCanvas = isPdf ? await renderPdfPageToCanvas(file, 1, 1.45) : await buildImageCanvas(file, MAX_IMAGE_WIDTH);
+  const sharpnessScore = analysisCanvas ? computeSharpness(analysisCanvas) : 0;
+  const sharpnessLabel = classifySharpness(sharpnessScore);
+  const warnings: string[] = [];
+
+  if (sharpnessLabel === 'warning') {
+    warnings.push('Calidad baja del archivo.');
+  }
+
+  const textResult = isPdf ? await extractTextFromPdf(file) : await extractTextFromImage(file);
+  const normalized = normalize(textResult.text);
+
+  if (!textResult.hasText) {
+    const hintMatch = getPeruFileHints(slot).some((hint) => hint.test(file.name));
+    if (hintMatch) {
+      warnings.push('Lectura limitada del contenido.');
+      return {
+        status: 'warning',
+        messages: ['Documento aceptado.'],
+        warnings,
+        extracted: {
+          hasText: false,
+          usedOcr: textResult.usedOcr,
+          confidence: textResult.confidence,
+          keywordsFound: [],
+          datesFound: []
+        },
+        quality: {
+          sharpnessScore: round(sharpnessScore),
+          sharpnessLabel
+        },
+        score: 0,
+        validityStatus: 'unknown'
+      };
+    }
+
+    return {
+      status: 'error',
+      messages: ['Documento rechazado: no se pudo confirmar el contenido del archivo.'],
+      warnings,
+      extracted: {
+        hasText: false,
+        usedOcr: textResult.usedOcr,
+        confidence: textResult.confidence,
+        keywordsFound: [],
+        datesFound: []
+      },
+      quality: {
+        sharpnessScore: round(sharpnessScore),
+        sharpnessLabel
+      },
+      score: 0,
+      validityStatus: 'unknown'
+    };
+  }
+
+  const classification = classifyPeruvianBySlot(slot, normalized);
+  if (!classification.valid) {
+    return {
+      status: 'error',
+      messages: [`Documento rechazado: ${classification.reason}`],
+      warnings,
+      extracted: {
+        hasText: true,
+        usedOcr: textResult.usedOcr,
+        confidence: textResult.confidence,
+        keywordsFound: classification.keywordsFound,
+        datesFound: findAllDateStrings(textResult.text)
+      },
+      quality: {
+        sharpnessScore: round(sharpnessScore),
+        sharpnessLabel
+      },
+      score: classification.score,
+      validityStatus: 'unknown'
+    };
+  }
+
+  const validity = parsePeruvianValidityWarnings(slot, textResult.text);
+  warnings.push(...validity.warnings);
+
+  return {
+    status: warnings.length > 0 ? 'warning' : 'valid',
+    messages: ['Documento aceptado.'],
     warnings,
     extracted: {
       hasText: true,
@@ -998,6 +1118,128 @@ function parseValidityWarnings(slot: DocumentType, rawText: string) {
   }
 
   return { status: 'ok' as const, warnings };
+}
+
+function getPeruFileHints(slot: DocumentType) {
+  if (slot === 'rif') return [/ruc/i, /sunat/i, /ficha/i];
+  if (slot === 'registroMercantil') return [/sunarp/i, /vigencia/i, /partida/i, /registral/i, /poder/i];
+  return [/dni/i, /ce/i, /identidad/i, /extranjer/i];
+}
+
+function classifyPeruvianBySlot(slot: DocumentType, rawText: string) {
+  const text = normalize(rawText).replace(/\s+/g, ' ').trim();
+  if (!text) {
+    return {
+      valid: false,
+      reason: 'no se pudo confirmar el contenido del archivo.',
+      score: 0,
+      keywordsFound: [] as string[]
+    };
+  }
+
+  if (slot === 'rif') {
+    const keywordsFound = findPhraseMatches(
+      text,
+      ['RUC', 'SUNAT', 'REGISTRO UNICO DE CONTRIBUYENTES', 'FICHA RUC', 'ESTADO DEL CONTRIBUYENTE'],
+      0.6
+    );
+    const antiHits = findPhraseMatches(text, ['DNI', 'DOCUMENTO NACIONAL DE IDENTIDAD', 'SUNARP', 'PARTIDA REGISTRAL'], 0.6);
+    let score = keywordsFound.length * 2;
+    if (PERU_RUC_REGEX.test(text)) {
+      score += 4;
+      keywordsFound.push('PATRON_RUC');
+    }
+    if (antiHits.length >= 2) {
+      return { valid: false, reason: 'el archivo parece corresponder a otro tipo de documento, no a un RUC.', score, keywordsFound };
+    }
+    return {
+      valid: score >= 4,
+      reason: score >= 4 ? '' : 'no coincide con un RUC emitido para Peru.',
+      score,
+      keywordsFound
+    };
+  }
+
+  if (slot === 'registroMercantil') {
+    const keywordsFound = findPhraseMatches(
+      text,
+      ['SUNARP', 'PARTIDA REGISTRAL', 'VIGENCIA DE PODER', 'ASIENTO', 'OFICINA REGISTRAL', 'ZONA REGISTRAL', 'PERSONA JURIDICA'],
+      0.6
+    );
+    const antiHits = findPhraseMatches(text, ['SUNAT', 'RUC', 'DNI', 'DOCUMENTO NACIONAL DE IDENTIDAD', 'CARNET DE EXTRANJERIA'], 0.6);
+    let score = keywordsFound.length * 1.5;
+    if (text.includes('REPRESENTACION') || text.includes('APODERADO') || text.includes('PODER')) score += 1.5;
+    if (text.includes('PARTIDA') && text.includes('REGISTRAL')) score += 2;
+    if (antiHits.length >= 2 && score < 5) {
+      return {
+        valid: false,
+        reason: 'el archivo no coincide con una Vigencia de Poder o Partida Registral.',
+        score,
+        keywordsFound
+      };
+    }
+    return {
+      valid: score >= 4.5,
+      reason: score >= 4.5 ? '' : 'no coincide con una Vigencia de Poder o Partida Registral.',
+      score,
+      keywordsFound
+    };
+  }
+
+  const keywordsFound = findPhraseMatches(
+    text,
+    ['DNI', 'DOCUMENTO NACIONAL DE IDENTIDAD', 'RENIEC', 'CARNET DE EXTRANJERIA', 'IDENTIDAD'],
+    0.6
+  );
+  const antiHits = findPhraseMatches(text, ['SUNAT', 'RUC', 'SUNARP', 'PARTIDA REGISTRAL', 'VIGENCIA DE PODER'], 0.6);
+  let score = keywordsFound.length * 1.5;
+  if (PERU_DNI_REGEX.test(text)) {
+    score += 3;
+    keywordsFound.push('PATRON_DNI');
+  }
+  if (PERU_CE_REGEX.test(text)) {
+    score += 3;
+    keywordsFound.push('PATRON_CE');
+  }
+  if (antiHits.length >= 2 && score < 5) {
+    return { valid: false, reason: 'el archivo parece no corresponder a un DNI o Carnet de Extranjeria.', score, keywordsFound };
+  }
+  return {
+    valid: score >= 4.5,
+    reason: score >= 4.5 ? '' : 'no coincide con un DNI o Carnet de Extranjeria del representante.',
+    score,
+    keywordsFound
+  };
+}
+
+function parsePeruvianValidityWarnings(slot: DocumentType, rawText: string) {
+  const warnings: string[] = [];
+
+  if (slot === 'cedulaRepresentante') {
+    const { expiry, raw } = parseExpiry(rawText);
+    if (expiry && expiry.getTime() < Date.now()) {
+      warnings.push(`Documento de identidad vencido (${raw ?? formatDate(expiry)}).`);
+      return { status: 'warning' as const, warnings };
+    }
+  }
+
+  if (slot === 'registroMercantil') {
+    const parsedDates = findAllDateStrings(rawText)
+      .map((token) => parseDate(token))
+      .filter((value): value is Date => Boolean(value));
+
+    if (parsedDates.length > 0) {
+      const newest = parsedDates.reduce((acc, cur) => (cur.getTime() > acc.getTime() ? cur : acc));
+      const fiveYearsMs = 5 * 365 * 24 * 60 * 60 * 1000;
+      if (Date.now() - newest.getTime() > fiveYearsMs) {
+        warnings.push('El documento registral luce antiguo. Verifique si requiere una version actualizada.');
+        return { status: 'warning' as const, warnings };
+      }
+      return { status: 'ok' as const, warnings };
+    }
+  }
+
+  return { status: 'unknown' as const, warnings };
 }
 
 function classifySharpness(score: number): SharpnessLabel {

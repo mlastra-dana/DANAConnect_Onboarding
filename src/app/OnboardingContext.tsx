@@ -2,6 +2,7 @@ import { PropsWithChildren, createContext, useContext, useEffect, useMemo, useRe
 import { TenantConfig } from '../data/tenants';
 import {
   BiometricValidationRecord,
+  CountryCode,
   DocumentRecord,
   OnboardingState,
   RepresentativeRecord,
@@ -11,6 +12,7 @@ import {
 import { clearState, createEmptyDocument, createInitialState, loadState, saveState } from './state';
 
 type Action =
+  | { type: 'set_country'; payload: CountryCode }
   | { type: 'set_document'; payload: { docType: RequiredDocumentType; record: DocumentRecord } }
   | { type: 'set_representative'; payload: { id: 1 | 2; representative: RepresentativeRecord } }
   | { type: 'set_representative_enabled'; payload: { id: 2; enabled: boolean } }
@@ -20,6 +22,7 @@ type Action =
 
 type ContextValue = {
   state: OnboardingState;
+  setCountry: (country: CountryCode) => void;
   setDocument: (docType: RequiredDocumentType, record: DocumentRecord) => void;
   setRepresentative: (id: 1 | 2, representative: RepresentativeRecord) => void;
   setRepresentativeEnabled: (id: 2, enabled: boolean) => void;
@@ -36,6 +39,11 @@ const OnboardingContext = createContext<ContextValue | null>(null);
 
 function reducer(state: OnboardingState, action: Action): OnboardingState {
   switch (action.type) {
+    case 'set_country':
+      return {
+        ...state,
+        country: action.payload
+      };
     case 'set_document':
       return {
         ...state,
@@ -125,6 +133,7 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
 
     return {
       state,
+      setCountry: (country) => dispatch({ type: 'set_country', payload: country }),
       setDocument: (docType, record) => dispatch({ type: 'set_document', payload: { docType, record } }),
       setRepresentative: (id, representative) => dispatch({ type: 'set_representative', payload: { id, representative } }),
       setRepresentativeEnabled: (id, enabled) => dispatch({ type: 'set_representative_enabled', payload: { id, enabled } }),

@@ -8,6 +8,7 @@ import { Toast } from '../components/ui/Toast';
 import { validateDocumentFile } from '../lib/validators/documentValidators';
 import { createEmptyDocument, createEmptyRepresentative } from '../app/state';
 import { DocumentRecord, RequiredDocumentType, RepresentativeRecord } from '../app/types';
+import { getCountryConfig, getDocumentLabel } from '../config/onboardingCountries';
 
 type UploadKey = 'rif' | 'registroMercantil' | 'rep1' | 'rep2';
 
@@ -36,6 +37,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
   const representative1 = state.representatives.find((rep) => rep.id === 1)!;
   const representative2 = state.representatives.find((rep) => rep.id === 2)!;
   const documentOrder: RequiredDocumentType[] = ['rif', 'registroMercantil'];
+  const countryConfig = getCountryConfig(state.country);
 
   async function handleUploadBase(docType: RequiredDocumentType, file: File) {
     const key: UploadKey = docType;
@@ -56,7 +58,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
     setRuntimeFiles((prev) => ({ ...prev, [key]: file }));
 
-    const result = await validateDocumentFile(docType, file, (progress) => {
+    const result = await validateDocumentFile(docType, file, state.country, (progress) => {
       setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
     });
 
@@ -94,7 +96,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
     setRuntimeFiles((prev) => ({ ...prev, [key]: file }));
 
-    const result = await validateDocumentFile('cedulaRepresentante', file, (progress) => {
+    const result = await validateDocumentFile('cedulaRepresentante', file, state.country, (progress) => {
       setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
     });
 
@@ -161,13 +163,15 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
   return (
     <div className="space-y-6">
-      <Toast type="info" message="Cargue los documentos requeridos para continuar." />
+      <Toast type="info" message={countryConfig.documentsIntro} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {documentOrder.map((docType) => (
           <FileUploadCard
             key={docType}
             docRecord={state.documents[docType] as DocumentRecord}
+            title={getDocumentLabel(state.country, docType)}
+            label={getDocumentLabel(state.country, docType)}
             loading={loadingMap[docType] || uploadingMap[docType]}
             isUploading={uploadingMap[docType]}
             uploadProgress={uploadProgressMap[docType]}
@@ -179,17 +183,18 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         ))}
 
         <FileUploadCard
-          sectionTitle="Representantes legales"
-          sectionDescription="Cargue la cédula del representante principal. Puede agregar un segundo representante si aplica."
+          sectionTitle={countryConfig.representativeSectionTitle}
+          sectionDescription={countryConfig.representativeSectionDescription}
           sectionAction={
             !representative2.enabled ? (
               <Button type="button" variant="secondary" onClick={handleAddRepresentative2}>
                 <Plus className="h-4 w-4" />
-                Agregar segundo representante
+                {countryConfig.addSecondRepresentativeLabel}
               </Button>
             ) : undefined
           }
-          title="Cédula del Representante (Obligatorio)"
+          title={countryConfig.representativePrimaryTitle}
+          label={countryConfig.documents.cedulaRepresentante.label}
           docRecord={{ ...representative1.document, type: 'cedulaRepresentante' }}
           loading={loadingMap.rep1 || uploadingMap.rep1}
           isUploading={uploadingMap.rep1}
@@ -202,11 +207,12 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
         {representative2.enabled ? (
           <FileUploadCard
-            title="Cédula del segundo representante (Opcional)"
+            title={countryConfig.representativeSecondaryTitle}
+            label={countryConfig.documents.cedulaRepresentante.label}
             sectionAction={
               <Button type="button" variant="ghost" onClick={handleDeleteRepresentative2}>
                 <Trash2 className="h-4 w-4" />
-                Quitar segundo representante
+                {countryConfig.removeSecondRepresentativeLabel}
               </Button>
             }
             docRecord={{ ...representative2.document, type: 'cedulaRepresentante' }}

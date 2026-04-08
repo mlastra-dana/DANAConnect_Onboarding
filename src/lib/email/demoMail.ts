@@ -1,4 +1,5 @@
 import { OnboardingState } from '../../app/types';
+import { getCountryConfig, getDocumentLabel } from '../../config/onboardingCountries';
 
 export type DemoEmailPayload = {
   trackingId: string;
@@ -22,6 +23,7 @@ export function buildDemoEmail(state: OnboardingState, companyId: string, extern
   }`;
 
   const companyName = state.tenant.name;
+  const country = getCountryConfig(state.country);
 
   const subject = `DanaConnect | Onboarding recibido | ${companyName} | ${trackingId}`;
   const body = [
@@ -30,15 +32,16 @@ export function buildDemoEmail(state: OnboardingState, companyId: string, extern
     'Se recibió documentación desde el Portal de Onboarding.',
     '',
     `Empresa: ${companyName} (ID: ${companyId})`,
+    `País: ${country.name}`,
     `Código: ${trackingId}`,
     `Fecha: ${submittedAtISO}`,
     `Link del portal: ${portalLink}`,
     '',
     'Resumen:',
-    `- RIF: ${statusLabel(state.documents.rif.validation.status)}`,
-    `- Registro/Acta: ${statusLabel(state.documents.registroMercantil.validation.status)}`,
-    `- Cédula Representante: ${statusLabel(state.representatives[0].document.validation.status)}`,
-    `- Cédula Representante 2: ${
+    `- ${getDocumentLabel(state.country, 'rif')}: ${statusLabel(state.documents.rif.validation.status)}`,
+    `- ${getDocumentLabel(state.country, 'registroMercantil')}: ${statusLabel(state.documents.registroMercantil.validation.status)}`,
+    `- ${country.reviewRepresentativePrimaryLabel}: ${statusLabel(state.representatives[0].document.validation.status)}`,
+    `- ${country.reviewRepresentativeSecondaryLabel}: ${
       state.representatives[1].enabled ? statusLabel(state.representatives[1].document.validation.status) : 'No aplica'
     }`,
     `- Biometría: ${biometricStatusLabel(state.biometrics.status)}`,
@@ -50,14 +53,15 @@ export function buildDemoEmail(state: OnboardingState, companyId: string, extern
 }
 
 export function buildFriendlySummaryLines(state: OnboardingState) {
+  const country = getCountryConfig(state.country);
   const lines = [
-    `RIF: ${statusToFriendly(state.documents.rif.validation.status)}`,
-    `Registro/Acta: ${statusToFriendly(state.documents.registroMercantil.validation.status)}`,
-    `Cédula representante: ${statusToFriendly(state.representatives[0].document.validation.status)}`
+    `${getDocumentLabel(state.country, 'rif')}: ${statusToFriendly(state.documents.rif.validation.status)}`,
+    `${getDocumentLabel(state.country, 'registroMercantil')}: ${statusToFriendly(state.documents.registroMercantil.validation.status)}`,
+    `${country.reviewRepresentativePrimaryLabel}: ${statusToFriendly(state.representatives[0].document.validation.status)}`
   ];
 
   if (state.representatives[1].enabled) {
-    lines.push(`Cédula segundo representante: ${statusToFriendly(state.representatives[1].document.validation.status)}`);
+    lines.push(`${country.reviewRepresentativeSecondaryLabel}: ${statusToFriendly(state.representatives[1].document.validation.status)}`);
   }
   lines.push(`Biometría: ${biometricStatusToFriendly(state.biometrics.status)}`);
 

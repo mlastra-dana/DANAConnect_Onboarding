@@ -1,7 +1,6 @@
 import { useId, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle, Loader2, UploadCloud, XCircle } from 'lucide-react';
 import { DocumentRecord } from '../../app/types';
-import { DOCUMENT_LABELS } from '../../app/state';
 import { StatusBadge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -12,6 +11,7 @@ import { Progress } from '../ui/Progress';
 export function DocumentUploader({
   docRecord,
   title,
+  label,
   sectionTitle,
   sectionDescription,
   sectionAction,
@@ -25,6 +25,7 @@ export function DocumentUploader({
 }: {
   docRecord: DocumentRecord;
   title?: string;
+  label?: string;
   sectionTitle?: string;
   sectionDescription?: string;
   sectionAction?: React.ReactNode;
@@ -40,6 +41,7 @@ export function DocumentUploader({
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
   const fileAccept = useMemo(() => '.pdf,.png,.jpg,.jpeg,.webp', []);
+  const resolvedLabel = label ?? title ?? docRecord.type;
   const feedbackStatus = loading
     ? 'pending'
     : docRecord.validation.status === 'valid'
@@ -90,7 +92,7 @@ export function DocumentUploader({
         </div>
       ) : null}
 
-      <h3 className="pr-24 text-lg font-semibold text-dark">{title ?? DOCUMENT_LABELS[docRecord.type]}</h3>
+      <h3 className="pr-24 text-lg font-semibold text-dark">{title ?? resolvedLabel}</h3>
 
       {loading ? (
         <div className="space-y-2 rounded-lg border border-borderLight bg-surface p-3">
@@ -106,7 +108,7 @@ export function DocumentUploader({
       <div
         role="button"
         tabIndex={0}
-        aria-label={`Subir ${DOCUMENT_LABELS[docRecord.type]}`}
+        aria-label={`Subir ${resolvedLabel}`}
         onClick={triggerFileDialog}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
@@ -172,7 +174,7 @@ export function DocumentUploader({
           ) : docRecord.previewUrl ? (
             <img
               src={docRecord.previewUrl}
-              alt={`Vista previa de ${DOCUMENT_LABELS[docRecord.type]}`}
+              alt={`Vista previa de ${resolvedLabel}`}
               className="mt-3 max-h-56 rounded-lg"
             />
           ) : (
