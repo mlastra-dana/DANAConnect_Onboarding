@@ -58,7 +58,7 @@ export function getStorageKey(companyId: string) {
 
 export function saveState(state: OnboardingState) {
   const key = getStorageKey(state.companyId);
-  localStorage.setItem(key, JSON.stringify(state));
+  localStorage.setItem(key, JSON.stringify(stripTransientDocuments(state)));
 }
 
 export function clearState(companyId: string) {
@@ -70,8 +70,30 @@ export function loadState(companyId: string): OnboardingState | null {
   const raw = localStorage.getItem(getStorageKey(companyId));
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as OnboardingState;
+    return stripTransientDocuments(JSON.parse(raw) as OnboardingState);
   } catch {
     return null;
   }
+}
+
+function stripTransientDocuments(state: OnboardingState): OnboardingState {
+  const [representative1, representative2] = state.representatives;
+
+  return {
+    ...state,
+    documents: {
+      rif: createEmptyDocument('rif'),
+      registroMercantil: createEmptyDocument('registroMercantil')
+    },
+    representatives: [
+      {
+        ...representative1,
+        document: createEmptyDocument('cedulaRepresentante')
+      },
+      {
+        ...representative2,
+        document: createEmptyDocument('cedulaRepresentante')
+      }
+    ]
+  };
 }

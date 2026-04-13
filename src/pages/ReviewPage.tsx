@@ -7,6 +7,7 @@ import { StatusBadge } from '../components/ui/Badge';
 import { Toast } from '../components/ui/Toast';
 import { buildDemoEmail, openMailto, sendEmailViaApi } from '../lib/email/demoMail';
 import { getCountryConfig, getDocumentLabel } from '../config/onboardingCountries';
+import { clearState } from '../app/state';
 
 export function ReviewPage({ companyId }: { companyId: string }) {
   const { state, canSubmit, setSubmission } = useOnboarding();
@@ -65,6 +66,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
       };
 
       localStorage.setItem(`onboarding_submission:${companyId}:${email.trackingId}`, JSON.stringify(payload));
+      clearState(companyId);
       navigate(`/onboarding/${companyId}/success`);
     } catch {
       setSubmission({ status: 'error', error: 'No se pudo completar el envío. Intente nuevamente.' });
