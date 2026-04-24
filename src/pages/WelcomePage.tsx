@@ -9,7 +9,7 @@ export function WelcomePage({ companyId }: { companyId: string }) {
   const { state, setCountry } = useOnboarding();
   const selectedCountry = getCountryConfig(state.country);
 
-  function handleCountrySelect(country: 've' | 'pe') {
+  function handleCountrySelect(country: 've' | 'pe' | 'bo') {
     setCountry(country);
     navigate(`/onboarding/${companyId}/documents`);
   }

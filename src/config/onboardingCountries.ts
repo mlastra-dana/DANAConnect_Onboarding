@@ -73,6 +73,29 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
     removeSecondRepresentativeLabel: 'Quitar segundo representante',
     reviewRepresentativePrimaryLabel: 'DNI o CE del Representante 1',
     reviewRepresentativeSecondaryLabel: 'DNI o CE del Representante 2'
+  },
+  bo: {
+    code: 'bo',
+    name: 'Bolivia',
+    flag: '🇧🇴',
+    heroEyebrow: 'DANACONNECT BOLIVIA',
+    heroHeadline: 'Onboarding documental para empresas en Bolivia.',
+    heroSubheadline: 'Mantenga el flujo guiado de DanaConnect, adaptado a los requisitos documentales y de identificacion empresarial de Bolivia.',
+    heroButton: 'Continuar con Bolivia',
+    documentsIntro: 'Cargue la documentacion requerida para completar el onboarding de Bolivia.',
+    documents: {
+      rif: { label: 'NIT' },
+      registroMercantil: { label: 'Matricula de Comercio o Testimonio de Constitucion' },
+      cedulaRepresentante: { label: 'CI del Representante' }
+    },
+    representativePrimaryTitle: 'CI del Representante (Obligatorio)',
+    representativeSecondaryTitle: 'CI del segundo representante (Opcional)',
+    representativeSectionTitle: 'Representantes legales',
+    representativeSectionDescription: 'Cargue la cedula de identidad del representante principal. Puede agregar un segundo representante si aplica.',
+    addSecondRepresentativeLabel: 'Agregar segundo representante',
+    removeSecondRepresentativeLabel: 'Quitar segundo representante',
+    reviewRepresentativePrimaryLabel: 'CI del Representante 1',
+    reviewRepresentativeSecondaryLabel: 'CI del Representante 2'
   }
 };
 

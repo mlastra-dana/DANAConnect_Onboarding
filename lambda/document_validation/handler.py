@@ -35,6 +35,9 @@ DOC_SLOT_LABELS = {
     ("pe", "rif"): "RUC",
     ("pe", "registroMercantil"): "Vigencia de Poder o Partida Registral",
     ("pe", "cedulaRepresentante"): "DNI o Carnet de Extranjeria del representante",
+    ("bo", "rif"): "NIT",
+    ("bo", "registroMercantil"): "Matricula de Comercio o Testimonio de Constitucion",
+    ("bo", "cedulaRepresentante"): "Cedula de Identidad del representante",
 }
 
 
@@ -115,8 +118,8 @@ def require_string(payload: Dict[str, Any], key: str) -> str:
 
 def normalize_country(value: Any) -> str:
     normalized = str(value or "ve").strip().lower()
-    if normalized not in {"ve", "pe"}:
-        raise ValueError("country debe ser 've' o 'pe'")
+    if normalized not in {"ve", "pe", "bo"}:
+        raise ValueError("country debe ser 've', 'pe' o 'bo'")
     return normalized
 
 
@@ -219,6 +222,11 @@ def build_prompt(
             "rif": "Debe parecer un RUC peruano.",
             "registroMercantil": "Debe parecer una Vigencia de Poder o Partida Registral peruana.",
             "cedulaRepresentante": "Debe parecer un DNI o Carnet de Extranjeria del representante en Peru.",
+        },
+        "bo": {
+            "rif": "Debe parecer un NIT boliviano.",
+            "registroMercantil": "Debe parecer una Matricula de Comercio, certificado de FUNDEMPRESA o Testimonio de Constitucion de Bolivia.",
+            "cedulaRepresentante": "Debe parecer una cedula de identidad boliviana del representante.",
         },
     }
 

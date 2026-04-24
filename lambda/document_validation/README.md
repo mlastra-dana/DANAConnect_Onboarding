@@ -55,9 +55,10 @@ Modelo usado en la demo:
 ## Notas
 
 - Esta version no usa Textract ni S3; toda la validación se resuelve directamente con Bedrock.
-- Soporta los dos paises del demo:
+- Soporta los paises del demo:
   - `ve`: `rif`, `registroMercantil`, `cedulaRepresentante`
   - `pe`: `rif`, `registroMercantil`, `cedulaRepresentante`
+  - `bo`: `rif`, `registroMercantil`, `cedulaRepresentante`
 - El payload de entrada está alineado con el frontend actual del portal.
 - El `BEDROCK_MODEL_ID` debe apuntar a un inference profile o modelo ya habilitado en la cuenta.
 - Si vas a usar Function URL desde el frontend, recuerda limitar CORS y proteger acceso antes de moverlo a productivo.

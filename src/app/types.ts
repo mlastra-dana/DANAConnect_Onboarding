@@ -1,6 +1,6 @@
 import { TenantConfig } from '../data/tenants';
 
-export type CountryCode = 've' | 'pe';
+export type CountryCode = 've' | 'pe' | 'bo';
 export type DocumentType = 'rif' | 'registroMercantil' | 'cedulaRepresentante';
 export type DocumentRecordType = DocumentType;
 export type RequiredDocumentType = 'rif' | 'registroMercantil';
