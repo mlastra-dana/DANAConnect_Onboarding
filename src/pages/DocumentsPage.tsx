@@ -7,14 +7,17 @@ import { Button } from '../components/ui/Button';
 import { Toast } from '../components/ui/Toast';
 import { validateDocumentFile } from '../lib/validators/documentValidators';
 import { createEmptyDocument, createEmptyRepresentative } from '../app/state';
-import { DocumentRecord, RequiredDocumentType, RepresentativeRecord } from '../app/types';
-import { getCountryConfig, getDocumentLabel } from '../config/onboardingCountries';
+import { DocumentRecord, DocumentType, RepresentativeRecord } from '../app/types';
+import { getDocumentLabel, getDocumentOrder, getFlowConfig, requiresRepresentatives } from '../config/onboardingCountries';
+import { Card } from '../components/ui/Card';
 
-type UploadKey = 'rif' | 'registroMercantil' | 'rep1' | 'rep2';
+type UploadKey = DocumentType | 'rep1' | 'rep2';
 
 const initialBoolMap: Record<UploadKey, boolean> = {
   rif: false,
   registroMercantil: false,
+  documentoIdentidad: false,
+  cedulaRepresentante: false,
   rep1: false,
   rep2: false
 };
@@ -22,12 +25,14 @@ const initialBoolMap: Record<UploadKey, boolean> = {
 const initialNumMap: Record<UploadKey, number> = {
   rif: 0,
   registroMercantil: 0,
+  documentoIdentidad: 0,
+  cedulaRepresentante: 0,
   rep1: 0,
   rep2: 0
 };
 
 export function DocumentsPage({ companyId }: { companyId: string }) {
-  const { state, setDocument, setRepresentative, setRepresentativeEnabled, allDocumentsValid } = useOnboarding();
+  const { state, setDocument, setRepresentative, setRepresentativeEnabled, setPersonalInfo, allDocumentsValid } = useOnboarding();
   const [loadingMap, setLoadingMap] = useState<Record<UploadKey, boolean>>(initialBoolMap);
   const [uploadingMap, setUploadingMap] = useState<Record<UploadKey, boolean>>(initialBoolMap);
   const [uploadProgressMap, setUploadProgressMap] = useState<Record<UploadKey, number>>(initialNumMap);
@@ -36,10 +41,11 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
   const representative1 = state.representatives.find((rep) => rep.id === 1)!;
   const representative2 = state.representatives.find((rep) => rep.id === 2)!;
-  const documentOrder: RequiredDocumentType[] = ['rif', 'registroMercantil'];
-  const countryConfig = getCountryConfig(state.country);
+  const flowConfig = getFlowConfig(state.country, state.personType);
+  const documentOrder = getDocumentOrder(state.country, state.personType);
+  const showRepresentatives = requiresRepresentatives(state.country, state.personType);
 
-  async function handleUploadBase(docType: RequiredDocumentType, file: File) {
+  async function handleUploadBase(docType: DocumentType, file: File) {
     const key: UploadKey = docType;
     setUploadingMap((prev) => ({ ...prev, [key]: true }));
     setUploadProgressMap((prev) => ({ ...prev, [key]: 0 }));
@@ -70,6 +76,14 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       previewUrl,
       validation: result
     });
+
+    if (state.personType === 'natural' && docType === 'documentoIdentidad' && result.extractedIdentity) {
+      setPersonalInfo({
+        firstName: result.extractedIdentity.firstName ?? '',
+        lastName: result.extractedIdentity.lastName ?? '',
+        documentNumber: result.extractedIdentity.documentNumber ?? ''
+      });
+    }
 
     setLoadingMap((prev) => ({ ...prev, [key]: false }));
   }
@@ -117,7 +131,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     setLoadingMap((prev) => ({ ...prev, [key]: false }));
   }
 
-  function handleRemoveBase(docType: RequiredDocumentType) {
+  function handleRemoveBase(docType: DocumentType) {
     const key: UploadKey = docType;
     const previous = state.documents[docType];
     if (previous.previewUrl) URL.revokeObjectURL(previous.previewUrl);
@@ -163,15 +177,15 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
   return (
     <div className="space-y-6">
-      <Toast type="info" message={countryConfig.documentsIntro} />
+      <Toast type="info" message={flowConfig.documentsIntro} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {documentOrder.map((docType) => (
           <FileUploadCard
             key={docType}
             docRecord={state.documents[docType] as DocumentRecord}
-            title={getDocumentLabel(state.country, docType)}
-            label={getDocumentLabel(state.country, docType)}
+            title={getDocumentLabel(state.country, state.personType, docType)}
+            label={getDocumentLabel(state.country, state.personType, docType)}
             loading={loadingMap[docType] || uploadingMap[docType]}
             isUploading={uploadingMap[docType]}
             uploadProgress={uploadProgressMap[docType]}
@@ -182,37 +196,39 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
           />
         ))}
 
-        <FileUploadCard
-          sectionTitle={countryConfig.representativeSectionTitle}
-          sectionDescription={countryConfig.representativeSectionDescription}
-          sectionAction={
-            !representative2.enabled ? (
-              <Button type="button" variant="secondary" onClick={handleAddRepresentative2}>
-                <Plus className="h-4 w-4" />
-                {countryConfig.addSecondRepresentativeLabel}
-              </Button>
-            ) : undefined
-          }
-          title={countryConfig.representativePrimaryTitle}
-          label={countryConfig.documents.cedulaRepresentante.label}
-          docRecord={{ ...representative1.document, type: 'cedulaRepresentante' }}
-          loading={loadingMap.rep1 || uploadingMap.rep1}
-          isUploading={uploadingMap.rep1}
-          uploadProgress={uploadProgressMap.rep1}
-          validationProgress={validationProgressMap.rep1}
-          previewFile={runtimeFiles.rep1}
-          onSelectFile={(file) => handleUploadRepresentative(1, file)}
-          onRemoveFile={() => handleRemoveRepresentative(1)}
-        />
-
-        {representative2.enabled ? (
+        {showRepresentatives ? (
           <FileUploadCard
-            title={countryConfig.representativeSecondaryTitle}
-            label={countryConfig.documents.cedulaRepresentante.label}
+            sectionTitle={flowConfig.representativeSectionTitle}
+            sectionDescription={flowConfig.representativeSectionDescription}
+            sectionAction={
+              !representative2.enabled ? (
+                <Button type="button" variant="secondary" onClick={handleAddRepresentative2}>
+                  <Plus className="h-4 w-4" />
+                  {flowConfig.addSecondRepresentativeLabel}
+                </Button>
+              ) : undefined
+            }
+            title={flowConfig.representativePrimaryTitle}
+            label={getDocumentLabel(state.country, state.personType, 'cedulaRepresentante')}
+            docRecord={{ ...representative1.document, type: 'cedulaRepresentante' }}
+            loading={loadingMap.rep1 || uploadingMap.rep1}
+            isUploading={uploadingMap.rep1}
+            uploadProgress={uploadProgressMap.rep1}
+            validationProgress={validationProgressMap.rep1}
+            previewFile={runtimeFiles.rep1}
+            onSelectFile={(file) => handleUploadRepresentative(1, file)}
+            onRemoveFile={() => handleRemoveRepresentative(1)}
+          />
+        ) : null}
+
+        {showRepresentatives && representative2.enabled ? (
+          <FileUploadCard
+            title={flowConfig.representativeSecondaryTitle}
+            label={getDocumentLabel(state.country, state.personType, 'cedulaRepresentante')}
             sectionAction={
               <Button type="button" variant="ghost" onClick={handleDeleteRepresentative2}>
                 <Trash2 className="h-4 w-4" />
-                {countryConfig.removeSecondRepresentativeLabel}
+                {flowConfig.removeSecondRepresentativeLabel}
               </Button>
             }
             docRecord={{ ...representative2.document, type: 'cedulaRepresentante' }}
@@ -226,6 +242,59 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
           />
         ) : null}
       </div>
+
+      {state.personType === 'natural' ? (
+        <Card>
+          <h3 className="text-lg font-semibold text-dark">Datos de identidad</h3>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-dark">Nombres</span>
+              <input
+                type="text"
+                value={state.personalInfo.firstName}
+                onChange={(event) =>
+                  setPersonalInfo({
+                    ...state.personalInfo,
+                    firstName: event.target.value
+                  })
+                }
+                className="w-full rounded-lg border border-borderLight px-3 py-2.5 text-sm text-dark outline-none transition-colors focus:border-primary"
+                placeholder="Nombres"
+              />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-dark">Apellidos</span>
+              <input
+                type="text"
+                value={state.personalInfo.lastName}
+                onChange={(event) =>
+                  setPersonalInfo({
+                    ...state.personalInfo,
+                    lastName: event.target.value
+                  })
+                }
+                className="w-full rounded-lg border border-borderLight px-3 py-2.5 text-sm text-dark outline-none transition-colors focus:border-primary"
+                placeholder="Apellidos"
+              />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-dark">Numero de identificacion</span>
+              <input
+                type="text"
+                value={state.personalInfo.documentNumber}
+                onChange={(event) =>
+                  setPersonalInfo({
+                    ...state.personalInfo,
+                    documentNumber: event.target.value
+                  })
+                }
+                className="w-full rounded-lg border border-borderLight px-3 py-2.5 text-sm text-dark outline-none transition-colors focus:border-primary"
+                placeholder="Numero de identificacion"
+              />
+            </label>
+          </div>
+        </Card>
+      ) : null}
 
       <div className="flex flex-wrap justify-between gap-3">
         <Link to={`/onboarding/${companyId}`}>

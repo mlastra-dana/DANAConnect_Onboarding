@@ -6,7 +6,7 @@ import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/ui/Badge';
 import { Toast } from '../components/ui/Toast';
 import { buildDemoEmail, openMailto, sendEmailViaApi } from '../lib/email/demoMail';
-import { getCountryConfig, getDocumentLabel } from '../config/onboardingCountries';
+import { getDocumentLabel, getDocumentOrder, getFlowConfig, requiresRepresentatives } from '../config/onboardingCountries';
 import { clearState } from '../app/state';
 
 export function ReviewPage({ companyId }: { companyId: string }) {
@@ -15,12 +15,13 @@ export function ReviewPage({ companyId }: { companyId: string }) {
   const navigate = useNavigate();
   const representative1 = state.representatives.find((rep) => rep.id === 1)!;
   const representative2 = state.representatives.find((rep) => rep.id === 2)!;
-  const countryConfig = getCountryConfig(state.country);
+  const flowConfig = getFlowConfig(state.country, state.personType);
+  const activeDocuments = getDocumentOrder(state.country, state.personType);
+  const showRepresentatives = requiresRepresentatives(state.country, state.personType);
   const requiredDocuments = [
-    state.documents.rif.fileName,
-    state.documents.registroMercantil.fileName,
-    representative1.document.fileName,
-    ...(representative2.enabled ? [representative2.document.fileName] : [])
+    ...activeDocuments.map((docType) => state.documents[docType].fileName),
+    ...(showRepresentatives ? [representative1.document.fileName] : []),
+    ...(showRepresentatives && representative2.enabled ? [representative2.document.fileName] : [])
   ];
   const receivedDocumentsCount = requiredDocuments.filter(Boolean).length;
   const requiredDocumentsCount = requiredDocuments.length;
@@ -94,42 +95,57 @@ export function ReviewPage({ companyId }: { companyId: string }) {
         <p className="mt-1 text-sm text-grayText">
           Documentos recibidos: {receivedDocumentsCount}/{requiredDocumentsCount}
         </p>
+        <p className="mt-1 text-sm text-grayText">
+          Tipo de onboarding: {flowConfig.personTypeLabel}
+        </p>
+        {state.personType === 'natural' ? (
+          <p className="mt-1 text-sm text-grayText">
+            Identidad: {state.personalInfo.firstName || 'Sin nombres'} {state.personalInfo.lastName || ''} {state.personalInfo.documentNumber ? `· ${state.personalInfo.documentNumber}` : ''}
+          </p>
+        ) : null}
         <ul className="mt-3 space-y-2">
-          {Object.values(state.documents).map((doc, idx) => (
-            <li key={`${doc.type}-${idx}`} className="flex items-center justify-between rounded-lg border border-borderLight p-3">
+          {activeDocuments.map((docType) => {
+            const doc = state.documents[docType];
+            return (
+              <li key={docType} className="flex items-center justify-between rounded-lg border border-borderLight p-3">
               <div>
-                <p className="font-medium text-dark">{getDocumentLabel(state.country, doc.type)}</p>
+                  <p className="font-medium text-dark">{getDocumentLabel(state.country, state.personType, docType)}</p>
                 <p className="text-xs text-grayText">{doc.fileName ?? 'Sin archivo'}</p>
               </div>
               <StatusBadge status={doc.validation.status} />
             </li>
-          ))}
-          <li className="flex items-center justify-between rounded-lg border border-borderLight p-3">
-            <div>
-              <p className="font-medium text-dark">{countryConfig.reviewRepresentativePrimaryLabel}</p>
-              <p className="text-xs text-grayText">{representative1.document.fileName ?? 'Sin archivo'}</p>
-            </div>
-            <StatusBadge status={representative1.document.validation.status} />
-          </li>
-          <li className="flex items-center justify-between rounded-lg border border-borderLight p-3">
-            <div>
-              <p className="font-medium text-dark">{countryConfig.reviewRepresentativeSecondaryLabel}</p>
-              <p className="text-xs text-grayText">
-                {!representative2.enabled
-                  ? 'No aplica'
-                  : representative2.document.fileName ?? 'Pendiente'}
-              </p>
-            </div>
-            <StatusBadge
-              status={
-                !representative2.enabled
-                  ? 'na'
-                  : representative2.document.fileName
-                    ? representative2.document.validation.status
-                    : 'pending'
-              }
-            />
-          </li>
+            );
+          })}
+          {showRepresentatives ? (
+            <li className="flex items-center justify-between rounded-lg border border-borderLight p-3">
+              <div>
+                <p className="font-medium text-dark">{flowConfig.reviewRepresentativePrimaryLabel}</p>
+                <p className="text-xs text-grayText">{representative1.document.fileName ?? 'Sin archivo'}</p>
+              </div>
+              <StatusBadge status={representative1.document.validation.status} />
+            </li>
+          ) : null}
+          {showRepresentatives ? (
+            <li className="flex items-center justify-between rounded-lg border border-borderLight p-3">
+              <div>
+                <p className="font-medium text-dark">{flowConfig.reviewRepresentativeSecondaryLabel}</p>
+                <p className="text-xs text-grayText">
+                  {!representative2.enabled
+                    ? 'No aplica'
+                    : representative2.document.fileName ?? 'Pendiente'}
+                </p>
+              </div>
+              <StatusBadge
+                status={
+                  !representative2.enabled
+                    ? 'na'
+                    : representative2.document.fileName
+                      ? representative2.document.validation.status
+                      : 'pending'
+                }
+              />
+            </li>
+          ) : null}
           <li className="flex items-center justify-between rounded-lg border border-borderLight p-3">
             <div>
               <p className="font-medium text-dark">Biometría</p>

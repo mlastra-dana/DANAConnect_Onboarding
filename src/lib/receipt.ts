@@ -1,5 +1,5 @@
 import { OnboardingState } from '../app/types';
-import { getCountryConfig, getDocumentLabel } from '../config/onboardingCountries';
+import { getDocumentLabel, getDocumentOrder, getFlowConfig, requiresRepresentatives } from '../config/onboardingCountries';
 
 type ReceiptData = {
   companyName: string;
@@ -12,23 +12,27 @@ type ReceiptData = {
 export function buildReceiptData(state: OnboardingState): ReceiptData {
   const submittedAt = state.submission.submittedAt ? new Date(state.submission.submittedAt) : new Date();
   const code = shortRequestCode(state.submission.registrationId);
-  const country = getCountryConfig(state.country);
+  const flow = getFlowConfig(state.country, state.personType);
+  const documents = getDocumentOrder(state.country, state.personType).map((docType) => ({
+    label: getDocumentLabel(state.country, state.personType, docType),
+    fileName: state.documents[docType].fileName
+  }));
+
+  if (requiresRepresentatives(state.country, state.personType)) {
+    documents.push({ label: flow.reviewRepresentativePrimaryLabel ?? 'Representante 1', fileName: state.representatives[0].document.fileName });
+    documents.push({
+      label: flow.reviewRepresentativeSecondaryLabel ?? 'Representante 2',
+      fileName: state.representatives[1].enabled ? state.representatives[1].document.fileName : 'No aplica'
+    });
+  }
+  documents.push({ label: 'Biometría', fileName: biometricToFileLabel(state.biometrics.status) });
 
   return {
     companyName: state.tenant.name,
     companyId: state.companyId,
     requestCode: code,
     submittedAt,
-    documents: [
-      { label: getDocumentLabel(state.country, 'rif'), fileName: state.documents.rif.fileName },
-      { label: getDocumentLabel(state.country, 'registroMercantil'), fileName: state.documents.registroMercantil.fileName },
-      { label: country.reviewRepresentativePrimaryLabel, fileName: state.representatives[0].document.fileName },
-      {
-        label: country.reviewRepresentativeSecondaryLabel,
-        fileName: state.representatives[1].enabled ? state.representatives[1].document.fileName : 'No aplica'
-      },
-      { label: 'Biometría', fileName: biometricToFileLabel(state.biometrics.status) }
-    ]
+    documents
   };
 }
 

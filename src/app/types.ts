@@ -1,9 +1,9 @@
 import { TenantConfig } from '../data/tenants';
 
 export type CountryCode = 've' | 'pe' | 'bo';
-export type DocumentType = 'rif' | 'registroMercantil' | 'cedulaRepresentante';
+export type PersonType = 'juridica' | 'natural';
+export type DocumentType = 'rif' | 'registroMercantil' | 'cedulaRepresentante' | 'documentoIdentidad';
 export type DocumentRecordType = DocumentType;
-export type RequiredDocumentType = 'rif' | 'registroMercantil';
 export type ValidationStatus = 'pending' | 'validating' | 'valid' | 'error' | 'warning' | 'review';
 export type ValidityStatus = 'ok' | 'warning' | 'unknown';
 export type SharpnessLabel = 'ok' | 'warning' | 'bad' | 'unknown';
@@ -42,6 +42,12 @@ export type DocumentValidationResult = {
   isIdDocument?: boolean;
   extractedId?: string;
   expiryDate?: string;
+  extractedIdentity?: {
+    firstName?: string;
+    lastName?: string;
+    documentNumber?: string;
+    rawText?: string;
+  };
   error?: string;
 };
 
@@ -77,12 +83,20 @@ export type SubmissionState = {
   emailTo?: string;
 };
 
+export type PersonalInfo = {
+  firstName: string;
+  lastName: string;
+  documentNumber: string;
+};
+
 export type OnboardingState = {
   companyId: string;
   country: CountryCode;
+  personType: PersonType;
   tenant: TenantConfig;
-  documents: Record<RequiredDocumentType, DocumentRecord>;
+  documents: Record<DocumentType, DocumentRecord>;
   representatives: [RepresentativeRecord, RepresentativeRecord];
+  personalInfo: PersonalInfo;
   biometrics: BiometricValidationRecord;
   submission: SubmissionState;
 };

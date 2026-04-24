@@ -1,13 +1,13 @@
 import { CheckCircle2 } from 'lucide-react';
 
-const steps = ['Bienvenida', 'Documentos', 'Biometría', 'Revisión & Envío'];
+const steps = ['Bienvenida', 'Tipo de Persona', 'Documentos', 'Biometría', 'Revisión & Envío'];
 
 export function Stepper({ currentStep }: { currentStep: number }) {
   return (
     <nav aria-label="Pasos de onboarding" className="mb-8">
       <div className="relative hidden md:block">
         <div className="absolute left-[10%] right-[10%] top-4 h-px bg-borderLight" />
-        <ol className="relative grid grid-cols-4 gap-4">
+        <ol className="relative grid grid-cols-5 gap-4">
           {steps.map((step, index) => {
             const stepNumber = index + 1;
             const active = currentStep === stepNumber;

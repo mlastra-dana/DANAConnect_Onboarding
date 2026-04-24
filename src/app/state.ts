@@ -1,11 +1,14 @@
-import { DocumentRecordType, OnboardingState, RepresentativeRecord } from './types';
+import { DocumentRecordType, DocumentType, OnboardingState, RepresentativeRecord } from './types';
 import { TenantConfig } from '../data/tenants';
 
 export const DOCUMENT_LABELS: Record<DocumentRecordType, string> = {
   rif: 'RIF',
   registroMercantil: 'Registro Mercantil',
-  cedulaRepresentante: 'Cédula del Representante'
+  cedulaRepresentante: 'Cédula del Representante',
+  documentoIdentidad: 'Documento de Identidad'
 };
+
+const ALL_DOCUMENT_TYPES: DocumentType[] = ['rif', 'registroMercantil', 'cedulaRepresentante', 'documentoIdentidad'];
 
 export function createEmptyDocument(type: DocumentRecordType) {
   return {
@@ -27,9 +30,27 @@ export function createEmptyRepresentative(id: 1 | 2, enabled: boolean): Represen
   };
 }
 
+export function createEmptyDocuments(): Record<DocumentType, ReturnType<typeof createEmptyDocument>> {
+  return ALL_DOCUMENT_TYPES.reduce(
+    (acc, type) => {
+      acc[type] = createEmptyDocument(type);
+      return acc;
+    },
+    {} as Record<DocumentType, ReturnType<typeof createEmptyDocument>>
+  );
+}
+
 export function createEmptyBiometric() {
   return {
     status: 'pending' as const
+  };
+}
+
+export function createEmptyPersonalInfo() {
+  return {
+    firstName: '',
+    lastName: '',
+    documentNumber: ''
   };
 }
 
@@ -37,12 +58,11 @@ export function createInitialState(companyId: string, tenant: TenantConfig): Onb
   return {
     companyId,
     country: 've',
+    personType: 'juridica',
     tenant,
-    documents: {
-      rif: createEmptyDocument('rif'),
-      registroMercantil: createEmptyDocument('registroMercantil')
-    },
+    documents: createEmptyDocuments(),
     representatives: [createEmptyRepresentative(1, true), createEmptyRepresentative(2, false)],
+    personalInfo: createEmptyPersonalInfo(),
     biometrics: createEmptyBiometric(),
     submission: {
       status: 'idle'
@@ -81,10 +101,7 @@ function stripTransientDocuments(state: OnboardingState): OnboardingState {
 
   return {
     ...state,
-    documents: {
-      rif: createEmptyDocument('rif'),
-      registroMercantil: createEmptyDocument('registroMercantil')
-    },
+    documents: createEmptyDocuments(),
     representatives: [
       {
         ...representative1,
@@ -94,6 +111,7 @@ function stripTransientDocuments(state: OnboardingState): OnboardingState {
         ...representative2,
         document: createEmptyDocument('cedulaRepresentante')
       }
-    ]
+    ],
+    personalInfo: createEmptyPersonalInfo()
   };
 }

@@ -1,5 +1,4 @@
 import base64
-import io
 import json
 import logging
 import os
@@ -8,17 +7,15 @@ from typing import Any, Dict, List
 
 import boto3
 from botocore.config import Config
-import pypdfium2 as pdfium
 
 
 LOGGER = logging.getLogger()
 LOGGER.setLevel(logging.INFO)
 
 AWS_REGION = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-1"
-BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "SET_ME_TO_A_SONNET_4_MODEL")
+BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.anthropic.claude-3-7-sonnet-20250219-v1:0")
 MAX_FILE_BYTES = int(os.environ.get("MAX_FILE_BYTES", str(10 * 1024 * 1024)))
 
-TEXTRACT_CLIENT = boto3.client("textract", region_name=AWS_REGION, config=Config(retries={"max_attempts": 3}))
 BEDROCK_CLIENT = boto3.client("bedrock-runtime", region_name=AWS_REGION, config=Config(retries={"max_attempts": 3}))
 
 ALLOWED_MIME_TYPES = {
@@ -26,18 +23,22 @@ ALLOWED_MIME_TYPES = {
     "image/jpeg",
     "image/jpg",
     "image/png",
+    "image/webp",
 }
 
 DOC_SLOT_LABELS = {
     ("ve", "rif"): "RIF",
     ("ve", "registroMercantil"): "Registro Mercantil / Acta",
     ("ve", "cedulaRepresentante"): "Cedula del representante",
+    ("ve", "documentoIdentidad"): "Cedula de identidad",
     ("pe", "rif"): "RUC",
     ("pe", "registroMercantil"): "Vigencia de Poder o Partida Registral",
     ("pe", "cedulaRepresentante"): "DNI o Carnet de Extranjeria del representante",
+    ("pe", "documentoIdentidad"): "DNI o Carnet de Extranjeria",
     ("bo", "rif"): "NIT",
     ("bo", "registroMercantil"): "Matricula de Comercio o Testimonio de Constitucion",
     ("bo", "cedulaRepresentante"): "Cedula de Identidad del representante",
+    ("bo", "documentoIdentidad"): "Cedula de Identidad",
 }
 
 
@@ -65,13 +66,12 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         if len(file_bytes) > MAX_FILE_BYTES:
             return response(400, {"ok": False, "error": f"Archivo excede el maximo permitido de {MAX_FILE_BYTES} bytes"})
 
-        extracted = run_textract(file_bytes=file_bytes, file_name=file_name, content_type=content_type)
-        analysis = run_sonnet_analysis(
+        analysis = run_bedrock_validation(
+            file_bytes=file_bytes,
             file_name=file_name,
             content_type=content_type,
             country=country,
             slot=slot,
-            extracted=extracted,
         )
 
         final = build_validation_response(
@@ -79,7 +79,7 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             content_type=content_type,
             country=country,
             slot=slot,
-            extracted=extracted,
+            file_size=len(file_bytes),
             analysis=analysis,
         )
         return response(200, final)
@@ -93,7 +93,7 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 def parse_json_body(event: Dict[str, Any]) -> Dict[str, Any]:
     raw_body = event.get("body")
     if raw_body is None:
-      raise ValueError("Body requerido")
+        raise ValueError("Body requerido")
 
     if event.get("isBase64Encoded"):
         raw_body = base64.b64decode(raw_body).decode("utf-8")
@@ -125,7 +125,7 @@ def normalize_country(value: Any) -> str:
 
 def normalize_slot(value: Any) -> str:
     normalized = str(value or "").strip()
-    if normalized not in {"rif", "registroMercantil", "cedulaRepresentante"}:
+    if normalized not in {"rif", "registroMercantil", "cedulaRepresentante", "documentoIdentidad"}:
         raise ValueError("slot invalido")
     return normalized
 
@@ -134,52 +134,68 @@ def normalize_content_type(value: str) -> str:
     return value.split(";")[0].strip().lower()
 
 
-def run_textract(*, file_bytes: bytes, file_name: str, content_type: str) -> Dict[str, Any]:
-    if content_type == "application/pdf":
-        rendered_first_page = render_first_pdf_page_to_png(file_bytes)
-        textract_response = TEXTRACT_CLIENT.detect_document_text(Document={"Bytes": rendered_first_page})
-    else:
-        textract_response = TEXTRACT_CLIENT.detect_document_text(Document={"Bytes": file_bytes})
-
-    blocks = textract_response.get("Blocks", [])
-    lines = [block.get("Text", "").strip() for block in blocks if block.get("BlockType") == "LINE" and block.get("Text")]
-    words = [block.get("Text", "").strip() for block in blocks if block.get("BlockType") == "WORD" and block.get("Text")]
-    pages = max([int(block.get("Page", 1)) for block in blocks] or [1])
-    full_text = "\n".join(lines).strip()
-
-    return {
-        "raw": textract_response,
-        "pages": pages,
-        "line_count": len(lines),
-        "word_count": len(words),
-        "text": full_text,
-        "excerpt": full_text[:6000],
-        "has_text": bool(full_text),
-    }
-def render_first_pdf_page_to_png(file_bytes: bytes) -> bytes:
-    try:
-        pdf = pdfium.PdfDocument(file_bytes)
-        if len(pdf) < 1:
-            raise ValueError("El PDF no contiene paginas.")
-
-        page = pdf[0]
-        bitmap = page.render(scale=2.4)
-        image = bitmap.to_pil()
-
-        output = io.BytesIO()
-        image.save(output, format="PNG")
-        return output.getvalue()
-    except Exception as exc:  # noqa: BLE001
-        raise ValueError(f"No se pudo convertir la primera pagina del PDF a imagen: {exc}") from exc
+def mime_to_bedrock_format(content_type: str, file_name: str) -> str:
+    if content_type == "application/pdf" or file_name.lower().endswith(".pdf"):
+        return "pdf"
+    if content_type == "image/png":
+        return "png"
+    if content_type == "image/webp":
+        return "webp"
+    return "jpeg"
 
 
-def run_sonnet_analysis(
+def build_bedrock_user_content(
     *,
+    prompt: str,
+    file_bytes: bytes,
+    file_name: str,
+    content_type: str,
+) -> List[Dict[str, Any]]:
+    if content_type == "application/pdf":
+        return [
+            {"text": prompt},
+            {
+                "document": {
+                    "format": "pdf",
+                    "name": sanitize_document_name(file_name),
+                    "source": {"bytes": file_bytes},
+                }
+            },
+        ]
+
+    return [
+        {"text": prompt},
+        {
+            "image": {
+                "format": mime_to_bedrock_format(content_type, file_name),
+                "source": {"bytes": file_bytes},
+            }
+        },
+    ]
+
+
+def sanitize_document_name(file_name: str) -> str:
+    base_name = (file_name or "documento").strip()
+
+    if "." in base_name:
+        base_name = base_name.rsplit(".", 1)[0]
+
+    base_name = re.sub(r"[^A-Za-z0-9\s\-\(\)\[\]]+", " ", base_name)
+    base_name = re.sub(r"\s+", " ", base_name).strip()
+
+    if not base_name:
+        base_name = "documento"
+
+    return base_name[:200]
+
+
+def run_bedrock_validation(
+    *,
+    file_bytes: bytes,
     file_name: str,
     content_type: str,
     country: str,
     slot: str,
-    extracted: Dict[str, Any],
 ) -> Dict[str, Any]:
     slot_label = DOC_SLOT_LABELS[(country, slot)]
     prompt = build_prompt(
@@ -188,13 +204,19 @@ def run_sonnet_analysis(
         country=country,
         slot=slot,
         slot_label=slot_label,
-        extracted=extracted,
+    )
+
+    user_content = build_bedrock_user_content(
+        prompt=prompt,
+        file_bytes=file_bytes,
+        file_name=file_name,
+        content_type=content_type,
     )
 
     bedrock_response = BEDROCK_CLIENT.converse(
         modelId=BEDROCK_MODEL_ID,
-        messages=[{"role": "user", "content": [{"text": prompt}]}],
-        inferenceConfig={"temperature": 0, "topP": 0.9, "maxTokens": 900},
+        messages=[{"role": "user", "content": user_content}],
+        inferenceConfig={"temperature": 0, "topP": 0.9, "maxTokens": 1200},
     )
 
     text = extract_bedrock_text(bedrock_response)
@@ -210,65 +232,93 @@ def build_prompt(
     country: str,
     slot: str,
     slot_label: str,
-    extracted: Dict[str, Any],
 ) -> str:
     rules = {
         "ve": {
             "rif": "Debe parecer un RIF venezolano.",
-            "registroMercantil": "Debe parecer un Registro Mercantil o Acta mercantil venezolana.",
+            "registroMercantil": "Debe parecer un Registro Mercantil, Acta constitutiva o documento mercantil venezolano.",
             "cedulaRepresentante": "Debe parecer una cedula venezolana del representante.",
+            "documentoIdentidad": "Debe parecer una cedula venezolana de persona natural.",
         },
         "pe": {
             "rif": "Debe parecer un RUC peruano.",
             "registroMercantil": "Debe parecer una Vigencia de Poder o Partida Registral peruana.",
             "cedulaRepresentante": "Debe parecer un DNI o Carnet de Extranjeria del representante en Peru.",
+            "documentoIdentidad": "Debe parecer un DNI o Carnet de Extranjeria de persona natural en Peru.",
         },
         "bo": {
             "rif": "Debe parecer un NIT boliviano.",
-            "registroMercantil": "Debe parecer una Matricula de Comercio, certificado de FUNDEMPRESA o Testimonio de Constitucion de Bolivia.",
+            "registroMercantil": "Debe parecer una Matricula de Comercio, Testimonio de Constitucion o documento mercantil boliviano.",
             "cedulaRepresentante": "Debe parecer una cedula de identidad boliviana del representante.",
+            "documentoIdentidad": "Debe parecer una cedula de identidad boliviana de persona natural.",
         },
     }
+
+    extraction_rules = """
+Si el slot es "documentoIdentidad", adicionalmente intenta extraer esta salida minima:
+- firstName
+- lastName
+- documentNumber
+- rawText
+
+Si no puedes determinar un campo con confianza razonable, devuelvelo como cadena vacia.
+No inventes datos.
+""".strip()
 
     return f"""
 Eres un validador documental para un onboarding empresarial.
 
-Analiza un documento para el slot "{slot}" ({slot_label}) del pais "{country}".
+Analiza un unico archivo y determina si corresponde al documento esperado.
+
+Documento esperado:
+- slot: "{slot}"
+- label: "{slot_label}"
+- country: "{country}"
 
 Regla principal:
 - {rules[country][slot]}
+
+Instrucciones:
+- Evalua el archivo completo de forma visual y documental.
+- No inventes texto ni campos.
+- No hace falta extraer datos estructurados salvo para documentoIdentidad.
+- Tu trabajo principal es validar si el archivo coincide o no con el tipo documental esperado.
+- Si el archivo parece correcto pero es parcial, borroso, incompleto o ambiguo, usa "warning".
+- Si claramente no corresponde, usa "error".
+- Si corresponde claramente, usa "valid".
+- {extraction_rules if slot == "documentoIdentidad" else 'No extraigas campos de identidad para otros slots.'}
 
 Tu respuesta DEBE ser JSON puro, sin markdown, con esta forma exacta:
 {{
   "status": "valid" | "warning" | "error",
   "document_type_match": true | false,
   "confidence": number,
-  "summary": "mensaje corto",
+  "summary": "mensaje corto para UI",
   "warnings": ["..."],
   "reasons": ["..."],
-  "keywords_found": ["..."]
+  "keywords_found": ["..."],
+  "extractedIdentity": {{
+    "firstName": "",
+    "lastName": "",
+    "documentNumber": "",
+    "rawText": ""
+  }}
 }}
 
-Criterios:
-- Usa "valid" cuando el documento coincide claramente.
-- Usa "warning" cuando parece correcto pero la lectura es parcial, limitada o incompleta.
-- Usa "error" cuando no coincide o no hay evidencia suficiente.
-- No inventes texto no presente.
-- Si el texto extraido es pobre, puedes apoyarte moderadamente en el nombre del archivo.
+Reglas adicionales:
+- confidence debe estar entre 0 y 1.
+- warnings solo aplica cuando hay dudas, calidad baja o revision recomendada.
+- reasons explica por que se rechaza o por que hay observaciones.
+- keywords_found debe incluir palabras o conceptos visibles relevantes si existen.
+- Si el documento no coincide con el slot solicitado, document_type_match debe ser false.
+- Si el archivo esta vacio, ilegible o no permite determinar el tipo, responde "error" o "warning" segun el caso.
+- Si el slot no es documentoIdentidad, devuelve extractedIdentity con strings vacios.
 
 Datos del archivo:
 - file_name: {file_name}
 - content_type: {content_type}
 - country: {country}
 - slot: {slot}
-- pages_detected: {extracted["pages"]}
-- line_count: {extracted["line_count"]}
-- word_count: {extracted["word_count"]}
-
-Texto extraido por Textract:
-<<<
-{extracted["excerpt"] or "[sin texto extraido]"}
->>>
 """.strip()
 
 
@@ -307,7 +357,7 @@ def build_validation_response(
     content_type: str,
     country: str,
     slot: str,
-    extracted: Dict[str, Any],
+    file_size: int,
     analysis: Dict[str, Any],
 ) -> Dict[str, Any]:
     status = normalize_status(analysis.get("status"))
@@ -317,9 +367,10 @@ def build_validation_response(
     summary = str(analysis.get("summary") or "").strip()
     confidence = normalize_confidence(analysis.get("confidence"))
     document_type_match = bool(analysis.get("document_type_match"))
+    extracted_identity = normalize_extracted_identity(analysis.get("extractedIdentity"))
 
     if status == "warning" and not warnings:
-        warnings = ["La lectura del documento fue parcial. Puede requerir revision manual."]
+        warnings = ["La validacion no fue concluyente. Se recomienda revision manual."]
     if status == "error" and not reasons:
         reasons = ["No fue posible confirmar que el archivo corresponda al documento solicitado."]
     if status in {"valid", "warning"} and not summary:
@@ -347,14 +398,11 @@ def build_validation_response(
         "warnings": warnings,
         "confidence": confidence,
         "document_type_match": document_type_match,
-        "extracted": {
-            "hasText": extracted["has_text"],
-            "pages": extracted["pages"],
-            "lineCount": extracted["line_count"],
-            "wordCount": extracted["word_count"],
+        "analysis": {
             "keywordsFound": keywords_found,
-            "excerpt": extracted["excerpt"][:1500],
+            "fileSizeBytes": file_size,
         },
+        "extractedIdentity": extracted_identity,
         "uiStatus": {
             "state": "error" if status == "error" else "ok",
             "title": ui_title,
@@ -362,9 +410,19 @@ def build_validation_response(
         },
         "providerDiagnostics": {
             "bedrockModelId": BEDROCK_MODEL_ID,
-            "textractPages": extracted["pages"],
             "rawModelText": analysis.get("_raw_model_text", ""),
         },
+    }
+
+
+def normalize_extracted_identity(value: Any) -> Dict[str, str]:
+    if not isinstance(value, dict):
+        return {"firstName": "", "lastName": "", "documentNumber": "", "rawText": ""}
+    return {
+        "firstName": str(value.get("firstName") or "").strip(),
+        "lastName": str(value.get("lastName") or "").strip(),
+        "documentNumber": str(value.get("documentNumber") or "").strip(),
+        "rawText": str(value.get("rawText") or "").strip(),
     }
 
 

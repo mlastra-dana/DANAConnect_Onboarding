@@ -109,7 +109,8 @@ export async function validateDocumentFile(
     uiStatus: result.uiStatus,
     extracted: result.extracted,
     quality: result.quality,
-    internalDiagnostics: result.internalDiagnostics
+    internalDiagnostics: result.internalDiagnostics,
+    extractedIdentity: result.extractedIdentity
   };
 }
 
@@ -153,6 +154,7 @@ function mapLambdaResponseToValidationResult(body: unknown, fileSize: number) {
   const uiStatus = isRecord(payload.uiStatus) ? payload.uiStatus : {};
   const analysis = isRecord(payload.analysis) ? payload.analysis : {};
   const diagnostics = isRecord(payload.providerDiagnostics) ? payload.providerDiagnostics : {};
+  const extractedIdentityPayload = isRecord(payload.extractedIdentity) ? payload.extractedIdentity : {};
   const typeStatus: 'valid' | 'error' | 'review' = status === 'error' ? 'error' : status === 'warning' ? 'review' : 'valid';
   const uiState: 'ok' | 'error' = uiStatus.state === 'error' ? 'error' : 'ok';
 
@@ -184,6 +186,13 @@ function mapLambdaResponseToValidationResult(body: unknown, fileSize: number) {
     },
     quality: {
       sharpnessLabel: 'unknown' as const
+    },
+    extractedIdentity: {
+      firstName: typeof extractedIdentityPayload.firstName === 'string' ? extractedIdentityPayload.firstName.trim() : '',
+      lastName: typeof extractedIdentityPayload.lastName === 'string' ? extractedIdentityPayload.lastName.trim() : '',
+      documentNumber:
+        typeof extractedIdentityPayload.documentNumber === 'string' ? extractedIdentityPayload.documentNumber.trim() : '',
+      rawText: typeof extractedIdentityPayload.rawText === 'string' ? extractedIdentityPayload.rawText : ''
     },
     internalDiagnostics: [
       `lambda_status:${status}`,

@@ -57,6 +57,7 @@ export function DocumentUploader({
     docRecord.validation.uiStatus?.message || 'No pudimos validar este documento. Verifique que sea legible e intente nuevamente.';
   const pendingMessage = docRecord.validation.uiStatus?.message || 'Aún no hay validaciones ejecutadas.';
   const warningMessages = docRecord.validation.warnings ?? [];
+  const hasFile = Boolean(docRecord.fileName);
   const fileContainerClass =
     feedbackStatus === 'valid'
       ? 'border-green-200 bg-green-50/40'
@@ -105,60 +106,73 @@ export function DocumentUploader({
         </div>
       ) : null}
 
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label={`Subir ${resolvedLabel}`}
-        onClick={triggerFileDialog}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            triggerFileDialog();
-          }
-        }}
-        onDragOver={(event) => {
-          event.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(event) => {
-          event.preventDefault();
-          setDragOver(false);
-          void handleFiles(event.dataTransfer.files);
-        }}
-        className={`rounded-xl border border-dashed p-5 transition-colors duration-200 ${
-          dragOver ? 'border-primary bg-[#FAFAFA]' : 'border-borderLight bg-white'
-        }`}
-      >
-        <div className="flex flex-col items-center gap-2 text-center text-sm text-grayText">
-          <UploadCloud className="h-6 w-6 text-primary" />
-          <p>Arrastra tu archivo o selecciónalo.</p>
-          <input
-            id={inputId}
-            ref={inputRef}
-            type="file"
-            accept={fileAccept}
-            className="hidden"
-            onChange={(event) => {
-              void handleFiles(event.target.files);
-            }}
-          />
-          <label htmlFor={inputId} className="sr-only">
-            Seleccionar archivo
-          </label>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={(event) => {
-              event.stopPropagation();
+      {!hasFile ? (
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={`Subir ${resolvedLabel}`}
+          onClick={triggerFileDialog}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
               triggerFileDialog();
-            }}
-          >
-            Seleccionar archivo
-          </Button>
-          <p className="text-xs text-grayText">PDF, JPG, PNG o WEBP. Máx. 10MB.</p>
+            }
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragOver(false);
+            void handleFiles(event.dataTransfer.files);
+          }}
+          className={`rounded-xl border border-dashed p-5 transition-colors duration-200 ${
+            dragOver ? 'border-primary bg-[#FAFAFA]' : 'border-borderLight bg-white'
+          }`}
+        >
+          <div className="flex flex-col items-center gap-2 text-center text-sm text-grayText">
+            <UploadCloud className="h-6 w-6 text-primary" />
+            <p>Arrastra tu archivo o selecciónalo.</p>
+            <input
+              id={inputId}
+              ref={inputRef}
+              type="file"
+              accept={fileAccept}
+              className="hidden"
+              onChange={(event) => {
+                void handleFiles(event.target.files);
+              }}
+            />
+            <label htmlFor={inputId} className="sr-only">
+              Seleccionar archivo
+            </label>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={(event) => {
+                event.stopPropagation();
+                triggerFileDialog();
+              }}
+            >
+              Seleccionar archivo
+            </Button>
+            <p className="text-xs text-grayText">PDF, JPG, PNG o WEBP. Máx. 10MB.</p>
+          </div>
         </div>
-      </div>
+      ) : (
+        <input
+          id={inputId}
+          ref={inputRef}
+          type="file"
+          accept={fileAccept}
+          className="hidden"
+          onChange={(event) => {
+            void handleFiles(event.target.files);
+          }}
+        />
+      )}
 
       {docRecord.fileName ? (
         <div className={`rounded-xl border p-3 ${fileContainerClass}`}>

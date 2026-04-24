@@ -1,5 +1,5 @@
 import { OnboardingState } from '../../app/types';
-import { getCountryConfig, getDocumentLabel } from '../../config/onboardingCountries';
+import { getDocumentLabel, getDocumentOrder, getFlowConfig, requiresRepresentatives } from '../../config/onboardingCountries';
 
 export type DemoEmailPayload = {
   trackingId: string;
@@ -23,28 +23,42 @@ export function buildDemoEmail(state: OnboardingState, companyId: string, extern
   }`;
 
   const companyName = state.tenant.name;
-  const country = getCountryConfig(state.country);
+  const flow = getFlowConfig(state.country, state.personType);
+  const activeDocuments = getDocumentOrder(state.country, state.personType);
+  const showRepresentatives = requiresRepresentatives(state.country, state.personType);
 
   const subject = `DanaConnect | Onboarding recibido | ${companyName} | ${trackingId}`;
+  const summaryLines = activeDocuments.map(
+    (docType) => `- ${getDocumentLabel(state.country, state.personType, docType)}: ${statusLabel(state.documents[docType].validation.status)}`
+  );
+  if (showRepresentatives) {
+    summaryLines.push(`- ${flow.reviewRepresentativePrimaryLabel}: ${statusLabel(state.representatives[0].document.validation.status)}`);
+    summaryLines.push(
+      `- ${flow.reviewRepresentativeSecondaryLabel}: ${
+        state.representatives[1].enabled ? statusLabel(state.representatives[1].document.validation.status) : 'No aplica'
+      }`
+    );
+  }
+  if (state.personType === 'natural') {
+    summaryLines.push(`- Nombres: ${state.personalInfo.firstName || 'No extraidos'}`);
+    summaryLines.push(`- Apellidos: ${state.personalInfo.lastName || 'No extraidos'}`);
+    summaryLines.push(`- Identificacion: ${state.personalInfo.documentNumber || 'No extraida'}`);
+  }
+  summaryLines.push(`- Biometría: ${biometricStatusLabel(state.biometrics.status)}`);
   const body = [
     'Hola equipo DanaConnect,',
     '',
     'Se recibió documentación desde el Portal de Onboarding.',
     '',
     `Empresa: ${companyName} (ID: ${companyId})`,
-    `País: ${country.name}`,
+    `País: ${state.country.toUpperCase()}`,
+    `Tipo de persona: ${flow.personTypeLabel}`,
     `Código: ${trackingId}`,
     `Fecha: ${submittedAtISO}`,
     `Link del portal: ${portalLink}`,
     '',
     'Resumen:',
-    `- ${getDocumentLabel(state.country, 'rif')}: ${statusLabel(state.documents.rif.validation.status)}`,
-    `- ${getDocumentLabel(state.country, 'registroMercantil')}: ${statusLabel(state.documents.registroMercantil.validation.status)}`,
-    `- ${country.reviewRepresentativePrimaryLabel}: ${statusLabel(state.representatives[0].document.validation.status)}`,
-    `- ${country.reviewRepresentativeSecondaryLabel}: ${
-      state.representatives[1].enabled ? statusLabel(state.representatives[1].document.validation.status) : 'No aplica'
-    }`,
-    `- Biometría: ${biometricStatusLabel(state.biometrics.status)}`,
+    ...summaryLines,
     '',
     'Gracias.'
   ].join('\n');
@@ -53,15 +67,22 @@ export function buildDemoEmail(state: OnboardingState, companyId: string, extern
 }
 
 export function buildFriendlySummaryLines(state: OnboardingState) {
-  const country = getCountryConfig(state.country);
-  const lines = [
-    `${getDocumentLabel(state.country, 'rif')}: ${statusToFriendly(state.documents.rif.validation.status)}`,
-    `${getDocumentLabel(state.country, 'registroMercantil')}: ${statusToFriendly(state.documents.registroMercantil.validation.status)}`,
-    `${country.reviewRepresentativePrimaryLabel}: ${statusToFriendly(state.representatives[0].document.validation.status)}`
-  ];
+  const flow = getFlowConfig(state.country, state.personType);
+  const lines = getDocumentOrder(state.country, state.personType).map(
+    (docType) => `${getDocumentLabel(state.country, state.personType, docType)}: ${statusToFriendly(state.documents[docType].validation.status)}`
+  );
 
-  if (state.representatives[1].enabled) {
-    lines.push(`${country.reviewRepresentativeSecondaryLabel}: ${statusToFriendly(state.representatives[1].document.validation.status)}`);
+  if (requiresRepresentatives(state.country, state.personType)) {
+    lines.push(`${flow.reviewRepresentativePrimaryLabel}: ${statusToFriendly(state.representatives[0].document.validation.status)}`);
+  }
+
+  if (requiresRepresentatives(state.country, state.personType) && state.representatives[1].enabled) {
+    lines.push(`${flow.reviewRepresentativeSecondaryLabel}: ${statusToFriendly(state.representatives[1].document.validation.status)}`);
+  }
+  if (state.personType === 'natural') {
+    lines.push(`Nombres: ${state.personalInfo.firstName || 'Pendiente'}`);
+    lines.push(`Apellidos: ${state.personalInfo.lastName || 'Pendiente'}`);
+    lines.push(`Identificacion: ${state.personalInfo.documentNumber || 'Pendiente'}`);
   }
   lines.push(`Biometría: ${biometricStatusToFriendly(state.biometrics.status)}`);
 

@@ -4,18 +4,23 @@ import {
   BiometricValidationRecord,
   CountryCode,
   DocumentRecord,
+  DocumentType,
   OnboardingState,
+  PersonalInfo,
+  PersonType,
   RepresentativeRecord,
-  RequiredDocumentType,
   SubmissionState
 } from './types';
 import { clearState, createEmptyDocument, createInitialState, loadState, saveState } from './state';
+import { getDocumentOrder, requiresRepresentatives } from '../config/onboardingCountries';
 
 type Action =
   | { type: 'set_country'; payload: CountryCode }
-  | { type: 'set_document'; payload: { docType: RequiredDocumentType; record: DocumentRecord } }
+  | { type: 'set_person_type'; payload: PersonType }
+  | { type: 'set_document'; payload: { docType: DocumentType; record: DocumentRecord } }
   | { type: 'set_representative'; payload: { id: 1 | 2; representative: RepresentativeRecord } }
   | { type: 'set_representative_enabled'; payload: { id: 2; enabled: boolean } }
+  | { type: 'set_personal_info'; payload: PersonalInfo }
   | { type: 'set_biometric'; payload: BiometricValidationRecord }
   | { type: 'set_submission'; payload: SubmissionState }
   | { type: 'reset'; payload: OnboardingState };
@@ -23,9 +28,11 @@ type Action =
 type ContextValue = {
   state: OnboardingState;
   setCountry: (country: CountryCode) => void;
-  setDocument: (docType: RequiredDocumentType, record: DocumentRecord) => void;
+  setPersonType: (personType: PersonType) => void;
+  setDocument: (docType: DocumentType, record: DocumentRecord) => void;
   setRepresentative: (id: 1 | 2, representative: RepresentativeRecord) => void;
   setRepresentativeEnabled: (id: 2, enabled: boolean) => void;
+  setPersonalInfo: (record: PersonalInfo) => void;
   setBiometric: (record: BiometricValidationRecord) => void;
   setSubmission: (submission: SubmissionState) => void;
   resetOnboarding: () => void;
@@ -42,7 +49,22 @@ function reducer(state: OnboardingState, action: Action): OnboardingState {
     case 'set_country':
       return {
         ...state,
-        country: action.payload
+        country: action.payload,
+        documents: createInitialState(state.companyId, state.tenant).documents,
+        representatives: createInitialState(state.companyId, state.tenant).representatives,
+        personalInfo: createInitialState(state.companyId, state.tenant).personalInfo,
+        biometrics: createInitialState(state.companyId, state.tenant).biometrics,
+        submission: createInitialState(state.companyId, state.tenant).submission
+      };
+    case 'set_person_type':
+      return {
+        ...state,
+        personType: action.payload,
+        documents: createInitialState(state.companyId, state.tenant).documents,
+        representatives: createInitialState(state.companyId, state.tenant).representatives,
+        personalInfo: createInitialState(state.companyId, state.tenant).personalInfo,
+        biometrics: createInitialState(state.companyId, state.tenant).biometrics,
+        submission: createInitialState(state.companyId, state.tenant).submission
       };
     case 'set_document':
       return {
@@ -71,6 +93,11 @@ function reducer(state: OnboardingState, action: Action): OnboardingState {
               }
             : item
         ) as OnboardingState['representatives']
+      };
+    case 'set_personal_info':
+      return {
+        ...state,
+        personalInfo: action.payload
       };
     case 'set_submission':
       return {
@@ -118,14 +145,16 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
   const value = useMemo<ContextValue>(() => {
     const representative1 = state.representatives.find((rep) => rep.id === 1);
     const representative2 = state.representatives.find((rep) => rep.id === 2);
-    const requiredDocs = [
-      state.documents.rif.validation.status,
-      state.documents.registroMercantil.validation.status,
-      representative1?.document.validation.status
-    ];
+    const activeDocumentStatuses = getDocumentOrder(state.country, state.personType).map(
+      (docType) => state.documents[docType].validation.status
+    );
+    const requiredDocs = [...activeDocumentStatuses];
 
-    if (representative2?.enabled) {
-      requiredDocs.push(representative2.document.validation.status);
+    if (requiresRepresentatives(state.country, state.personType) && representative1) {
+      requiredDocs.push(representative1.document.validation.status);
+      if (representative2?.enabled) {
+        requiredDocs.push(representative2.document.validation.status);
+      }
     }
 
     const allDocumentsValid = requiredDocs.every((status) => status === 'valid');
@@ -134,9 +163,11 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
     return {
       state,
       setCountry: (country) => dispatch({ type: 'set_country', payload: country }),
+      setPersonType: (personType) => dispatch({ type: 'set_person_type', payload: personType }),
       setDocument: (docType, record) => dispatch({ type: 'set_document', payload: { docType, record } }),
       setRepresentative: (id, representative) => dispatch({ type: 'set_representative', payload: { id, representative } }),
       setRepresentativeEnabled: (id, enabled) => dispatch({ type: 'set_representative_enabled', payload: { id, enabled } }),
+      setPersonalInfo: (record) => dispatch({ type: 'set_personal_info', payload: record }),
       setBiometric: (record) => dispatch({ type: 'set_biometric', payload: record }),
       setSubmission: (submission) => dispatch({ type: 'set_submission', payload: submission }),
       resetOnboarding: () => {

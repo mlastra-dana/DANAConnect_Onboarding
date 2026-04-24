@@ -4,6 +4,7 @@ import { AppLayout } from './AppLayout';
 import { getTenantByCompanyId } from '../data/tenants';
 import { OnboardingProvider, useOnboarding } from './OnboardingContext';
 import { WelcomePage } from '../pages/WelcomePage';
+import { PersonTypePage } from '../pages/PersonTypePage';
 import { DocumentsPage } from '../pages/DocumentsPage';
 import { BiometricPage } from '../pages/BiometricPage';
 import { ReviewPage } from '../pages/ReviewPage';
@@ -16,14 +17,16 @@ function resolveStep(segment?: string) {
     case undefined:
     case '':
       return { step: 1, key: 'welcome' };
+    case 'tipo-persona':
+      return { step: 2, key: 'personType' };
     case 'documents':
-      return { step: 2, key: 'documents' };
+      return { step: 3, key: 'documents' };
     case 'biometria':
-      return { step: 3, key: 'biometria' };
+      return { step: 4, key: 'biometria' };
     case 'review':
-      return { step: 4, key: 'review' };
+      return { step: 5, key: 'review' };
     case 'success':
-      return { step: 4, key: 'success' };
+      return { step: 5, key: 'success' };
     default:
       return { step: 1, key: 'notfound' };
   }
@@ -94,6 +97,7 @@ function OnboardingContent({
   const previousPathRef = useRef<string | null>(null);
   const stepTitles: Record<string, string> = {
     welcome: 'DanaConnect | Onboarding',
+    personType: 'DanaConnect | Tipo de Persona',
     documents: 'DanaConnect | Documentos',
     biometria: 'DanaConnect | Biometría',
     review: 'DanaConnect | Revisión',
@@ -120,6 +124,7 @@ function OnboardingContent({
   return (
     <AppLayout tenant={tenant} currentStep={step}>
       {stepKey === 'welcome' ? <WelcomePage companyId={companyId} /> : null}
+      {stepKey === 'personType' ? <PersonTypePage companyId={companyId} /> : null}
       {stepKey === 'documents' ? <DocumentsPage companyId={companyId} /> : null}
       {stepKey === 'biometria' ? <BiometricPage companyId={companyId} /> : null}
       {stepKey === 'review' ? <ReviewPage companyId={companyId} /> : null}

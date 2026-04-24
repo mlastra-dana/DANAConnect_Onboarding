@@ -11,15 +11,15 @@ export function WelcomePage({ companyId }: { companyId: string }) {
 
   function handleCountrySelect(country: 've' | 'pe' | 'bo') {
     setCountry(country);
-    navigate(`/onboarding/${companyId}/documents`);
+    navigate(`/onboarding/${companyId}/tipo-persona`);
   }
 
   return (
     <div>
       <DanaConnectHero
-        eyebrow=""
+        eyebrow={selectedCountry.heroEyebrow}
         headline="Portal de onboarding y carga de documentos."
-        subheadline="Centralice los adjuntos requeridos en un flujo simple, seguro y validado para su empresa."
+        subheadline="Seleccione el país para continuar con el flujo correspondiente."
         actions={
           <div className="space-y-4">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/80">Selecciona pais</p>

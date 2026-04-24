@@ -137,7 +137,8 @@ const SLOT_KEYWORDS = {
 const FILE_HINTS: Record<DocumentType, RegExp[]> = {
   rif: [/rif/i, /seniat/i],
   registroMercantil: [/mercantil/i, /constitutiv/i, /estatuto/i, /registro/i],
-  cedulaRepresentante: [/cedula/i, /saime/i, /identidad/i]
+  cedulaRepresentante: [/cedula/i, /saime/i, /identidad/i],
+  documentoIdentidad: [/cedula/i, /dni/i, /identidad/i, /ce/i]
 };
 
 export async function validateDocumentForSlot(
