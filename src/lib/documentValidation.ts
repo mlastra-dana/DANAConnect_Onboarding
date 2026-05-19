@@ -138,7 +138,12 @@ const FILE_HINTS: Record<DocumentType, RegExp[]> = {
   rif: [/rif/i, /seniat/i],
   registroMercantil: [/mercantil/i, /constitutiv/i, /estatuto/i, /registro/i],
   cedulaRepresentante: [/cedula/i, /saime/i, /identidad/i],
-  documentoIdentidad: [/cedula/i, /dni/i, /identidad/i, /ce/i]
+  documentoIdentidad: [/cedula/i, /dni/i, /identidad/i, /ce/i],
+  documentoFiscal: [/constancia/i, /fiscal/i, /situacion/i, /rfc/i],
+  documentoConstitucion: [/acta/i, /constitutiv/i, /constitucion/i, /registro/i],
+  facultadesRepresentante: [/poder/i, /notari/i, /facultad/i, /representante/i],
+  documentoRepresentante: [/identificacion/i, /oficial/i, /ine/i, /pasaporte/i],
+  comprobanteDomicilio: [/domicilio/i, /comprobante/i, /servicio/i, /recibo/i]
 };
 
 export async function validateDocumentForSlot(
@@ -146,20 +151,22 @@ export async function validateDocumentForSlot(
   slot: DocumentType,
   country: CountryCode = 've'
 ): Promise<SlotValidationResult> {
+  const resolvedSlot = resolveValidationSlot(slot, country);
+
   if (country === 'pe') {
-    return validatePeruvianDocumentForSlot(file, slot);
+    return validatePeruvianDocumentForSlot(file, resolvedSlot);
   }
 
-  const slotKey = slot;
-  if (slot === 'rif') {
+  const slotKey = resolvedSlot;
+  if (resolvedSlot === 'rif') {
     const rifResult = await validateRifDocument(file);
     return mapRifValidationToSlot(rifResult);
   }
-  if (slot === 'registroMercantil') {
+  if (resolvedSlot === 'registroMercantil') {
     const mercantilResult = await validateMercantilActaDocument(file);
     return mapMercantilValidationToSlot(mercantilResult);
   }
-  if (slot === 'cedulaRepresentante') {
+  if (resolvedSlot === 'cedulaRepresentante' || resolvedSlot === 'documentoIdentidad') {
     const cedulaResult = await validateCedulaDocument(file);
     return mapCedulaValidationToSlot(cedulaResult);
   }
@@ -237,7 +244,7 @@ export async function validateDocumentForSlot(
     };
   }
 
-  const classification = classifyBySlot(slot, normalized);
+  const classification = classifyBySlot(resolvedSlot, normalized);
   if (!classification.valid) {
     return {
       status: 'error',
@@ -259,7 +266,7 @@ export async function validateDocumentForSlot(
     };
   }
 
-  const validity = parseValidityWarnings(slot, textResult.text);
+  const validity = parseValidityWarnings(resolvedSlot, textResult.text);
   warnings.push(...validity.warnings);
   const finalStatus: SlotStatus = warnings.length > 0 ? 'warning' : 'valid';
 
@@ -282,6 +289,14 @@ export async function validateDocumentForSlot(
     score: classification.score,
     validityStatus: validity.status
   };
+}
+
+function resolveValidationSlot(slot: DocumentType, country: CountryCode): DocumentType {
+  if (country !== 'mx') return slot;
+  if (slot === 'documentoFiscal') return 'rif';
+  if (slot === 'documentoConstitucion' || slot === 'facultadesRepresentante') return 'registroMercantil';
+  if (slot === 'documentoRepresentante' || slot === 'comprobanteDomicilio') return 'documentoIdentidad';
+  return slot;
 }
 
 async function validatePeruvianDocumentForSlot(file: File, slot: DocumentType): Promise<SlotValidationResult> {

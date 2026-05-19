@@ -5,10 +5,25 @@ export const DOCUMENT_LABELS: Record<DocumentRecordType, string> = {
   rif: 'RIF',
   registroMercantil: 'Registro Mercantil',
   cedulaRepresentante: 'Cédula del Representante',
-  documentoIdentidad: 'Documento de Identidad'
+  documentoIdentidad: 'Documento de Identidad',
+  documentoFiscal: 'Documento Fiscal',
+  documentoConstitucion: 'Documento de Constitución',
+  facultadesRepresentante: 'Facultades del Representante',
+  documentoRepresentante: 'Documento del Representante',
+  comprobanteDomicilio: 'Comprobante de Domicilio'
 };
 
-const ALL_DOCUMENT_TYPES: DocumentType[] = ['rif', 'registroMercantil', 'cedulaRepresentante', 'documentoIdentidad'];
+const ALL_DOCUMENT_TYPES: DocumentType[] = [
+  'rif',
+  'registroMercantil',
+  'cedulaRepresentante',
+  'documentoIdentidad',
+  'documentoFiscal',
+  'documentoConstitucion',
+  'facultadesRepresentante',
+  'documentoRepresentante',
+  'comprobanteDomicilio'
+];
 
 export function createEmptyDocument(type: DocumentRecordType) {
   return {

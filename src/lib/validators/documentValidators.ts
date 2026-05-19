@@ -43,13 +43,14 @@ export async function validateDocumentFile(
     };
   }
 
+  const slotForValidation = resolveLambdaSlot(type, country);
   onProgress?.(30);
   const payload = {
     file_name: file.name,
     content_type: file.type || inferContentType(file.name),
     file_base64: await fileToBase64(file),
     country,
-    slot: type
+    slot: slotForValidation
   };
 
   onProgress?.(65);
@@ -112,6 +113,26 @@ export async function validateDocumentFile(
     internalDiagnostics: result.internalDiagnostics,
     extractedIdentity: result.extractedIdentity
   };
+}
+
+function resolveLambdaSlot(type: DocumentType, country: CountryCode): string {
+  if (country !== 'mx') {
+    return type;
+  }
+
+  const mexicoSlotMap: Partial<Record<DocumentType, string>> = {
+    rif: 'documentoFiscal',
+    registroMercantil: 'documentoConstitucion',
+    cedulaRepresentante: 'documentoRepresentante',
+    documentoFiscal: 'documentoFiscal',
+    documentoConstitucion: 'documentoConstitucion',
+    facultadesRepresentante: 'facultadesRepresentante',
+    documentoRepresentante: 'documentoRepresentante',
+    documentoIdentidad: 'documentoIdentidad',
+    comprobanteDomicilio: 'comprobanteDomicilio'
+  };
+
+  return mexicoSlotMap[type] ?? type;
 }
 
 function inferContentType(fileName: string) {

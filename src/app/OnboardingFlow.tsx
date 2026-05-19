@@ -96,13 +96,13 @@ function OnboardingContent({
   const { resetOnboardingState } = useOnboarding();
   const previousPathRef = useRef<string | null>(null);
   const stepTitles: Record<string, string> = {
-    welcome: 'DanaConnect | Onboarding',
-    personType: 'DanaConnect | Tipo de Persona',
-    documents: 'DanaConnect | Documentos',
-    biometria: 'DanaConnect | Biometría',
-    review: 'DanaConnect | Revisión',
-    success: 'DanaConnect | Resultado',
-    notfound: 'DanaConnect | No encontrado'
+    welcome: 'DANAconnect | Onboarding',
+    personType: 'DANAconnect | Tipo de Persona',
+    documents: 'DANAconnect | Documentos',
+    biometria: 'DANAconnect | Biometría',
+    review: 'DANAconnect | Revisión',
+    success: 'DANAconnect | Resultado',
+    notfound: 'DANAconnect | No encontrado'
   };
 
   useEffect(() => {
@@ -118,7 +118,7 @@ function OnboardingContent({
   }, [companyId, pathname, resetOnboardingState, stepKey]);
 
   useEffect(() => {
-    document.title = stepTitles[stepKey] ?? 'DanaConnect | Onboarding';
+    document.title = stepTitles[stepKey] ?? 'DANAconnect | Onboarding';
   }, [stepKey]);
 
   return (

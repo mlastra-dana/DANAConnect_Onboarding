@@ -167,6 +167,136 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         }
       }
     }
+  },
+  mx: {
+    code: 'mx',
+    name: 'México',
+    flag: '🇲🇽',
+    heroEyebrow: 'DANACONNECT MEXICO',
+    personTypes: {
+      juridica: {
+        personType: 'juridica',
+        personTypeLabel: 'Persona moral',
+        personTypeDescription: 'Onboarding para empresas o sociedades con representantes legales.',
+        heroHeadline: 'Portal de onboarding para empresas en México.',
+        heroSubheadline: 'Centralice los adjuntos requeridos en un flujo simple, seguro y validado para su empresa en México.',
+        heroButton: 'Continuar con persona juridica',
+        documentsIntro: 'Cargue los documentos requeridos para continuar con el onboarding de persona juridica.',
+        documentOrder: ['documentoFiscal', 'documentoConstitucion', 'facultadesRepresentante', 'documentoRepresentante'],
+        documents: {
+          documentoFiscal: { label: 'Constancia de Situación Fiscal' },
+          documentoConstitucion: { label: 'Acta Constitutiva' },
+          facultadesRepresentante: { label: 'Poder Notarial o facultades del representante legal' },
+          documentoRepresentante: { label: 'Identificación oficial vigente del representante legal' },
+          comprobanteDomicilio: { label: 'Comprobante de domicilio fiscal' }
+        }
+      },
+      natural: {
+        personType: 'natural',
+        personTypeLabel: 'Persona física',
+        personTypeDescription: 'Onboarding individual para personas naturales.',
+        heroHeadline: 'Portal de onboarding para personas naturales en México.',
+        heroSubheadline: 'Cargue su documentacion personal en un flujo guiado, simple y validado para México.',
+        heroButton: 'Continuar con persona natural',
+        documentsIntro: 'Cargue el RFC y su documento de identidad para completar el onboarding de persona natural.',
+        documentOrder: ['documentoFiscal', 'documentoIdentidad'],
+        documents: {
+          documentoFiscal: { label: 'Constancia de Situación Fiscal' },
+          documentoIdentidad: { label: 'Identificación oficial vigente' },
+          comprobanteDomicilio: { label: 'Comprobante de domicilio fiscal' }
+        }
+      }
+    }
+  },
+  ar: {
+    code: 'ar',
+    name: 'Argentina',
+    flag: '🇦🇷',
+    heroEyebrow: 'DANACONNECT ARGENTINA',
+    personTypes: {
+      juridica: {
+        personType: 'juridica',
+        personTypeLabel: 'Persona juridica',
+        personTypeDescription: 'Onboarding para empresas o sociedades con representantes legales.',
+        heroHeadline: 'Portal de onboarding para empresas en Argentina.',
+        heroSubheadline: 'Centralice los adjuntos requeridos en un flujo simple, seguro y validado para su empresa en Argentina.',
+        heroButton: 'Continuar con persona juridica',
+        documentsIntro: 'Cargue los documentos requeridos para continuar con el onboarding de persona juridica.',
+        documentOrder: ['rif', 'registroMercantil'],
+        documents: {
+          rif: { label: 'CUIT' },
+          registroMercantil: { label: 'Inscripción societaria o constancia registral' },
+          cedulaRepresentante: { label: 'DNI del Representante' }
+        },
+        representativePrimaryTitle: 'DNI del Representante (Obligatorio)',
+        representativeSecondaryTitle: 'DNI del segundo representante (Opcional)',
+        representativeSectionTitle: 'Representantes legales',
+        representativeSectionDescription: 'Cargue el DNI del representante principal. Puede agregar un segundo representante si aplica.',
+        addSecondRepresentativeLabel: 'Agregar segundo representante',
+        removeSecondRepresentativeLabel: 'Quitar segundo representante',
+        reviewRepresentativePrimaryLabel: 'DNI del Representante 1',
+        reviewRepresentativeSecondaryLabel: 'DNI del Representante 2'
+      },
+      natural: {
+        personType: 'natural',
+        personTypeLabel: 'Persona natural',
+        personTypeDescription: 'Onboarding individual para personas naturales.',
+        heroHeadline: 'Portal de onboarding para personas naturales en Argentina.',
+        heroSubheadline: 'Cargue su documentacion personal en un flujo guiado, simple y validado para Argentina.',
+        heroButton: 'Continuar con persona natural',
+        documentsIntro: 'Cargue el CUIT y el DNI requeridos para completar el onboarding de persona natural.',
+        documentOrder: ['rif', 'documentoIdentidad'],
+        documents: {
+          rif: { label: 'CUIT' },
+          documentoIdentidad: { label: 'DNI' }
+        }
+      }
+    }
+  },
+  do: {
+    code: 'do',
+    name: 'República Dominicana',
+    flag: '🇩🇴',
+    heroEyebrow: 'DANACONNECT REPUBLICA DOMINICANA',
+    personTypes: {
+      juridica: {
+        personType: 'juridica',
+        personTypeLabel: 'Persona juridica',
+        personTypeDescription: 'Onboarding para empresas o sociedades con representantes legales.',
+        heroHeadline: 'Portal de onboarding para empresas en República Dominicana.',
+        heroSubheadline: 'Centralice los adjuntos requeridos en un flujo simple, seguro y validado para su empresa en República Dominicana.',
+        heroButton: 'Continuar con persona juridica',
+        documentsIntro: 'Cargue los documentos requeridos para continuar con el onboarding de persona juridica.',
+        documentOrder: ['rif', 'registroMercantil'],
+        documents: {
+          rif: { label: 'RNC' },
+          registroMercantil: { label: 'Registro Mercantil o Acta Constitutiva' },
+          cedulaRepresentante: { label: 'Cédula del Representante' }
+        },
+        representativePrimaryTitle: 'Cédula del Representante (Obligatorio)',
+        representativeSecondaryTitle: 'Cédula del segundo representante (Opcional)',
+        representativeSectionTitle: 'Representantes legales',
+        representativeSectionDescription: 'Cargue la cédula del representante principal. Puede agregar un segundo representante si aplica.',
+        addSecondRepresentativeLabel: 'Agregar segundo representante',
+        removeSecondRepresentativeLabel: 'Quitar segundo representante',
+        reviewRepresentativePrimaryLabel: 'Cédula del Representante 1',
+        reviewRepresentativeSecondaryLabel: 'Cédula del Representante 2'
+      },
+      natural: {
+        personType: 'natural',
+        personTypeLabel: 'Persona natural',
+        personTypeDescription: 'Onboarding individual para personas naturales.',
+        heroHeadline: 'Portal de onboarding para personas naturales en República Dominicana.',
+        heroSubheadline: 'Cargue su documentacion personal en un flujo guiado, simple y validado para República Dominicana.',
+        heroButton: 'Continuar con persona natural',
+        documentsIntro: 'Cargue el RNC y la cédula requeridos para completar el onboarding de persona natural.',
+        documentOrder: ['rif', 'documentoIdentidad'],
+        documents: {
+          rif: { label: 'RNC' },
+          documentoIdentidad: { label: 'Cédula de Identidad' }
+        }
+      }
+    }
   }
 };
 

@@ -60,6 +60,7 @@ export function BiometricPage({ companyId }: { companyId: string }) {
   const [geo, setGeo] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [geoAddress, setGeoAddress] = useState<string | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
+  const [biometricConsentAccepted, setBiometricConsentAccepted] = useState(false);
   const [completedGestures, setCompletedGestures] = useState<Record<Gesture, boolean>>({
     center: false,
     turn_left: false,
@@ -544,8 +545,24 @@ export function BiometricPage({ companyId }: { companyId: string }) {
           ) : null}
         </div>
 
+        <label className="mt-4 flex items-start gap-2 rounded-lg border border-borderLight bg-white p-3 text-sm text-dark">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 accent-primary"
+            checked={biometricConsentAccepted}
+            onChange={(event) => setBiometricConsentAccepted(event.target.checked)}
+          />
+          <span>
+            He leído y acepto el Aviso de Privacidad y autorizo el tratamiento de mis datos biométricos y geolocalización.
+          </span>
+        </label>
+
         <div className="mt-4">
-          <Button onClick={() => void startChallenge()} disabled={cameraStatus !== 'active' || runningChallenge || isPassed} fullWidth>
+          <Button
+            onClick={() => void startChallenge()}
+            disabled={cameraStatus !== 'active' || runningChallenge || isPassed || !biometricConsentAccepted}
+            fullWidth
+          >
             {runningChallenge ? 'Validando...' : 'Iniciar prueba'}
           </Button>
         </div>

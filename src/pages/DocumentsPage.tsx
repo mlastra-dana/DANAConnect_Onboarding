@@ -18,6 +18,11 @@ const initialBoolMap: Record<UploadKey, boolean> = {
   registroMercantil: false,
   documentoIdentidad: false,
   cedulaRepresentante: false,
+  documentoFiscal: false,
+  documentoConstitucion: false,
+  facultadesRepresentante: false,
+  documentoRepresentante: false,
+  comprobanteDomicilio: false,
   rep1: false,
   rep2: false
 };
@@ -27,6 +32,11 @@ const initialNumMap: Record<UploadKey, number> = {
   registroMercantil: 0,
   documentoIdentidad: 0,
   cedulaRepresentante: 0,
+  documentoFiscal: 0,
+  documentoConstitucion: 0,
+  facultadesRepresentante: 0,
+  documentoRepresentante: 0,
+  comprobanteDomicilio: 0,
   rep1: 0,
   rep2: 0
 };
@@ -41,6 +51,8 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
   const representative1 = state.representatives.find((rep) => rep.id === 1)!;
   const representative2 = state.representatives.find((rep) => rep.id === 2)!;
+  const isMexicoNatural = state.country === 'mx' && state.personType === 'natural';
+  const firstNameLabel = isMexicoNatural ? 'Nombre(s)' : 'Nombres';
   const flowConfig = getFlowConfig(state.country, state.personType);
   const documentOrder = getDocumentOrder(state.country, state.personType);
   const showRepresentatives = requiresRepresentatives(state.country, state.personType);
@@ -248,7 +260,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
           <h3 className="text-lg font-semibold text-dark">Datos de identidad</h3>
           <div className="mt-4 grid gap-4 md:grid-cols-3">
             <label className="space-y-2">
-              <span className="text-sm font-medium text-dark">Nombres</span>
+              <span className="text-sm font-medium text-dark">{firstNameLabel}</span>
               <input
                 type="text"
                 value={state.personalInfo.firstName}
@@ -259,7 +271,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                   })
                 }
                 className="w-full rounded-lg border border-borderLight px-3 py-2.5 text-sm text-dark outline-none transition-colors focus:border-primary"
-                placeholder="Nombres"
+                placeholder={firstNameLabel}
               />
             </label>
             <label className="space-y-2">
@@ -297,7 +309,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       ) : null}
 
       <div className="flex flex-wrap justify-between gap-3">
-        <Link to={`/onboarding/${companyId}`}>
+        <Link to={`/onboarding/${companyId}/tipo-persona`}>
           <Button variant="ghost">Volver</Button>
         </Link>
         <Link to={`/onboarding/${companyId}/biometria`}>
