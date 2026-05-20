@@ -81,7 +81,7 @@ export function BiometricPage({ companyId }: { companyId: string }) {
       return 'Modo automático alterno activo: siga los gestos, el sistema valida sin capturas manuales.';
     }
     if (!runningChallenge && !isPassed) return 'Cámara activa. Pulsa "Iniciar prueba".';
-    if (isPassed) return 'Biometría completada.';
+    if (isPassed) return 'Prueba de Vida completada.';
     return gestureInstruction(currentGesture);
   }, [cameraStatus, cameraError, runningChallenge, isPassed, currentGesture, detectionMode]);
 
@@ -429,7 +429,7 @@ export function BiometricPage({ companyId }: { companyId: string }) {
             <ScanFace className="h-6 w-6" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-dark">Biometría</h2>
+            <h2 className="text-xl font-bold text-dark">Prueba de Vida</h2>
             <p className="text-sm text-grayText">Activación de cámara y prueba de vida con gestos.</p>
           </div>
         </div>
@@ -504,7 +504,7 @@ export function BiometricPage({ companyId }: { companyId: string }) {
       </Card>
 
       <Card>
-        <h3 className="text-base font-semibold text-dark">Estado de biometría</h3>
+        <h3 className="text-base font-semibold text-dark">Estado de prueba de vida</h3>
         <div className="mt-3">
           <StatusBadge status={mapBiometricStatus(current.status)} />
         </div>
@@ -569,7 +569,7 @@ export function BiometricPage({ companyId }: { companyId: string }) {
 
         <div className="mt-5 flex items-start gap-2 rounded-lg border border-[#F9D1C9] bg-[#FFF4F1] p-3 text-sm text-dark">
           <ShieldCheck className="mt-0.5 h-4 w-4 text-primary" />
-          <p>La biometría validada es obligatoria para habilitar el envío final.</p>
+          <p>La prueba de vida validada es obligatoria para habilitar el envío final.</p>
         </div>
       </Card>
     </div>

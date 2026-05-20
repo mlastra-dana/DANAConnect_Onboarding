@@ -148,7 +148,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
           ) : null}
           <li className="flex items-center justify-between rounded-lg border border-borderLight p-3">
             <div>
-              <p className="font-medium text-dark">Biometría</p>
+              <p className="font-medium text-dark">Prueba de Vida</p>
               <p className="text-xs text-grayText">{biometricStatusLabel(state.biometrics.status)}</p>
             </div>
             <StatusBadge status={toBadgeStatus(state.biometrics.status)} />
@@ -168,7 +168,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
       {!canSubmit ? (
         <Toast
           type="error"
-          message="No puede enviar todavía: complete documentos y biometría en estado válido."
+          message="No puede enviar todavía: complete documentos y prueba de vida en estado válido."
         />
       ) : null}
     </div>

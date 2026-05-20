@@ -44,7 +44,7 @@ export function buildDemoEmail(state: OnboardingState, companyId: string, extern
     summaryLines.push(`- Apellidos: ${state.personalInfo.lastName || 'No extraidos'}`);
     summaryLines.push(`- Identificacion: ${state.personalInfo.documentNumber || 'No extraida'}`);
   }
-  summaryLines.push(`- Biometría: ${biometricStatusLabel(state.biometrics.status)}`);
+  summaryLines.push(`- Prueba de Vida: ${biometricStatusLabel(state.biometrics.status)}`);
   const body = [
     'Hola equipo DanaConnect,',
     '',
@@ -84,7 +84,7 @@ export function buildFriendlySummaryLines(state: OnboardingState) {
     lines.push(`Apellidos: ${state.personalInfo.lastName || 'Pendiente'}`);
     lines.push(`Identificacion: ${state.personalInfo.documentNumber || 'Pendiente'}`);
   }
-  lines.push(`Biometría: ${biometricStatusToFriendly(state.biometrics.status)}`);
+  lines.push(`Prueba de Vida: ${biometricStatusToFriendly(state.biometrics.status)}`);
 
   return lines;
 }

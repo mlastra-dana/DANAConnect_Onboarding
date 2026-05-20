@@ -99,7 +99,7 @@ function OnboardingContent({
     welcome: 'DANAconnect | Onboarding',
     personType: 'DANAconnect | Tipo de Persona',
     documents: 'DANAconnect | Documentos',
-    biometria: 'DANAconnect | Biometría',
+    biometria: 'DANAconnect | Prueba de Vida',
     review: 'DANAconnect | Revisión',
     success: 'DANAconnect | Resultado',
     notfound: 'DANAconnect | No encontrado'

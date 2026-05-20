@@ -1,6 +1,6 @@
 import { CheckCircle2 } from 'lucide-react';
 
-const steps = ['Bienvenida', 'Tipo de Persona', 'Documentos', 'Biometría', 'Revisión & Envío'];
+const steps = ['Bienvenida', 'Tipo de Persona', 'Documentos', 'Prueba de Vida', 'Revisión & Envío'];
 
 export function Stepper({ currentStep }: { currentStep: number }) {
   return (

@@ -25,7 +25,7 @@ export function buildReceiptData(state: OnboardingState): ReceiptData {
       fileName: state.representatives[1].enabled ? state.representatives[1].document.fileName : 'No aplica'
     });
   }
-  documents.push({ label: 'Biometría', fileName: biometricToFileLabel(state.biometrics.status) });
+  documents.push({ label: 'Prueba de Vida', fileName: biometricToFileLabel(state.biometrics.status) });
 
   return {
     companyName: state.tenant.name,
