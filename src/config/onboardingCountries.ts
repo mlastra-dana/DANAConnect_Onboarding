@@ -37,7 +37,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
     code: 've',
     name: 'Venezuela',
     flag: '🇻🇪',
-    heroEyebrow: 'DANACONNECT VENEZUELA',
+    heroEyebrow: '',
     personTypes: {
       juridica: {
         personType: 'juridica',
@@ -82,14 +82,14 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
     code: 'pe',
     name: 'Perú',
     flag: '🇵🇪',
-    heroEyebrow: 'DANACONNECT PERU',
+    heroEyebrow: '',
     personTypes: {
       juridica: {
         personType: 'juridica',
         personTypeLabel: 'Persona juridica',
         personTypeDescription: 'Onboarding para empresas con vigencia de poder y representantes legales.',
         heroHeadline: 'Onboarding documental para empresas en Peru.',
-        heroSubheadline: 'Mantenga el flujo guiado de DanaConnect, adaptado a los requisitos documentales y de identificacion de Peru.',
+        heroSubheadline: 'Mantenga el flujo guiado de Example Company, adaptado a los requisitos documentales y de identificacion de Peru.',
         heroButton: 'Continuar con persona juridica',
         documentsIntro: 'Cargue la documentacion requerida para completar el onboarding de persona juridica en Peru.',
         documentOrder: ['rif', 'registroMercantil'],
@@ -112,7 +112,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         personTypeLabel: 'Persona natural',
         personTypeDescription: 'Onboarding individual para personas naturales.',
         heroHeadline: 'Onboarding documental para personas naturales en Peru.',
-        heroSubheadline: 'Complete el flujo personal de DanaConnect con los documentos requeridos para Peru.',
+        heroSubheadline: 'Complete el flujo personal de Example Company con los documentos requeridos para Peru.',
         heroButton: 'Continuar con persona natural',
         documentsIntro: 'Cargue el RUC y el documento de identidad requeridos para completar el onboarding de persona natural en Peru.',
         documentOrder: ['rif', 'documentoIdentidad'],
@@ -127,14 +127,14 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
     code: 'bo',
     name: 'Bolivia',
     flag: '🇧🇴',
-    heroEyebrow: 'DANACONNECT BOLIVIA',
+    heroEyebrow: '',
     personTypes: {
       juridica: {
         personType: 'juridica',
         personTypeLabel: 'Persona juridica',
         personTypeDescription: 'Onboarding para empresas con matricula y representantes legales.',
         heroHeadline: 'Onboarding documental para empresas en Bolivia.',
-        heroSubheadline: 'Mantenga el flujo guiado de DanaConnect, adaptado a los requisitos documentales y de identificacion empresarial de Bolivia.',
+        heroSubheadline: 'Mantenga el flujo guiado de Example Company, adaptado a los requisitos documentales y de identificacion empresarial de Bolivia.',
         heroButton: 'Continuar con persona juridica',
         documentsIntro: 'Cargue la documentacion requerida para completar el onboarding de persona juridica en Bolivia.',
         documentOrder: ['rif', 'registroMercantil'],
@@ -157,7 +157,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         personTypeLabel: 'Persona natural',
         personTypeDescription: 'Onboarding individual para personas naturales.',
         heroHeadline: 'Onboarding documental para personas naturales en Bolivia.',
-        heroSubheadline: 'Complete el flujo personal de DanaConnect con los recaudos requeridos para Bolivia.',
+        heroSubheadline: 'Complete el flujo personal de Example Company con los recaudos requeridos para Bolivia.',
         heroButton: 'Continuar con persona natural',
         documentsIntro: 'Cargue el NIT y la cédula de identidad requeridos para completar el onboarding de persona natural en Bolivia.',
         documentOrder: ['rif', 'documentoIdentidad'],
@@ -172,7 +172,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
     code: 'mx',
     name: 'México',
     flag: '🇲🇽',
-    heroEyebrow: 'DANACONNECT MEXICO',
+    heroEyebrow: '',
     personTypes: {
       juridica: {
         personType: 'juridica',
@@ -212,7 +212,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
     code: 'ar',
     name: 'Argentina',
     flag: '🇦🇷',
-    heroEyebrow: 'DANACONNECT ARGENTINA',
+    heroEyebrow: '',
     personTypes: {
       juridica: {
         personType: 'juridica',
@@ -257,7 +257,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
     code: 'do',
     name: 'República Dominicana',
     flag: '🇩🇴',
-    heroEyebrow: 'DANACONNECT REPUBLICA DOMINICANA',
+    heroEyebrow: '',
     personTypes: {
       juridica: {
         personType: 'juridica',

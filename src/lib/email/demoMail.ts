@@ -27,7 +27,7 @@ export function buildDemoEmail(state: OnboardingState, companyId: string, extern
   const activeDocuments = getDocumentOrder(state.country, state.personType);
   const showRepresentatives = requiresRepresentatives(state.country, state.personType);
 
-  const subject = `DanaConnect | Onboarding recibido | ${companyName} | ${trackingId}`;
+  const subject = `${companyName} | Onboarding recibido | ${trackingId}`;
   const summaryLines = activeDocuments.map(
     (docType) => `- ${getDocumentLabel(state.country, state.personType, docType)}: ${statusLabel(state.documents[docType].validation.status)}`
   );
@@ -46,7 +46,7 @@ export function buildDemoEmail(state: OnboardingState, companyId: string, extern
   }
   summaryLines.push(`- Prueba de Vida: ${biometricStatusLabel(state.biometrics.status)}`);
   const body = [
-    'Hola equipo DanaConnect,',
+    `Hola equipo ${companyName},`,
     '',
     'Se recibió documentación desde el Portal de Onboarding.',
     '',
@@ -92,11 +92,11 @@ export function buildFriendlySummaryLines(state: OnboardingState) {
 export function buildFriendlyMailDraft(state: OnboardingState, companyId: string) {
   const portalLink = `${window.location.origin}/onboarding/${companyId}`;
   const requestCode = state.submission.registrationId ? state.submission.registrationId.slice(0, 8).toUpperCase() : 'PENDIENTE';
-  const subject = `DanaConnect | Documentación recibida | ${state.tenant.name}`;
+  const subject = `${state.tenant.name} | Documentación recibida`;
   const summaryLines = buildFriendlySummaryLines(state).map((line) => `- ${line}`).join('\n');
 
   const body = [
-    'Hola equipo DanaConnect,',
+    `Hola equipo ${state.tenant.name},`,
     '',
     'Comparto el resumen de la documentación enviada:',
     summaryLines,

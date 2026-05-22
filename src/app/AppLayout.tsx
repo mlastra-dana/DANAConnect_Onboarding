@@ -31,7 +31,7 @@ export function AppLayout({
   }
 
   return (
-    <div className="min-h-screen bg-surface text-dark" style={{ ['--tenant-brand' as string]: tenant.brandColor ?? '#DD5736' }}>
+    <div className="min-h-screen bg-surface text-dark" style={{ ['--tenant-brand' as string]: tenant.brandColor ?? '#4B16B6' }}>
       <DanaConnectHeader
         tenantName={tenant.name}
         logoUrl={tenant.logoUrl}

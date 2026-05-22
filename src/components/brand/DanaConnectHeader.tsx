@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { MouseEvent } from 'react';
 import { Button } from '../ui/Button';
 
+const DEFAULT_LOGO = '/brand/example_brand_kit_2/logos/svg/example_company_color.svg';
+
 export function DanaConnectHeader({
   tenantName,
   logoUrl,
@@ -22,8 +24,8 @@ export function DanaConnectHeader({
     return (
       <header className="sticky top-0 z-40 border-b border-borderLight bg-white">
         <div className="mx-auto flex h-[68px] w-full max-w-7xl items-center px-5 md:px-8">
-          <Link to={`/onboarding/${companyId}`} className="shrink-0" aria-label="Ir a inicio DanaConnect" onClick={onHomeClick}>
-            <img src={logoUrl || '/logo-danaconnect-horizontal.png'} alt="Logo DanaConnect" className="h-9 w-auto md:h-10" />
+          <Link to={`/onboarding/${companyId}`} className="shrink-0" aria-label={`Ir a inicio ${tenantName}`} onClick={onHomeClick}>
+            <img src={logoUrl || DEFAULT_LOGO} alt={`Logo ${tenantName}`} className="h-14 w-auto md:h-16" />
           </Link>
         </div>
       </header>
@@ -33,8 +35,8 @@ export function DanaConnectHeader({
   return (
     <header className="sticky top-0 z-40 border-b border-borderLight bg-white">
       <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 md:px-6">
-        <Link to={`/onboarding/${companyId}`} className="flex items-center" aria-label="Ir a inicio DanaConnect" onClick={onHomeClick}>
-          <img src={logoUrl || '/logo-danaconnect-horizontal.png'} alt="Logo DanaConnect" className="h-9 w-auto" />
+        <Link to={`/onboarding/${companyId}`} className="flex items-center" aria-label={`Ir a inicio ${tenantName}`} onClick={onHomeClick}>
+          <img src={logoUrl || DEFAULT_LOGO} alt={`Logo ${tenantName}`} className="h-14 w-auto md:h-16" />
         </Link>
 
         <div className="flex items-center">

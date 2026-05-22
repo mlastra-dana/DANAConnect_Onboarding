@@ -6,7 +6,8 @@
 
 :root {
   color-scheme: light;
-  --hero-bg-primary: #DD5736;
+  --hero-bg-primary: #4B16B6;
+  --hero-bg-accent: #BEA6FF;
 }
 
 body {
@@ -18,7 +19,9 @@ body {
 }
 
 .hero-shell {
-  background: var(--hero-bg-primary);
+  background:
+    radial-gradient(circle at 92% 18%, rgba(190, 166, 255, 0.52), transparent 34%),
+    linear-gradient(135deg, var(--hero-bg-primary) 0%, #2B0D6B 58%, #0F0F1F 100%);
 }
 
 .hero-title {

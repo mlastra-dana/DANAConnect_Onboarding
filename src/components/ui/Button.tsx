@@ -9,7 +9,7 @@ type Props = PropsWithChildren<ButtonHTMLAttributes<HTMLButtonElement>> & {
 
 const styles: Record<Variant, string> = {
   primary:
-    'bg-primary text-white hover:bg-primaryHover disabled:bg-[#F0C5BA] disabled:text-white',
+    'bg-primary text-white hover:bg-primaryHover disabled:bg-brand-300 disabled:text-white',
   secondary:
     'bg-white text-dark border border-borderLight hover:bg-surface disabled:text-grayText',
   ghost: 'bg-transparent text-grayText hover:bg-surface disabled:text-grayText/70',

@@ -39,7 +39,7 @@ export function Stepper({ currentStep }: { currentStep: number }) {
             <li
               key={step}
               className={`rounded-lg border p-3 text-sm ${
-                active ? 'border-primary bg-[#FFF4F1] text-dark' : 'border-borderLight bg-white text-grayText'
+                active ? 'border-primary bg-brand-50 text-dark' : 'border-borderLight bg-white text-grayText'
               }`}
             >
               <div className="flex items-center gap-2">

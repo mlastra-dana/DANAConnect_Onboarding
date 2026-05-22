@@ -20,7 +20,7 @@ export function WelcomePage({ companyId }: { companyId: string }) {
       <DanaConnectHero
         eyebrow={selectedCountry.heroEyebrow}
         headline="Portal de onboarding y carga de documentos."
-        subheadline="Seleccione el país para continuar con el flujo correspondiente."
+        subheadline=""
         actions={
           <div className="space-y-4">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/80">Selecciona pais</p>
@@ -32,7 +32,7 @@ export function WelcomePage({ companyId }: { companyId: string }) {
                     type="button"
                     onClick={() => handleCountrySelect(country.code)}
                     aria-label={country.name}
-                    className="flex h-16 w-16 items-center justify-center rounded-full border border-white/35 bg-white/10 text-3xl transition-all duration-200 hover:border-white hover:bg-white hover:shadow-soft focus-visible:border-white focus-visible:bg-white focus-visible:shadow-soft md:h-20 md:w-20 md:text-4xl"
+                    className="flex h-16 w-16 items-center justify-center rounded-full border border-white bg-white text-3xl shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-soft-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary md:h-20 md:w-20 md:text-4xl"
                   >
                     <span aria-hidden="true">{country.flag}</span>
                   </button>

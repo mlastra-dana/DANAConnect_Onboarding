@@ -425,7 +425,7 @@ export function BiometricPage({ companyId }: { companyId: string }) {
     <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[1.5fr_1fr]">
       <Card>
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FFF4F1] text-primary">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-50 text-primary">
             <ScanFace className="h-6 w-6" />
           </div>
           <div>
@@ -463,7 +463,7 @@ export function BiometricPage({ companyId }: { companyId: string }) {
                   done
                     ? 'border-green-200 bg-green-50 text-green-700'
                     : active
-                      ? 'border-primary bg-[#FFF4F1] text-dark'
+                      ? 'border-primary bg-brand-50 text-dark'
                       : 'border-borderLight bg-white text-grayText'
                 }`}
               >
@@ -567,7 +567,7 @@ export function BiometricPage({ companyId }: { companyId: string }) {
           </Button>
         </div>
 
-        <div className="mt-5 flex items-start gap-2 rounded-lg border border-[#F9D1C9] bg-[#FFF4F1] p-3 text-sm text-dark">
+        <div className="mt-5 flex items-start gap-2 rounded-lg border border-brand-100 bg-brand-50 p-3 text-sm text-dark">
           <ShieldCheck className="mt-0.5 h-4 w-4 text-primary" />
           <p>La prueba de vida validada es obligatoria para habilitar el envío final.</p>
         </div>

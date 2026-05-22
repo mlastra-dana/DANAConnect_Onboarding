@@ -11,27 +11,27 @@ export type TenantConfig = {
 export const tenantsRegistry: Record<string, TenantConfig> = {
   'demo-001': {
     companyId: 'demo-001',
-    name: 'DanaConnect',
-    logoUrl: '/logo-danaconnect-horizontal.png',
-    brandColor: '#DD5736',
+    name: 'Example Company',
+    logoUrl: '/brand/example_brand_kit_2/logos/svg/example_company_color.svg',
+    brandColor: '#4B16B6',
     slaHours: 8,
     whatsAppNumber: '584128194750',
     phone: '0212.819.47.50'
   },
   'demo-002': {
     companyId: 'demo-002',
-    name: 'Red Integral Preventiva C.A.',
-    logoUrl: '/logo-danaconnect-horizontal.png',
-    brandColor: '#DD5736',
+    name: 'Example Insurance',
+    logoUrl: '/brand/example_brand_kit_2/logos/svg/example_insurance_color.svg',
+    brandColor: '#4B16B6',
     slaHours: 8,
     whatsAppNumber: '584120002222',
     phone: '0212.819.47.50'
   },
   'demo-003': {
     companyId: 'demo-003',
-    name: 'Servicios Médicos Delta',
-    logoUrl: '/logo-danaconnect-horizontal.png',
-    brandColor: '#DD5736',
+    name: 'Example Banking',
+    logoUrl: '/brand/example_brand_kit_2/logos/svg/example_banking_color.svg',
+    brandColor: '#4B16B6',
     slaHours: 12,
     whatsAppNumber: '584120003333',
     phone: '0212.819.47.50'

@@ -4,28 +4,29 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: '#DD5736',
-        primaryHover: '#C5482A',
-        dark: '#1F1F1F',
-        grayText: '#6B6B6B',
-        surface: '#F5F5F5',
-        borderLight: '#EAEAEA',
-        successSoft: '#FFF4F1',
+        primary: '#4B16B6',
+        primaryHover: '#3A118E',
+        dark: '#0F0F1F',
+        grayText: '#3B4255',
+        surface: '#F7F6FB',
+        borderLight: '#E5E0F7',
+        successSoft: '#F5F0FF',
         errorSoft: '#FEF3F2',
-        pendingSoft: '#F3F4F6',
+        pendingSoft: '#F4F6FA',
         brand: {
-          50: '#FFF4F1',
-          100: '#FDE4DD',
-          500: '#DD5736',
-          600: '#C5482A',
-          700: '#A63D24',
-          900: '#5A261B'
+          50: '#F5F0FF',
+          100: '#E7DCFF',
+          300: '#BEA6FF',
+          500: '#4B16B6',
+          600: '#3A118E',
+          700: '#2B0D6B',
+          900: '#0F0F1F'
         }
       },
       boxShadow: {
         soft: '0 1px 2px rgba(16, 24, 40, 0.04)',
         'soft-dark': '0 6px 16px rgba(16, 24, 40, 0.08)',
-        'soft-orange': '0 8px 20px rgba(221, 87, 54, 0.22)'
+        'soft-orange': '0 8px 20px rgba(75, 22, 182, 0.22)'
       },
       fontFamily: {
         sans: ['Inter', 'Segoe UI', 'sans-serif']
