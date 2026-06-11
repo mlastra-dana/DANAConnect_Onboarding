@@ -64,7 +64,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
       },
       natural: {
         personType: 'natural',
-        personTypeLabel: 'Persona natural',
+        personTypeLabel: 'Persona física',
         personTypeDescription: 'Onboarding individual para personas naturales.',
         heroHeadline: 'Portal de onboarding para personas naturales en Venezuela.',
         heroSubheadline: 'Cargue su documentacion personal en un flujo guiado, simple y validado para Venezuela.',
@@ -109,7 +109,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
       },
       natural: {
         personType: 'natural',
-        personTypeLabel: 'Persona natural',
+        personTypeLabel: 'Persona física',
         personTypeDescription: 'Onboarding individual para personas naturales.',
         heroHeadline: 'Onboarding documental para personas naturales en Peru.',
         heroSubheadline: 'Complete el flujo personal de Example Company con los documentos requeridos para Peru.',
@@ -222,10 +222,11 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         heroSubheadline: 'Centralice los adjuntos requeridos en un flujo simple, seguro y validado para su empresa en Argentina.',
         heroButton: 'Continuar con persona juridica',
         documentsIntro: 'Cargue los documentos requeridos para continuar con el onboarding de persona juridica.',
-        documentOrder: ['rif', 'registroMercantil'],
+        documentOrder: ['rif', 'registroMercantil', 'actaDesignacionAutoridades'],
         documents: {
-          rif: { label: 'CUIT' },
-          registroMercantil: { label: 'Inscripción societaria o constancia registral' },
+          rif: { label: 'Constancia de CUIT' },
+          registroMercantil: { label: 'Estatuto / Contrato social o Instrumento constitutivo' },
+          actaDesignacionAutoridades: { label: 'Acta de designación de autoridades' },
           cedulaRepresentante: { label: 'DNI del Representante' }
         },
         representativePrimaryTitle: 'DNI del Representante (Obligatorio)',
@@ -239,7 +240,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
       },
       natural: {
         personType: 'natural',
-        personTypeLabel: 'Persona natural',
+        personTypeLabel: 'Persona física',
         personTypeDescription: 'Onboarding individual para personas naturales.',
         heroHeadline: 'Portal de onboarding para personas naturales en Argentina.',
         heroSubheadline: 'Cargue su documentacion personal en un flujo guiado, simple y validado para Argentina.',

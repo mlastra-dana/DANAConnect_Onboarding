@@ -10,7 +10,8 @@ export const DOCUMENT_LABELS: Record<DocumentRecordType, string> = {
   documentoConstitucion: 'Documento de Constitución',
   facultadesRepresentante: 'Facultades del Representante',
   documentoRepresentante: 'Documento del Representante',
-  comprobanteDomicilio: 'Comprobante de Domicilio'
+  comprobanteDomicilio: 'Comprobante de Domicilio',
+  actaDesignacionAutoridades: 'Acta de designación de autoridades'
 };
 
 const ALL_DOCUMENT_TYPES: DocumentType[] = [
@@ -22,7 +23,8 @@ const ALL_DOCUMENT_TYPES: DocumentType[] = [
   'documentoConstitucion',
   'facultadesRepresentante',
   'documentoRepresentante',
-  'comprobanteDomicilio'
+  'comprobanteDomicilio',
+  'actaDesignacionAutoridades'
 ];
 
 export function createEmptyDocument(type: DocumentRecordType) {

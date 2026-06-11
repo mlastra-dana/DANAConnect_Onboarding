@@ -11,7 +11,8 @@ export type DocumentType =
   | 'documentoConstitucion'
   | 'facultadesRepresentante'
   | 'documentoRepresentante'
-  | 'comprobanteDomicilio';
+  | 'comprobanteDomicilio'
+  | 'actaDesignacionAutoridades';
 export type DocumentRecordType = DocumentType;
 export type ValidationStatus = 'pending' | 'validating' | 'valid' | 'error' | 'warning' | 'review';
 export type ValidityStatus = 'ok' | 'warning' | 'unknown';

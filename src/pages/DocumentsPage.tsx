@@ -23,6 +23,7 @@ const initialBoolMap: Record<UploadKey, boolean> = {
   facultadesRepresentante: false,
   documentoRepresentante: false,
   comprobanteDomicilio: false,
+  actaDesignacionAutoridades: false,
   rep1: false,
   rep2: false
 };
@@ -37,6 +38,7 @@ const initialNumMap: Record<UploadKey, number> = {
   facultadesRepresentante: 0,
   documentoRepresentante: 0,
   comprobanteDomicilio: 0,
+  actaDesignacionAutoridades: 0,
   rep1: 0,
   rep2: 0
 };
