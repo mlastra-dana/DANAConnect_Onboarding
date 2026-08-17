@@ -16,7 +16,7 @@ API local de correo: `http://localhost:8787`
 
 - Re-brand completo con acento naranja DanaConnect (`#DD5736`) y tipografía Inter.
 - Home con hero naranja full-bleed, un solo CTA principal y 3 feature cards.
-- Selector de país al inicio con soporte para Venezuela (`ve`), Perú (`pe`) y Bolivia (`bo`).
+- Selector de país al inicio con soporte UI para Venezuela (`ve`), Perú (`pe`), Bolivia (`bo`), México (`mx`), Argentina (`ar`) y República Dominicana (`do`).
 - Flujo actualizado: `Bienvenida -> Documentos -> Biometría -> Revisión -> Final`.
 - Navbar limpia con logo, enlaces clave y botón `Salir` visible durante todo el onboarding.
 - Reset global al usar `Inicio`, `Salir` o `Volver al inicio` (archivos, previews, validaciones y envío).
@@ -28,6 +28,8 @@ API local de correo: `http://localhost:8787`
   - `ve`: RIF, Registro Mercantil / Acta, Cédula del representante
   - `pe`: RUC, Vigencia de Poder / Partida Registral, DNI o CE del representante
   - `bo`: NIT, Matrícula de Comercio / Testimonio de Constitución, CI del representante
+  - `mx`: Constancia de Situación Fiscal, Acta Constitutiva, Poder Notarial, identificación oficial
+  - `ar`: CUIT, Estatuto / Contrato social, facultades del representante, DNI
 - Mensajes al usuario simplificados: éxito `Documento aceptado.` y errores de una sola línea.
 - Pantalla final no técnica con checklist de recibidos y acciones `Copiar resumen`, `Abrir correo`, `Volver al inicio`.
 - Correo amigable vía `mailto` a `mlastra@danaconnect.com` con resumen y link del portal.
@@ -45,6 +47,7 @@ API local de correo: `http://localhost:8787`
 
 Se agregó una Lambda en Python para validación documental con Function URL:
 
+- Nombre desplegado: `Onboarding_validate_DanaConnect`
 - [handler.py](/Users/marialastra/Documents/DANAConnect_Onboarding/lambda/document_validation/handler.py)
 - [requirements.txt](/Users/marialastra/Documents/DANAConnect_Onboarding/lambda/document_validation/requirements.txt)
 - [README.md](/Users/marialastra/Documents/DANAConnect_Onboarding/lambda/document_validation/README.md)
@@ -52,10 +55,10 @@ Se agregó una Lambda en Python para validación documental con Function URL:
 Arquitectura final usada en la demo:
 
 - El frontend en Amplify convierte el archivo a base64 y hace `POST` al Function URL.
-- La Lambda valida el archivo directamente con Amazon Bedrock usando `converse`.
+- La Lambda clasifica y valida el archivo directamente con Amazon Bedrock usando `converse`.
 - Para PDFs usa `document`; para imágenes usa `image`.
 - La respuesta vuelve ya mapeada a estados compatibles con la UI (`valid`, `warning`, `error`).
-- El modelo actualmente utilizado para la demo es `us.anthropic.claude-3-7-sonnet-20250219-v1:0`.
+- El modelo por defecto en el handler sincronizado es `anthropic.claude-3-haiku-20240307-v1:0`.
 
 Variable de entorno recomendada en Amplify:
 
