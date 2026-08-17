@@ -143,7 +143,8 @@ const FILE_HINTS: Record<DocumentType, RegExp[]> = {
   documentoConstitucion: [/acta/i, /constitutiv/i, /constitucion/i, /registro/i],
   facultadesRepresentante: [/poder/i, /notari/i, /facultad/i, /representante/i],
   documentoRepresentante: [/identificacion/i, /oficial/i, /ine/i, /pasaporte/i],
-  comprobanteDomicilio: [/domicilio/i, /comprobante/i, /servicio/i, /recibo/i]
+  comprobanteDomicilio: [/domicilio/i, /comprobante/i, /servicio/i, /recibo/i],
+  actaDesignacionAutoridades: [/designacion/i, /autoridades/i, /acta/i, /asamblea/i, /directorio/i]
 };
 
 export async function validateDocumentForSlot(
@@ -292,6 +293,7 @@ export async function validateDocumentForSlot(
 }
 
 function resolveValidationSlot(slot: DocumentType, country: CountryCode): DocumentType {
+  if (slot === 'actaDesignacionAutoridades') return 'registroMercantil';
   if (country !== 'mx') return slot;
   if (slot === 'documentoFiscal') return 'rif';
   if (slot === 'documentoConstitucion' || slot === 'facultadesRepresentante') return 'registroMercantil';

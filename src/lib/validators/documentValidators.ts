@@ -116,6 +116,10 @@ export async function validateDocumentFile(
 }
 
 function resolveLambdaSlot(type: DocumentType, country: CountryCode): string {
+  if (type === 'actaDesignacionAutoridades') {
+    return 'registroMercantil';
+  }
+
   if (country !== 'mx') {
     return type;
   }
