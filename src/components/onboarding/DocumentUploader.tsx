@@ -20,6 +20,8 @@ export function DocumentUploader({
   uploadProgress,
   validationProgress,
   previewFile,
+  disabled,
+  disabledMessage,
   onSelectFile,
   onRemoveFile
 }: {
@@ -34,6 +36,8 @@ export function DocumentUploader({
   uploadProgress: number;
   validationProgress: number;
   previewFile?: File;
+  disabled?: boolean;
+  disabledMessage?: string;
   onSelectFile: (file: File) => Promise<void>;
   onRemoveFile: () => void;
 }) {
@@ -66,6 +70,7 @@ export function DocumentUploader({
         : 'border-borderLight';
 
   async function handleFiles(fileList: FileList | null) {
+    if (disabled) return;
     if (!fileList || fileList.length === 0) return;
     await onSelectFile(fileList[0]);
     if (inputRef.current) inputRef.current.value = '';
@@ -77,6 +82,7 @@ export function DocumentUploader({
   }
 
   function triggerFileDialog() {
+    if (disabled) return;
     inputRef.current?.click();
   }
 
@@ -120,16 +126,22 @@ export function DocumentUploader({
           }}
           onDragOver={(event) => {
             event.preventDefault();
+            if (disabled) return;
             setDragOver(true);
           }}
           onDragLeave={() => setDragOver(false)}
           onDrop={(event) => {
             event.preventDefault();
             setDragOver(false);
+            if (disabled) return;
             void handleFiles(event.dataTransfer.files);
           }}
           className={`rounded-xl border border-dashed p-5 transition-colors duration-200 ${
-            dragOver ? 'border-primary bg-[#FAFAFA]' : 'border-borderLight bg-white'
+            disabled
+              ? 'cursor-not-allowed border-borderLight bg-surface opacity-70'
+              : dragOver
+                ? 'border-primary bg-[#FAFAFA]'
+                : 'border-borderLight bg-white'
           }`}
         >
           <div className="flex flex-col items-center gap-2 text-center text-sm text-grayText">
@@ -140,6 +152,7 @@ export function DocumentUploader({
               ref={inputRef}
               type="file"
               accept={fileAccept}
+              disabled={disabled}
               className="hidden"
               onChange={(event) => {
                 void handleFiles(event.target.files);
@@ -151,6 +164,7 @@ export function DocumentUploader({
             <Button
               type="button"
               variant="secondary"
+              disabled={disabled}
               onClick={(event) => {
                 event.stopPropagation();
                 triggerFileDialog();
@@ -158,7 +172,7 @@ export function DocumentUploader({
             >
               Seleccionar archivo
             </Button>
-            <p className="text-xs text-grayText">PDF, JPG, PNG o WEBP. Máx. 10MB.</p>
+            <p className="text-xs text-grayText">{disabled && disabledMessage ? disabledMessage : 'PDF, JPG, PNG o WEBP. Máx. 10MB.'}</p>
           </div>
         </div>
       ) : (
@@ -167,6 +181,7 @@ export function DocumentUploader({
           ref={inputRef}
           type="file"
           accept={fileAccept}
+          disabled={disabled}
           className="hidden"
           onChange={(event) => {
             void handleFiles(event.target.files);

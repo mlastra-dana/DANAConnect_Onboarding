@@ -58,6 +58,9 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
   const flowConfig = getFlowConfig(state.country, state.personType);
   const documentOrder = getDocumentOrder(state.country, state.personType);
   const showRepresentatives = requiresRepresentatives(state.country, state.personType);
+  const isVenezuelaJuridica = state.country === 've' && state.personType === 'juridica';
+  const constitutionValidation = state.documents.registroMercantil.validation;
+  const canUploadRepresentative = !isVenezuelaJuridica || constitutionValidation.status === 'valid';
 
   async function handleUploadBase(docType: DocumentType, file: File) {
     const key: UploadKey = docType;
@@ -82,14 +85,26 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
     });
 
-    setDocument(docType, {
+    const nextDocument: DocumentRecord = {
       type: docType,
       fileName: file.name,
       fileSize: file.size,
       fileType: file.type,
       previewUrl,
       validation: result
-    });
+    };
+
+    setDocument(docType, nextDocument);
+
+    if (isVenezuelaJuridica && docType === 'registroMercantil') {
+      [representative1, representative2].forEach((representative) => {
+        if (!representative.enabled || representative.document.validation.status === 'pending') return;
+        setRepresentative(representative.id, {
+          ...representative,
+          document: createEmptyDocument('cedulaRepresentante')
+        });
+      });
+    }
 
     if (state.personType === 'natural' && docType === 'documentoIdentidad' && result.extractedIdentity) {
       setPersonalInfo({
@@ -124,9 +139,19 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
     setRuntimeFiles((prev) => ({ ...prev, [key]: file }));
 
-    const result = await validateDocumentFile('cedulaRepresentante', file, state.country, (progress) => {
-      setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
-    });
+    const result = await validateDocumentFile(
+      'cedulaRepresentante',
+      file,
+      state.country,
+      (progress) => {
+        setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
+      },
+      isVenezuelaJuridica
+        ? {
+            expectedLegalRepresentatives: constitutionValidation.extractedLegalRepresentatives ?? []
+          }
+        : undefined
+    );
 
     const nextRep: RepresentativeRecord = {
       ...currentRep,
@@ -230,6 +255,8 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
             uploadProgress={uploadProgressMap.rep1}
             validationProgress={validationProgressMap.rep1}
             previewFile={runtimeFiles.rep1}
+            disabled={!canUploadRepresentative}
+            disabledMessage="Primero cargue y valide el Registro Mercantil / Acta Constitutiva."
             onSelectFile={(file) => handleUploadRepresentative(1, file)}
             onRemoveFile={() => handleRemoveRepresentative(1)}
           />
@@ -251,6 +278,8 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
             uploadProgress={uploadProgressMap.rep2}
             validationProgress={validationProgressMap.rep2}
             previewFile={runtimeFiles.rep2}
+            disabled={!canUploadRepresentative}
+            disabledMessage="Primero cargue y valide el Registro Mercantil / Acta Constitutiva."
             onSelectFile={(file) => handleUploadRepresentative(2, file)}
             onRemoveFile={() => handleRemoveRepresentative(2)}
           />

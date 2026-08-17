@@ -64,7 +64,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
       },
       natural: {
         personType: 'natural',
-        personTypeLabel: 'Persona física',
+        personTypeLabel: 'Persona natural',
         personTypeDescription: 'Onboarding individual para personas naturales.',
         heroHeadline: 'Portal de onboarding para personas naturales en Venezuela.',
         heroSubheadline: 'Cargue su documentacion personal en un flujo guiado, simple y validado para Venezuela.',
@@ -109,7 +109,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
       },
       natural: {
         personType: 'natural',
-        personTypeLabel: 'Persona física',
+        personTypeLabel: 'Persona natural',
         personTypeDescription: 'Onboarding individual para personas naturales.',
         heroHeadline: 'Onboarding documental para personas naturales en Peru.',
         heroSubheadline: 'Complete el flujo personal de Example Company con los documentos requeridos para Peru.',
@@ -193,7 +193,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
       },
       natural: {
         personType: 'natural',
-        personTypeLabel: 'Persona física',
+        personTypeLabel: 'Persona natural',
         personTypeDescription: 'Onboarding individual para personas naturales.',
         heroHeadline: 'Portal de onboarding para personas naturales en México.',
         heroSubheadline: 'Cargue su documentacion personal en un flujo guiado, simple y validado para México.',
@@ -240,7 +240,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
       },
       natural: {
         personType: 'natural',
-        personTypeLabel: 'Persona física',
+        personTypeLabel: 'Persona natural',
         personTypeDescription: 'Onboarding individual para personas naturales.',
         heroHeadline: 'Portal de onboarding para personas naturales en Argentina.',
         heroSubheadline: 'Cargue su documentacion personal en un flujo guiado, simple y validado para Argentina.',

@@ -58,6 +58,13 @@ export type DocumentValidationResult = {
     documentNumber?: string;
     rawText?: string;
   };
+  extractedLegalRepresentatives?: Array<{
+    firstName?: string;
+    lastName?: string;
+    documentNumber?: string;
+    role?: string;
+    rawText?: string;
+  }>;
   error?: string;
 };
 

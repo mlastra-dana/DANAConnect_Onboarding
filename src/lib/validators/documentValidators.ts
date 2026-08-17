@@ -9,7 +9,10 @@ export async function validateDocumentFile(
   type: DocumentType,
   file: File,
   country: CountryCode,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  options?: {
+    expectedLegalRepresentatives?: DocumentValidationResult['extractedLegalRepresentatives'];
+  }
 ): Promise<DocumentValidationResult> {
   const checks: DocumentValidationResult['checks'] = [];
 
@@ -50,7 +53,8 @@ export async function validateDocumentFile(
     content_type: file.type || inferContentType(file.name),
     file_base64: await fileToBase64(file),
     country,
-    slot: slotForValidation
+    slot: slotForValidation,
+    expected_legal_representatives: options?.expectedLegalRepresentatives ?? []
   };
 
   onProgress?.(65);
@@ -111,7 +115,8 @@ export async function validateDocumentFile(
     extracted: result.extracted,
     quality: result.quality,
     internalDiagnostics: result.internalDiagnostics,
-    extractedIdentity: result.extractedIdentity
+    extractedIdentity: result.extractedIdentity,
+    extractedLegalRepresentatives: result.extractedLegalRepresentatives
   };
 }
 
@@ -180,6 +185,9 @@ function mapLambdaResponseToValidationResult(body: unknown, fileSize: number) {
   const analysis = isRecord(payload.analysis) ? payload.analysis : {};
   const diagnostics = isRecord(payload.providerDiagnostics) ? payload.providerDiagnostics : {};
   const extractedIdentityPayload = isRecord(payload.extractedIdentity) ? payload.extractedIdentity : {};
+  const extractedLegalRepresentativesPayload = Array.isArray(payload.extractedLegalRepresentatives)
+    ? payload.extractedLegalRepresentatives
+    : [];
   const typeStatus: 'valid' | 'error' | 'review' = status === 'error' ? 'error' : status === 'warning' ? 'review' : 'valid';
   const uiState: 'ok' | 'error' = uiStatus.state === 'error' ? 'error' : 'ok';
 
@@ -219,6 +227,15 @@ function mapLambdaResponseToValidationResult(body: unknown, fileSize: number) {
         typeof extractedIdentityPayload.documentNumber === 'string' ? extractedIdentityPayload.documentNumber.trim() : '',
       rawText: typeof extractedIdentityPayload.rawText === 'string' ? extractedIdentityPayload.rawText : ''
     },
+    extractedLegalRepresentatives: extractedLegalRepresentativesPayload
+      .filter(isRecord)
+      .map((representative) => ({
+        firstName: typeof representative.firstName === 'string' ? representative.firstName.trim() : '',
+        lastName: typeof representative.lastName === 'string' ? representative.lastName.trim() : '',
+        documentNumber: typeof representative.documentNumber === 'string' ? representative.documentNumber.trim() : '',
+        role: typeof representative.role === 'string' ? representative.role.trim() : '',
+        rawText: typeof representative.rawText === 'string' ? representative.rawText.trim() : ''
+      })),
     internalDiagnostics: [
       `lambda_status:${status}`,
       `lambda_file_size:${typeof analysis.fileSizeBytes === 'number' ? analysis.fileSizeBytes : fileSize}`,

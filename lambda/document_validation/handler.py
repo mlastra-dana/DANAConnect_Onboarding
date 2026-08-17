@@ -342,6 +342,11 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         country = normalize_country(payload.get("country"))
         raw_slot = require_string(payload, "slot")
         slot = normalize_slot(raw_slot)
+        expected_legal_representatives = (
+            normalize_extracted_legal_representatives(payload.get("expected_legal_representatives"))
+            if "expected_legal_representatives" in payload
+            else None
+        )
 
         if content_type not in ALLOWED_MIME_TYPES:
             return response(400, {"ok": False, "error": f"Tipo de archivo no permitido: {content_type}"})
@@ -417,6 +422,12 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             raw_slot=raw_slot,
             file_name=file_name,
             analysis=analysis,
+        )
+        analysis = apply_expected_legal_representative_guard(
+            country=country,
+            slot=slot,
+            analysis=analysis,
+            expected_legal_representatives=expected_legal_representatives,
         )
 
         final = build_validation_response(
@@ -714,6 +725,7 @@ def build_prompt(
     classifier_keywords = normalize_string_list(classification.get("keywords_found"))
 
     should_extract_identity = slot in IDENTITY_EXTRACTION_SLOTS
+    should_extract_legal_representatives = country == "ve" and slot == "documentoConstitucion"
 
     extraction_rules = """
 Si el slot es "documentoIdentidad" o "documentoRepresentante", adicionalmente intenta extraer esta salida minima:
@@ -737,6 +749,27 @@ No inventes datos.
 """.strip()
 
     no_extraction_rules = "No extraigas campos de identidad para este slot; devuelve extractedIdentity con strings vacios."
+    legal_representative_rules = """
+Para Venezuela y slot "documentoConstitucion", adicionalmente identifica representantes legales, administradores, directores,
+presidentes, gerentes, apoderados o personas con facultad visible para representar u obligar a la sociedad.
+
+Devuelve extractedLegalRepresentatives como una lista de personas con:
+- firstName
+- lastName
+- documentNumber
+- role
+- rawText
+
+Reglas para extractedLegalRepresentatives:
+- Incluye solo personas naturales mencionadas dentro del documento constitutivo/registral.
+- Prioriza personas mencionadas junto a cargos o frases como representante legal, presidente, director, gerente, administrador,
+  junta directiva, autorizado para representar, obligado por su firma o facultado para actuar por la sociedad.
+- documentNumber debe ser la cedula visible si aparece, por ejemplo V-12345678 o E-12345678. Si no aparece, devuelve cadena vacia.
+- rawText debe contener la frase corta visible que justifica la extraccion.
+- No inventes nombres, cedulas ni cargos.
+- Si no puedes identificar representantes legales con confianza razonable, devuelve una lista vacia.
+""".strip()
+    no_legal_representative_rules = "Devuelve extractedLegalRepresentatives como lista vacia."
 
     return f"""
 Eres un validador documental para un onboarding empresarial multi-pais.
@@ -783,6 +816,7 @@ Instrucciones:
 - No inventes texto ni campos.
 - El nombre del archivo es solo una pista secundaria.
 - {extraction_rules if should_extract_identity else no_extraction_rules}
+- {legal_representative_rules if should_extract_legal_representatives else no_legal_representative_rules}
 
 Tu respuesta DEBE ser JSON puro, sin markdown, con esta forma exacta:
 {{
@@ -798,7 +832,16 @@ Tu respuesta DEBE ser JSON puro, sin markdown, con esta forma exacta:
     "lastName": "",
     "documentNumber": "",
     "rawText": ""
-  }}
+  }},
+  "extractedLegalRepresentatives": [
+    {{
+      "firstName": "",
+      "lastName": "",
+      "documentNumber": "",
+      "role": "",
+      "rawText": ""
+    }}
+  ]
 }}
 
 Reglas adicionales:
@@ -811,6 +854,7 @@ Reglas adicionales:
 - Si el archivo esta vacio o completamente ilegible, responde "error".
 - Si el archivo es parcialmente legible pero tiene indicadores fuertes del documento esperado, responde "warning".
 - Si el slot no requiere extraccion de identidad, devuelve extractedIdentity con strings vacios.
+- Si el slot no requiere extraccion de representantes legales, devuelve extractedLegalRepresentatives como lista vacia.
 
 Datos del archivo:
 - file_name: {file_name}
@@ -997,6 +1041,7 @@ def reject_incompatible_document_type(
             "documentNumber": "",
             "rawText": "",
         },
+        "extractedLegalRepresentatives": [],
         "_raw_classifier_text": classification.get("_raw_classifier_text", ""),
         "_raw_model_text": "",
     }
@@ -1104,6 +1149,134 @@ def apply_post_validation_guards(
     return analysis
 
 
+def apply_expected_legal_representative_guard(
+    *,
+    country: str,
+    slot: str,
+    analysis: Dict[str, Any],
+    expected_legal_representatives: Optional[List[Dict[str, str]]],
+) -> Dict[str, Any]:
+    if country != "ve" or slot != "documentoRepresentante" or expected_legal_representatives is None:
+        return analysis
+
+    if normalize_status(analysis.get("status")) == "error":
+        return analysis
+
+    if not expected_legal_representatives:
+        analysis["status"] = "error"
+        analysis["document_type_match"] = False
+        analysis["summary"] = "Primero cargue un Registro Mercantil / Acta Constitutiva donde se identifique el representante legal."
+        analysis["warnings"] = []
+        analysis["reasons"] = [
+            "No se recibieron representantes legales extraidos del documento constitutivo.",
+            "La cedula del representante debe validarse contra una persona que aparezca como representante legal en el acta.",
+        ]
+        return analysis
+
+    identity = normalize_extracted_identity(analysis.get("extractedIdentity"))
+    identity_text = " ".join(
+        item
+        for item in [
+            identity.get("firstName", ""),
+            identity.get("lastName", ""),
+            identity.get("documentNumber", ""),
+            identity.get("rawText", ""),
+        ]
+        if item
+    )
+
+    if any(
+        legal_representative_matches(identity=identity, identity_text=identity_text, representative=representative)
+        for representative in expected_legal_representatives
+    ):
+        return analysis
+
+    analysis["status"] = "error"
+    analysis["document_type_match"] = False
+    analysis["summary"] = (
+        "La persona de esta cedula no aparece como representante legal en el Registro Mercantil / Acta Constitutiva cargado."
+    )
+    analysis["warnings"] = []
+    analysis["reasons"] = normalize_string_list(analysis.get("reasons")) + [
+        "La identidad extraida de la cedula no coincide con los representantes legales extraidos del acta.",
+    ]
+    return analysis
+
+
+def legal_representative_matches(
+    *,
+    identity: Dict[str, str],
+    identity_text: str,
+    representative: Dict[str, str],
+) -> bool:
+    representative_text = " ".join(
+        item
+        for item in [
+            representative.get("firstName", ""),
+            representative.get("lastName", ""),
+            representative.get("documentNumber", ""),
+            representative.get("role", ""),
+            representative.get("rawText", ""),
+        ]
+        if item
+    )
+
+    return (
+        document_numbers_match(identity.get("documentNumber"), representative.get("documentNumber"))
+        or document_number_appears_in_text(representative.get("documentNumber"), identity_text)
+        or document_number_appears_in_text(identity.get("documentNumber"), representative_text)
+        or names_match(identity_text, representative_text)
+    )
+
+
+def document_numbers_match(left: Optional[str], right: Optional[str]) -> bool:
+    left_variants = identity_number_variants(left)
+    right_variants = identity_number_variants(right)
+    return any(left_value in right_variants for left_value in left_variants)
+
+
+def document_number_appears_in_text(document_number: Optional[str], text: str) -> bool:
+    text_variants = identity_number_variants(text)
+    return any(
+        any(document_variant in text_variant for text_variant in text_variants)
+        for document_variant in identity_number_variants(document_number)
+    )
+
+
+def identity_number_variants(value: Optional[str]) -> List[str]:
+    normalized = normalize_text_for_matching(value).upper()
+    compact = re.sub(r"[^A-Z0-9]", "", normalized)
+    digits = re.sub(r"\D", "", normalized)
+    return list(dict.fromkeys(item for item in [compact, digits] if len(item) >= 5))
+
+
+def names_match(identity_text: str, representative_text: str) -> bool:
+    identity_tokens = significant_name_tokens(identity_text)
+    representative_tokens = set(significant_name_tokens(representative_text))
+    if len(identity_tokens) < 2 or len(representative_tokens) < 2:
+        return False
+
+    matched = [token for token in identity_tokens if token in representative_tokens]
+    return len(matched) >= 2
+
+
+def significant_name_tokens(value: str) -> List[str]:
+    ignored = {
+        "CEDULA",
+        "IDENTIDAD",
+        "VENEZOLANO",
+        "VENEZOLANA",
+        "REPUBLICA",
+        "BOLIVARIANA",
+        "PRESIDENTE",
+        "DIRECTOR",
+        "REPRESENTANTE",
+        "LEGAL",
+    }
+    tokens = normalize_text_for_matching(value).upper().split()
+    return [token for token in tokens if len(token) >= 3 and token not in ignored]
+
+
 def extract_bedrock_text(result: Dict[str, Any]) -> str:
     output = result.get("output") or {}
     message = output.get("message") or {}
@@ -1151,6 +1324,9 @@ def build_validation_response(
     confidence = normalize_confidence(analysis.get("confidence"))
     document_type_match = bool(analysis.get("document_type_match"))
     extracted_identity = normalize_extracted_identity(analysis.get("extractedIdentity"))
+    extracted_legal_representatives = normalize_extracted_legal_representatives(
+        analysis.get("extractedLegalRepresentatives")
+    )
     detected_document_type = normalize_detected_document_type(analysis.get("detected_document_type"))
     detected_country = normalize_detected_country(analysis.get("detected_country"))
 
@@ -1194,6 +1370,7 @@ def build_validation_response(
             "detectedCountry": detected_country,
         },
         "extractedIdentity": extracted_identity,
+        "extractedLegalRepresentatives": extracted_legal_representatives,
         "uiStatus": {
             "state": "error" if status == "error" else "warning" if status == "warning" else "ok",
             "title": ui_title,
@@ -1217,6 +1394,28 @@ def normalize_extracted_identity(value: Any) -> Dict[str, str]:
         "documentNumber": str(value.get("documentNumber") or "").strip(),
         "rawText": str(value.get("rawText") or "").strip(),
     }
+
+
+def normalize_extracted_legal_representatives(value: Any) -> List[Dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+
+    representatives: List[Dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+
+        representative = {
+            "firstName": str(item.get("firstName") or "").strip(),
+            "lastName": str(item.get("lastName") or "").strip(),
+            "documentNumber": str(item.get("documentNumber") or "").strip(),
+            "role": str(item.get("role") or "").strip(),
+            "rawText": str(item.get("rawText") or "").strip(),
+        }
+        if any(representative.values()):
+            representatives.append(representative)
+
+    return representatives
 
 
 def normalize_status(value: Any) -> str:
