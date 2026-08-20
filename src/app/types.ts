@@ -1,6 +1,6 @@
 import { TenantConfig } from '../data/tenants';
 
-export type CountryCode = 've' | 'pe' | 'bo' | 'mx' | 'ar' | 'do';
+export type CountryCode = 've' | 'pe' | 'bo' | 'mx' | 'ar' | 'do' | 'usa';
 export type PersonType = 'juridica' | 'natural';
 export type DocumentType =
   | 'rif'
@@ -12,7 +12,9 @@ export type DocumentType =
   | 'facultadesRepresentante'
   | 'documentoRepresentante'
   | 'comprobanteDomicilio'
-  | 'actaDesignacionAutoridades';
+  | 'actaDesignacionAutoridades'
+  | 'licenciaConducirFrente'
+  | 'licenciaConducirReverso';
 export type DocumentRecordType = DocumentType;
 export type ValidationStatus = 'pending' | 'validating' | 'valid' | 'error' | 'warning' | 'review';
 export type ValidityStatus = 'ok' | 'warning' | 'unknown';

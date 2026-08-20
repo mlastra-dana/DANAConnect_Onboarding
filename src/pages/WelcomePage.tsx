@@ -24,7 +24,7 @@ export function WelcomePage({ companyId }: { companyId: string }) {
         actions={
           <div className="space-y-4">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/80">Selecciona pais</p>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               {Object.values(ONBOARDING_COUNTRIES).map((country) => {
                 return (
                   <button

@@ -16,7 +16,7 @@ API local de correo: `http://localhost:8787`
 
 - Re-brand completo con acento naranja DanaConnect (`#DD5736`) y tipografía Inter.
 - Home con hero naranja full-bleed, un solo CTA principal y 3 feature cards.
-- Selector de país al inicio con soporte UI para Venezuela (`ve`), Perú (`pe`), Bolivia (`bo`), México (`mx`), Argentina (`ar`) y República Dominicana (`do`).
+- Selector de país al inicio con soporte UI para Venezuela (`ve`), Perú (`pe`), Bolivia (`bo`), México (`mx`), Argentina (`ar`), República Dominicana (`do`) y Estados Unidos (`usa`).
 - Flujo actualizado: `Bienvenida -> Documentos -> Biometría -> Revisión -> Final`.
 - Navbar limpia con logo, enlaces clave y botón `Salir` visible durante todo el onboarding.
 - Reset global al usar `Inicio`, `Salir` o `Volver al inicio` (archivos, previews, validaciones y envío).
@@ -30,6 +30,7 @@ API local de correo: `http://localhost:8787`
   - `bo`: NIT, Matrícula de Comercio / Testimonio de Constitución, CI del representante
   - `mx`: Constancia de Situación Fiscal, Acta Constitutiva, Poder Notarial, identificación oficial
   - `ar`: CUIT, Estatuto / Contrato social, facultades del representante, DNI
+  - `usa`: licencia de conducir para persona natural, frente y reverso
 - Mensajes al usuario simplificados: éxito `Documento aceptado.` y errores de una sola línea.
 - Pantalla final no técnica con checklist de recibidos y acciones `Copiar resumen`, `Abrir correo`, `Volver al inicio`.
 - Correo amigable vía `mailto` a `mlastra@danaconnect.com` con resumen y link del portal.

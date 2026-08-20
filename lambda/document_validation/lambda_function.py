@@ -30,7 +30,7 @@ ALLOWED_MIME_TYPES = {
     "image/webp",
 }
 
-SUPPORTED_COUNTRIES = {"ve", "pe", "bo", "mx", "ar"}
+SUPPORTED_COUNTRIES = {"ve", "pe", "bo", "mx", "ar", "usa"}
 
 PLACEHOLDER_WORDS = {"ejemplo", "placeholder", "sample", "dummy", "ficticio", "inventado"}
 
@@ -40,6 +40,8 @@ DETECTED_DOCUMENT_TYPES = {
     "facultadesRepresentante",
     "documentoRepresentante",
     "documentoIdentidad",
+    "licenciaConducirFrente",
+    "licenciaConducirReverso",
     "comprobanteDomicilio",
     "desconocido",
     "otro",
@@ -83,6 +85,26 @@ INCOMPATIBLE_DETECTED_TYPES = {
         "facultadesRepresentante",
         "documentoRepresentante",
         "documentoIdentidad",
+        "licenciaConducirFrente",
+        "licenciaConducirReverso",
+    },
+    "licenciaConducirFrente": {
+        "documentoFiscal",
+        "documentoConstitucion",
+        "facultadesRepresentante",
+        "documentoRepresentante",
+        "documentoIdentidad",
+        "comprobanteDomicilio",
+        "licenciaConducirReverso",
+    },
+    "licenciaConducirReverso": {
+        "documentoFiscal",
+        "documentoConstitucion",
+        "facultadesRepresentante",
+        "documentoRepresentante",
+        "documentoIdentidad",
+        "comprobanteDomicilio",
+        "licenciaConducirFrente",
     },
 }
 
@@ -122,6 +144,16 @@ SLOT_ALIASES = {
 
     "documentoIdentidad": "documentoIdentidad",
     "identificacionOficial": "documentoIdentidad",
+
+    "licenciaConducirFrente": "licenciaConducirFrente",
+    "driverLicenseFront": "licenciaConducirFrente",
+    "driversLicenseFront": "licenciaConducirFrente",
+    "licenseFront": "licenciaConducirFrente",
+
+    "licenciaConducirReverso": "licenciaConducirReverso",
+    "driverLicenseBack": "licenciaConducirReverso",
+    "driversLicenseBack": "licenciaConducirReverso",
+    "licenseBack": "licenciaConducirReverso",
 
     "comprobanteDomicilio": "comprobanteDomicilio",
     "domicilioFiscal": "comprobanteDomicilio",
@@ -180,6 +212,11 @@ DOC_SLOT_LABELS: Dict[Tuple[str, str], str] = {
     ("ar", "documentoRepresentante"): "DNI del representante legal",
     ("ar", "documentoIdentidad"): "DNI",
     ("ar", "comprobanteDomicilio"): "Comprobante de domicilio fiscal",
+
+    # Estados Unidos
+    ("usa", "licenciaConducirFrente"): "Driver License - front",
+    ("usa", "licenciaConducirReverso"): "Driver License - back",
+    ("usa", "documentoIdentidad"): "Driver License or state ID",
 }
 
 DOC_VALIDATION_RULES: Dict[str, Dict[str, str]] = {
@@ -325,9 +362,31 @@ DOC_VALIDATION_RULES: Dict[str, Dict[str, str]] = {
             "nombre, razon social, CUIT o CUIL."
         ),
     },
+    "usa": {
+        "licenciaConducirFrente": (
+            "Debe parecer el frente de una licencia de conducir de Estados Unidos. "
+            "Indicadores esperados: texto Driver License o Commercial Driver License, nombre y apellido, fotografia, "
+            "estado emisor, DL/ID number o numero de licencia, fecha de nacimiento, fecha de expiracion, direccion, clase, "
+            "sexo, estatura, color de ojos o fecha de emision. Debe corresponder al lado frontal con fotografia y datos personales."
+        ),
+        "licenciaConducirReverso": (
+            "Debe parecer el reverso de una licencia de conducir de Estados Unidos. "
+            "Indicadores esperados: codigo de barras PDF417 o barcode, banda magnetica, restricciones, endorsements, clase, "
+            "texto de condiciones de manejo, organ donor, instrucciones o datos impresos del reverso. "
+            "Debe corresponder al lado posterior; no aceptes el frente como reverso."
+        ),
+        "documentoIdentidad": (
+            "Debe parecer una licencia de conducir estadounidense o identificacion estatal con fotografia y datos personales."
+        ),
+        "documentoFiscal": "No aplica para este flujo de persona natural en Estados Unidos.",
+        "documentoConstitucion": "No aplica para este flujo de persona natural en Estados Unidos.",
+        "facultadesRepresentante": "No aplica para este flujo de persona natural en Estados Unidos.",
+        "documentoRepresentante": "No aplica para este flujo de persona natural en Estados Unidos.",
+        "comprobanteDomicilio": "No aplica para este flujo de persona natural en Estados Unidos.",
+    },
 }
 
-IDENTITY_EXTRACTION_SLOTS = {"documentoIdentidad", "documentoRepresentante"}
+IDENTITY_EXTRACTION_SLOTS = {"documentoIdentidad", "documentoRepresentante", "licenciaConducirFrente"}
 
 
 def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
@@ -512,7 +571,7 @@ def require_string(payload: Dict[str, Any], key: str) -> str:
 def normalize_country(value: Any) -> str:
     normalized = str(value or "ve").strip().lower()
     if normalized not in SUPPORTED_COUNTRIES:
-        raise ValueError("country debe ser 've', 'pe', 'bo', 'mx' o 'ar'")
+        raise ValueError("country debe ser 've', 'pe', 'bo', 'mx', 'ar' o 'usa'")
     return normalized
 
 
@@ -671,6 +730,8 @@ Clasifica detected_document_type usando exactamente uno de estos valores:
 - "facultadesRepresentante": poder, vigencia de poder, facultades, autorizacion legal, nombramiento, acta de designacion de autoridades, acta de asamblea, acta de directorio o documento que acredite facultades del representante.
 - "documentoRepresentante": identificacion oficial del representante legal.
 - "documentoIdentidad": identificacion oficial de persona natural, persona fisica o persona humana. Ej: DNI argentino, INE/IFE, pasaporte, cedula de identidad.
+- "licenciaConducirFrente": frente de una driver license estadounidense, con foto, nombre, direccion, fecha de nacimiento, DL/ID number, fecha de expiracion, estado emisor o texto Driver License.
+- "licenciaConducirReverso": reverso de una driver license estadounidense, con barcode/PDF417, banda magnetica, restricciones, endorsements, clase o texto administrativo del reverso.
 - "comprobanteDomicilio": recibo, constancia o comprobante de domicilio.
 - "desconocido": no se puede determinar.
 - "otro": es legible pero no corresponde a ninguno de los anteriores.
@@ -686,11 +747,13 @@ Reglas criticas:
 - Si ves "Estatuto", "Contrato Social", "Acta Constitutiva", "instrumento constitutivo", "Registro Publico", "IGJ", "Direccion Provincial de Personas Juridicas", "capital social", "socios", "accionistas", "administradores" u "objeto social", clasifica como "documentoConstitucion".
 - Si ves "Acta de designacion de autoridades", "Acta de asamblea", "Acta de directorio", "Poder", "Apoderado", "Presidente", "Gerente", "Representante legal" o "facultades", clasifica como "facultadesRepresentante".
 - Si ves "Documento Nacional de Identidad", "DNI", "RENAPER" o "Republica Argentina" en una identificacion personal, clasifica como "documentoIdentidad" o "documentoRepresentante" segun contexto visible.
+- Si ves "DRIVER LICENSE", "DL", "ID", una fotografia, nombre/direccion/DOB/EXP y el estado emisor de Estados Unidos, clasifica como "licenciaConducirFrente".
+- Si ves un barcode PDF417 grande, banda magnetica, restricciones, endorsements o texto administrativo sin fotografia principal, clasifica como "licenciaConducirReverso".
 
 Devuelve JSON puro, sin markdown, con esta forma exacta:
 {{
-  "detected_document_type": "documentoFiscal" | "documentoConstitucion" | "facultadesRepresentante" | "documentoRepresentante" | "documentoIdentidad" | "comprobanteDomicilio" | "desconocido" | "otro",
-  "detected_country": "ve" | "pe" | "bo" | "mx" | "ar" | "desconocido",
+  "detected_document_type": "documentoFiscal" | "documentoConstitucion" | "facultadesRepresentante" | "documentoRepresentante" | "documentoIdentidad" | "licenciaConducirFrente" | "licenciaConducirReverso" | "comprobanteDomicilio" | "desconocido" | "otro",
+  "detected_country": "ve" | "pe" | "bo" | "mx" | "ar" | "usa" | "desconocido",
   "confidence": number,
   "keywords_found": ["..."],
   "summary": "descripcion corta de lo que es el archivo"
@@ -1038,6 +1101,12 @@ Para Argentina:
 - Si aparece CUIL, incluyelo en rawText, pero no lo uses como documentNumber salvo que no haya numero de DNI visible.
 - Si el documento corresponde a DNI del representante legal, extrae los datos de la persona fisica del DNI.
 
+Para Estados Unidos:
+- Si el documento es el frente de una driver license, firstName y lastName deben salir de los campos visibles de nombre.
+- documentNumber debe ser el DL/ID number o numero de licencia mas confiable visible.
+- rawText debe incluir el estado emisor, DOB y EXP si son visibles.
+- No extraigas datos de identidad desde el reverso salvo que esten impresos de forma legible y confiable.
+
 Si no puedes determinar un campo con confianza razonable, devuelvelo como cadena vacia.
 No inventes datos.
 """.strip()
@@ -1128,6 +1197,13 @@ Reglas especiales Argentina:
 - Si el slot esperado es "documentoConstitucion", acepta Estatuto, Contrato Social, Acta Constitutiva, instrumento constitutivo, inscripcion registral o documento societario argentino.
 - Si el slot esperado es "facultadesRepresentante", acepta Acta de designacion de autoridades, acta de asamblea, acta de directorio, poder o documento que acredite representantes/autoridades.
 - Si el slot esperado es "documentoIdentidad" o "documentoRepresentante", acepta DNI argentino o documento de identidad personal, segun corresponda.
+
+Reglas especiales Estados Unidos:
+- Si el slot esperado es "licenciaConducirFrente", acepta solo el frente de una driver license estadounidense con fotografia y datos personales visibles.
+- Si el slot esperado es "licenciaConducirReverso", acepta solo el reverso de una driver license estadounidense con barcode/PDF417, banda magnetica, restricciones, endorsements o texto administrativo del reverso.
+- Si el usuario carga el frente en el slot de reverso, responde status="error", document_type_match=false.
+- Si el usuario carga el reverso en el slot de frente, responde status="error", document_type_match=false.
+- Si el documento parece una driver license estadounidense pero esta recortado, borroso o parcialmente legible, usa "warning".
 
 Instrucciones:
 - Evalua el archivo completo de forma visual y documental.
@@ -1305,6 +1381,41 @@ def apply_filename_safety_hints(
             classification["keywords_found"] = sorted(set(keywords + ["DNI"]))
             classification["summary"] = classification.get("summary") or "El archivo podria corresponder a un DNI argentino."
 
+    if country == "usa":
+        padded_name = f" {name} "
+
+        front_name_patterns = [
+            "front",
+            "frente",
+            "driver license front",
+            "drivers license front",
+            "licencia frente",
+        ]
+        back_name_patterns = [
+            "back",
+            "reverse",
+            "reverso",
+            "driver license back",
+            "drivers license back",
+            "licencia reverso",
+        ]
+
+        if current in {"desconocido", "otro", "documentoIdentidad"} and any(pattern in padded_name for pattern in front_name_patterns):
+            classification["detected_document_type"] = "licenciaConducirFrente"
+            classification["detected_country"] = classification.get("detected_country") or "usa"
+            classification["confidence"] = max(normalize_confidence(classification.get("confidence")), 0.70)
+            keywords = normalize_string_list(classification.get("keywords_found"))
+            classification["keywords_found"] = sorted(set(keywords + ["Driver License", "front"]))
+            classification["summary"] = classification.get("summary") or "El archivo podria corresponder al frente de una licencia de conducir."
+
+        if current in {"desconocido", "otro", "documentoIdentidad"} and any(pattern in padded_name for pattern in back_name_patterns):
+            classification["detected_document_type"] = "licenciaConducirReverso"
+            classification["detected_country"] = classification.get("detected_country") or "usa"
+            classification["confidence"] = max(normalize_confidence(classification.get("confidence")), 0.70)
+            keywords = normalize_string_list(classification.get("keywords_found"))
+            classification["keywords_found"] = sorted(set(keywords + ["Driver License", "back", "barcode"]))
+            classification["summary"] = classification.get("summary") or "El archivo podria corresponder al reverso de una licencia de conducir."
+
     return classification
 
 
@@ -1316,6 +1427,9 @@ def reject_incompatible_document_type(
     classification: Dict[str, Any],
 ) -> Optional[Dict[str, Any]]:
     detected = normalize_detected_document_type(classification.get("detected_document_type"))
+
+    if country == "usa" and slot in {"licenciaConducirFrente", "licenciaConducirReverso"} and detected == "documentoIdentidad":
+        return None
 
     if detected not in INCOMPATIBLE_DETECTED_TYPES.get(slot, set()):
         return None
@@ -1341,6 +1455,18 @@ def reject_incompatible_document_type(
         reasons = [
             "El documento fue clasificado como documento constitutivo.",
             "El apartado de facultades requiere Acta de designacion de autoridades, acta de asamblea/directorio o Poder.",
+        ]
+    elif country == "usa" and slot == "licenciaConducirFrente" and detected == "licenciaConducirReverso":
+        summary = "El archivo corresponde al reverso de la licencia, no al frente."
+        reasons = [
+            "El documento fue clasificado como reverso de una licencia de conducir.",
+            "Este apartado requiere el frente de la licencia con fotografia y datos personales.",
+        ]
+    elif country == "usa" and slot == "licenciaConducirReverso" and detected == "licenciaConducirFrente":
+        summary = "El archivo corresponde al frente de la licencia, no al reverso."
+        reasons = [
+            "El documento fue clasificado como frente de una licencia de conducir.",
+            "Este apartado requiere el reverso de la licencia con barcode o datos posteriores.",
         ]
     else:
         summary = f"El archivo corresponde a otro tipo de documento, no a {expected_label}."

@@ -24,6 +24,8 @@ const initialBoolMap: Record<UploadKey, boolean> = {
   documentoRepresentante: false,
   comprobanteDomicilio: false,
   actaDesignacionAutoridades: false,
+  licenciaConducirFrente: false,
+  licenciaConducirReverso: false,
   rep1: false,
   rep2: false
 };
@@ -39,6 +41,8 @@ const initialNumMap: Record<UploadKey, number> = {
   documentoRepresentante: 0,
   comprobanteDomicilio: 0,
   actaDesignacionAutoridades: 0,
+  licenciaConducirFrente: 0,
+  licenciaConducirReverso: 0,
   rep1: 0,
   rep2: 0
 };
@@ -112,7 +116,11 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       });
     }
 
-    if (state.personType === 'natural' && docType === 'documentoIdentidad' && result.extractedIdentity) {
+    if (
+      state.personType === 'natural' &&
+      (docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente') &&
+      result.extractedIdentity
+    ) {
       setPersonalInfo({
         firstName: result.extractedIdentity.firstName ?? '',
         lastName: result.extractedIdentity.lastName ?? '',

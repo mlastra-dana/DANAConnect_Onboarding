@@ -144,7 +144,9 @@ const FILE_HINTS: Record<DocumentType, RegExp[]> = {
   facultadesRepresentante: [/poder/i, /notari/i, /facultad/i, /representante/i],
   documentoRepresentante: [/identificacion/i, /oficial/i, /ine/i, /pasaporte/i],
   comprobanteDomicilio: [/domicilio/i, /comprobante/i, /servicio/i, /recibo/i],
-  actaDesignacionAutoridades: [/designacion/i, /autoridades/i, /acta/i, /asamblea/i, /directorio/i]
+  actaDesignacionAutoridades: [/designacion/i, /autoridades/i, /acta/i, /asamblea/i, /directorio/i],
+  licenciaConducirFrente: [/driver/i, /license/i, /licencia/i, /front/i, /frente/i],
+  licenciaConducirReverso: [/driver/i, /license/i, /licencia/i, /back/i, /reverse/i, /reverso/i, /barcode/i]
 };
 
 export async function validateDocumentForSlot(
@@ -297,7 +299,12 @@ function resolveValidationSlot(slot: DocumentType, country: CountryCode): Docume
   if (country !== 'mx') return slot;
   if (slot === 'documentoFiscal') return 'rif';
   if (slot === 'documentoConstitucion' || slot === 'facultadesRepresentante') return 'registroMercantil';
-  if (slot === 'documentoRepresentante' || slot === 'comprobanteDomicilio') return 'documentoIdentidad';
+  if (
+    slot === 'documentoRepresentante' ||
+    slot === 'comprobanteDomicilio' ||
+    slot === 'licenciaConducirFrente' ||
+    slot === 'licenciaConducirReverso'
+  ) return 'documentoIdentidad';
   return slot;
 }
 

@@ -61,13 +61,15 @@ Modelo usado en la demo:
 ## Notas
 
 - Esta version no usa Textract ni S3; toda la validación se resuelve directamente con Bedrock.
-- Soporta estos paises en el handler actual: `ve`, `pe`, `bo`, `mx`, `ar`.
+- Soporta estos paises en el handler actual: `ve`, `pe`, `bo`, `mx`, `ar`, `usa`.
 - Soporta slots canonicos y aliases legacy:
   - `documentoFiscal` (`rif`, `ruc`, `nit`, `rfc`, `cuit`)
   - `documentoConstitucion` (`registroMercantil`, `actaConstitutiva`, `estatuto`, `contratoSocial`)
   - `facultadesRepresentante` (`poderNotarial`, `vigenciaPoder`, `actaDesignacionAutoridades`)
   - `documentoRepresentante` (`cedulaRepresentante`, `identificacionRepresentante`)
   - `documentoIdentidad`
+  - `licenciaConducirFrente` (`driverLicenseFront`, `driversLicenseFront`, `licenseFront`)
+  - `licenciaConducirReverso` (`driverLicenseBack`, `driversLicenseBack`, `licenseBack`)
   - `comprobanteDomicilio`
 - La UI incluye Republica Dominicana (`do`), pero este handler todavia no la acepta en `SUPPORTED_COUNTRIES`.
 - El payload de entrada está alineado con el frontend actual del portal.

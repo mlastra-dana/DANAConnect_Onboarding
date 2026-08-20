@@ -298,6 +298,39 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         }
       }
     }
+  },
+  usa: {
+    code: 'usa',
+    name: 'Estados Unidos',
+    flag: '🇺🇸',
+    heroEyebrow: '',
+    personTypes: {
+      juridica: {
+        personType: 'juridica',
+        personTypeLabel: 'Empresa',
+        personTypeDescription: 'No disponible para Estados Unidos en este flujo.',
+        heroHeadline: 'Portal de onboarding para empresas en Estados Unidos.',
+        heroSubheadline: '',
+        heroButton: 'Continuar',
+        documentsIntro: 'Este flujo no está disponible para empresas en Estados Unidos.',
+        documentOrder: [],
+        documents: {}
+      },
+      natural: {
+        personType: 'natural',
+        personTypeLabel: 'Persona natural',
+        personTypeDescription: 'Onboarding individual con licencia de conducir.',
+        heroHeadline: 'Portal de onboarding para personas naturales en Estados Unidos.',
+        heroSubheadline: 'Cargue el frente y reverso de su licencia de conducir en un flujo guiado y validado.',
+        heroButton: 'Continuar con persona natural',
+        documentsIntro: 'Cargue el frente y reverso de su licencia de conducir para completar el onboarding.',
+        documentOrder: ['licenciaConducirFrente', 'licenciaConducirReverso'],
+        documents: {
+          licenciaConducirFrente: { label: 'Licencia de conducir - frente' },
+          licenciaConducirReverso: { label: 'Licencia de conducir - reverso' }
+        }
+      }
+    }
   }
 };
 

@@ -30,24 +30,26 @@ export function PersonTypePage({ companyId }: { companyId: string }) {
         </div>
 
         <div className="relative z-10 grid gap-3 md:grid-cols-2">
-          {(['juridica', 'natural'] as const).map((personType) => {
-            const flow = selectedCountry.personTypes[personType];
-            return (
-              <button
-                key={personType}
-                type="button"
-                onClick={() => handlePersonTypeSelect(personType)}
-                className="group min-h-24 rounded-2xl border border-white/30 bg-white/10 p-5 text-left text-white transition-all duration-200 hover:border-white hover:bg-white hover:text-dark hover:shadow-soft focus-visible:border-white focus-visible:bg-white focus-visible:text-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
-              >
-                <p className="text-base font-semibold uppercase tracking-[0.08em] transition-colors duration-200 group-hover:text-primary group-focus-visible:text-primary">
-                  {flow.personTypeLabel}
-                </p>
-                <p className="mt-2 text-sm leading-relaxed text-white/75 transition-colors duration-200 group-hover:text-grayText group-focus-visible:text-grayText">
-                  {flow.personTypeDescription}
-                </p>
-              </button>
-            );
-          })}
+          {(['juridica', 'natural'] as const)
+            .filter((personType) => selectedCountry.personTypes[personType].documentOrder.length > 0)
+            .map((personType) => {
+              const flow = selectedCountry.personTypes[personType];
+              return (
+                <button
+                  key={personType}
+                  type="button"
+                  onClick={() => handlePersonTypeSelect(personType)}
+                  className="group min-h-24 rounded-2xl border border-white/30 bg-white/10 p-5 text-left text-white transition-all duration-200 hover:border-white hover:bg-white hover:text-dark hover:shadow-soft focus-visible:border-white focus-visible:bg-white focus-visible:text-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
+                >
+                  <p className="text-base font-semibold uppercase tracking-[0.08em] transition-colors duration-200 group-hover:text-primary group-focus-visible:text-primary">
+                    {flow.personTypeLabel}
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-white/75 transition-colors duration-200 group-hover:text-grayText group-focus-visible:text-grayText">
+                    {flow.personTypeDescription}
+                  </p>
+                </button>
+              );
+            })}
         </div>
       </section>
 
