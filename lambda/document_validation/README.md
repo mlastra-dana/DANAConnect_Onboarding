@@ -4,6 +4,9 @@ Lambda en Python para validacion documental via Function URL.
 
 Lambda desplegada: `Onboarding_validate_DanaConnect`.
 
+Archivo fuente principal: `lambda_function.py`.
+Handler configurado en AWS: `lambda_function.lambda_handler`.
+
 ## Flujo
 
 1. Recibe un archivo en base64 por `POST`.

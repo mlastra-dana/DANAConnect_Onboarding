@@ -48,14 +48,16 @@ export async function validateDocumentFile(
 
   const slotForValidation = resolveLambdaSlot(type, country);
   onProgress?.(30);
-  const payload = {
+  const payload: Record<string, unknown> = {
     file_name: file.name,
     content_type: file.type || inferContentType(file.name),
     file_base64: await fileToBase64(file),
     country,
-    slot: slotForValidation,
-    expected_legal_representatives: options?.expectedLegalRepresentatives ?? []
+    slot: slotForValidation
   };
+  if (options?.expectedLegalRepresentatives) {
+    payload.expected_legal_representatives = options.expectedLegalRepresentatives;
+  }
 
   onProgress?.(65);
   const lambdaResponse = await fetch(DOCUMENT_VALIDATION_URL, {
@@ -116,7 +118,11 @@ export async function validateDocumentFile(
     quality: result.quality,
     internalDiagnostics: result.internalDiagnostics,
     extractedIdentity: result.extractedIdentity,
-    extractedLegalRepresentatives: result.extractedLegalRepresentatives
+    extractedLegalRepresentatives: result.extractedLegalRepresentatives,
+    legalRepresentativeMatch: result.legalRepresentativeMatch,
+    matchedRepresentativeRole: result.matchedRepresentativeRole,
+    matchedRepresentativeEvidence: result.matchedRepresentativeEvidence,
+    visibleIdentityEvidence: result.visibleIdentityEvidence
   };
 }
 
@@ -236,6 +242,14 @@ function mapLambdaResponseToValidationResult(body: unknown, fileSize: number) {
         role: typeof representative.role === 'string' ? representative.role.trim() : '',
         rawText: typeof representative.rawText === 'string' ? representative.rawText.trim() : ''
       })),
+    legalRepresentativeMatch:
+      typeof payload.legalRepresentativeMatch === 'boolean' ? payload.legalRepresentativeMatch : null,
+    matchedRepresentativeRole:
+      typeof payload.matchedRepresentativeRole === 'string' ? payload.matchedRepresentativeRole.trim() : '',
+    matchedRepresentativeEvidence:
+      typeof payload.matchedRepresentativeEvidence === 'string' ? payload.matchedRepresentativeEvidence.trim() : '',
+    visibleIdentityEvidence:
+      typeof payload.visibleIdentityEvidence === 'string' ? payload.visibleIdentityEvidence.trim() : '',
     internalDiagnostics: [
       `lambda_status:${status}`,
       `lambda_file_size:${typeof analysis.fileSizeBytes === 'number' ? analysis.fileSizeBytes : fileSize}`,

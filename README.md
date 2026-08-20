@@ -48,7 +48,7 @@ API local de correo: `http://localhost:8787`
 Se agregó una Lambda en Python para validación documental con Function URL:
 
 - Nombre desplegado: `Onboarding_validate_DanaConnect`
-- [handler.py](/Users/marialastra/Documents/DANAConnect_Onboarding/lambda/document_validation/handler.py)
+- [lambda_function.py](/Users/marialastra/Documents/DANAConnect_Onboarding/lambda/document_validation/lambda_function.py)
 - [requirements.txt](/Users/marialastra/Documents/DANAConnect_Onboarding/lambda/document_validation/requirements.txt)
 - [README.md](/Users/marialastra/Documents/DANAConnect_Onboarding/lambda/document_validation/README.md)
 

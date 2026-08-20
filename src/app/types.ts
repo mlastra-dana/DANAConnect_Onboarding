@@ -65,6 +65,10 @@ export type DocumentValidationResult = {
     role?: string;
     rawText?: string;
   }>;
+  legalRepresentativeMatch?: boolean | null;
+  matchedRepresentativeRole?: string;
+  matchedRepresentativeEvidence?: string;
+  visibleIdentityEvidence?: string;
   error?: string;
 };
 

@@ -32,6 +32,8 @@ ALLOWED_MIME_TYPES = {
 
 SUPPORTED_COUNTRIES = {"ve", "pe", "bo", "mx", "ar"}
 
+PLACEHOLDER_WORDS = {"ejemplo", "placeholder", "sample", "dummy", "ficticio", "inventado"}
+
 DETECTED_DOCUMENT_TYPES = {
     "documentoFiscal",
     "documentoConstitucion",
@@ -143,7 +145,7 @@ DOC_SLOT_LABELS: Dict[Tuple[str, str], str] = {
     ("ve", "documentoFiscal"): "RIF",
     ("ve", "documentoConstitucion"): "Registro Mercantil / Acta Constitutiva",
     ("ve", "facultadesRepresentante"): "Poder o facultades del representante legal",
-    ("ve", "documentoRepresentante"): "Cedula de identidad del representante",
+    ("ve", "documentoRepresentante"): "Cedula de identidad del representante o miembro de junta directiva",
     ("ve", "documentoIdentidad"): "Cedula de identidad",
     ("ve", "comprobanteDomicilio"): "Comprobante de domicilio",
 
@@ -200,7 +202,10 @@ DOC_VALIDATION_RULES: Dict[str, Dict[str, str]] = {
             "Debe parecer un poder, acta, documento mercantil o instrumento legal venezolano "
             "que acredite las facultades del representante legal."
         ),
-        "documentoRepresentante": "Debe parecer una cedula de identidad venezolana del representante legal.",
+        "documentoRepresentante": (
+            "Debe parecer una cedula de identidad venezolana de una persona natural que el acta indique como "
+            "representante legal, miembro de junta directiva, organo de administracion o autoridad societaria."
+        ),
         "documentoIdentidad": "Debe parecer una cedula de identidad venezolana de persona natural.",
         "comprobanteDomicilio": (
             "Debe parecer un comprobante de domicilio venezolano, recibo de servicio, "
@@ -403,6 +408,7 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             slot=slot,
             raw_slot=raw_slot,
             classification=classification,
+            expected_legal_representatives=expected_legal_representatives,
         )
 
         # 5) Conservamos la clasificacion neutral como fuente de verdad para el tipo documental.
@@ -414,6 +420,12 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         )
         analysis["_raw_classifier_text"] = classification.get("_raw_classifier_text", "")
         analysis["classifier_summary"] = classification.get("summary", "")
+        if country == "ve" and slot == "documentoConstitucion" and analysis["detected_document_type"] == "documentoConstitucion":
+            analysis["extractedLegalRepresentatives"] = run_bedrock_legal_representative_extraction(
+                file_bytes=file_bytes,
+                file_name=file_name,
+                content_type=content_type,
+            )
 
         # 6) Guardrails finales por si la validacion intenta aprobar algo incompatible.
         analysis = apply_post_validation_guards(
@@ -428,6 +440,29 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             slot=slot,
             analysis=analysis,
             expected_legal_representatives=expected_legal_representatives,
+        )
+        if country != "ve" or slot != "documentoRepresentante":
+            analysis["legalRepresentativeMatch"] = None
+        LOGGER.info(
+            "document_validation_result country=%s slot=%s status=%s extracted_legal_representatives=%s expected_legal_representatives=%s legal_representative_match=%s",
+            country,
+            slot,
+            normalize_status(analysis.get("status")),
+            len(normalize_extracted_legal_representatives(analysis.get("extractedLegalRepresentatives"))),
+            "not_sent" if expected_legal_representatives is None else len(expected_legal_representatives),
+            analysis.get("legalRepresentativeMatch"),
+        )
+        LOGGER.info(
+            "document_validation_extraction_debug %s",
+            json.dumps(
+                build_extraction_debug_payload(
+                    country=country,
+                    slot=slot,
+                    analysis=analysis,
+                    expected_legal_representatives=expected_legal_representatives,
+                ),
+                ensure_ascii=False,
+            ),
         )
 
         final = build_validation_response(
@@ -677,6 +712,7 @@ def run_bedrock_validation(
     slot: str,
     raw_slot: str,
     classification: Dict[str, Any],
+    expected_legal_representatives: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, Any]:
     slot_label = DOC_SLOT_LABELS[(country, slot)]
     prompt = build_prompt(
@@ -687,6 +723,7 @@ def run_bedrock_validation(
         raw_slot=raw_slot,
         slot_label=slot_label,
         classification=classification,
+        expected_legal_representatives=expected_legal_representatives,
     )
 
     user_content = build_bedrock_user_content(
@@ -708,6 +745,253 @@ def run_bedrock_validation(
     return parsed
 
 
+def run_bedrock_legal_representative_extraction(
+    *,
+    file_bytes: bytes,
+    file_name: str,
+    content_type: str,
+) -> List[Dict[str, str]]:
+    first_pass = run_bedrock_legal_representative_extraction_pass(
+        file_bytes=file_bytes,
+        file_name=file_name,
+        content_type=content_type,
+        prompt=LEGAL_REPRESENTATIVE_EXTRACTION_PROMPT,
+    )
+    second_pass = run_bedrock_legal_representative_extraction_pass(
+        file_bytes=file_bytes,
+        file_name=file_name,
+        content_type=content_type,
+        prompt=LEGAL_REPRESENTATIVE_CONFIRMATION_PROMPT,
+    )
+    candidates = consensus_legal_representatives(first_pass, second_pass)
+    if not candidates:
+        return []
+
+    return run_bedrock_legal_representative_verification(
+        file_bytes=file_bytes,
+        file_name=file_name,
+        content_type=content_type,
+        candidates=candidates,
+    )
+
+
+LEGAL_REPRESENTATIVE_EXTRACTION_PROMPT = """
+Eres un extractor estricto de datos de documentos societarios venezolanos.
+
+Tu unica tarea es leer el archivo adjunto y extraer personas naturales que aparezcan VISUALMENTE en el documento
+como representantes legales, miembros de junta directiva, organo de administracion, autoridades societarias
+o personas con cargos/facultades de representacion de la sociedad.
+
+Incluye solo personas que aparezcan junto a cargos o frases como presidente, director, vicepresidente, secretario,
+tesorero, gerente, administrador, miembro de junta directiva, organo de administracion, autoridad societaria,
+representante legal, facultado para representar, facultado para obligar a la sociedad, obligado por su firma,
+apoderado o autorizado para actuar por la sociedad.
+
+Reglas obligatorias:
+- No inventes nombres, apellidos, cedulas ni cargos.
+- No uses datos de ejemplo, muestras, placeholders ni valores ficticios.
+- No completes datos por intuicion.
+- No uses el nombre del archivo como fuente de nombres.
+- Si una cedula no es visible, documentNumber debe ser cadena vacia.
+- rawText debe ser una frase breve copiada o resumida del texto visible donde aparezca la persona, su cargo/facultad
+  y la cedula si documentNumber tiene valor.
+- Si no puedes leer representantes, miembros de junta directiva o autoridades societarias con confianza razonable,
+  devuelve una lista vacia.
+
+Devuelve JSON puro, sin markdown, con esta forma exacta:
+{
+  "representatives": []
+}
+
+Si encuentras representantes, usa objetos con esta forma:
+{
+  "firstName": "",
+  "lastName": "",
+  "documentNumber": "",
+  "role": "",
+  "rawText": ""
+}
+""".strip()
+
+
+LEGAL_REPRESENTATIVE_CONFIRMATION_PROMPT = """
+Lee el documento societario venezolano adjunto de forma independiente.
+
+Extrae unicamente personas naturales que el documento designe o mencione visualmente como parte de la administracion,
+junta directiva, representantes legales, autoridades societarias o personas con facultades de representacion.
+
+Criterios estrictos:
+- Devuelve solo personas cuyo nombre completo veas en el documento.
+- El cargo debe aparecer visualmente cerca del nombre o en la misma disposicion/seccion.
+- Si devuelves documentNumber, ese numero debe verse asociado a esa misma persona.
+- No uses ejemplos, no inventes, no completes nombres ni cedulas.
+- No uses datos de memoria ni datos de otro documento.
+- Si el documento es borroso o no puedes confirmar nombres reales, devuelve lista vacia.
+
+Devuelve JSON puro con esta forma exacta:
+{
+  "representatives": [
+    {
+      "firstName": "",
+      "lastName": "",
+      "documentNumber": "",
+      "role": "",
+      "rawText": ""
+    }
+  ]
+}
+""".strip()
+
+
+def run_bedrock_legal_representative_extraction_pass(
+    *,
+    file_bytes: bytes,
+    file_name: str,
+    content_type: str,
+    prompt: str,
+) -> List[Dict[str, str]]:
+    user_content = build_bedrock_user_content(
+        prompt=prompt,
+        file_bytes=file_bytes,
+        file_name=file_name,
+        content_type=content_type,
+    )
+
+    bedrock_response = BEDROCK_CLIENT.converse(
+        modelId=BEDROCK_MODEL_ID,
+        messages=[{"role": "user", "content": user_content}],
+        inferenceConfig={"temperature": 0, "topP": 0.9, "maxTokens": 1200},
+    )
+
+    text = extract_bedrock_text(bedrock_response)
+    parsed = parse_json_from_text(text)
+    return normalize_extracted_legal_representatives(parsed.get("representatives"))
+
+
+def run_bedrock_legal_representative_verification(
+    *,
+    file_bytes: bytes,
+    file_name: str,
+    content_type: str,
+    candidates: List[Dict[str, str]],
+) -> List[Dict[str, str]]:
+    candidates_json = json.dumps(candidates, ensure_ascii=False)
+    prompt = f"""
+Eres un verificador estricto de extracciones de documentos societarios venezolanos.
+
+Recibiras una lista de candidatos extraidos previamente del mismo documento adjunto. Tu unica tarea es confirmar
+si cada candidato aparece VISUALMENTE en el documento como representante legal, miembro de junta directiva,
+organo de administracion, autoridad societaria o persona con cargo/facultad de representacion.
+
+Candidatos a verificar:
+{candidates_json}
+
+Reglas obligatorias:
+- No agregues candidatos nuevos.
+- No corrijas nombres por intuicion.
+- No confirmes un candidato si no puedes ubicar visualmente su nombre en el documento.
+- Si el candidato trae documentNumber, solo confirmalo si ese numero tambien aparece visualmente asociado a esa persona.
+- Si el candidato no trae documentNumber, solo confirmalo si el nombre completo y el cargo aparecen visualmente en la misma seccion.
+- evidenceQuote debe contener la frase visible que respalda nombre, cargo y cedula cuando exista cedula.
+- Si tienes duda, excluye el candidato.
+
+Devuelve JSON puro, sin markdown, con esta forma exacta:
+{{
+  "confirmedRepresentatives": []
+}}
+
+Si confirmas candidatos, usa objetos con esta forma:
+{{
+  "firstName": "",
+  "lastName": "",
+  "documentNumber": "",
+  "role": "",
+  "rawText": ""
+}}
+""".strip()
+
+    user_content = build_bedrock_user_content(
+        prompt=prompt,
+        file_bytes=file_bytes,
+        file_name=file_name,
+        content_type=content_type,
+    )
+
+    bedrock_response = BEDROCK_CLIENT.converse(
+        modelId=BEDROCK_MODEL_ID,
+        messages=[{"role": "user", "content": user_content}],
+        inferenceConfig={"temperature": 0, "topP": 0.9, "maxTokens": 1200},
+    )
+
+    text = extract_bedrock_text(bedrock_response)
+    parsed = parse_json_from_text(text)
+    return normalize_extracted_legal_representatives(parsed.get("confirmedRepresentatives"))
+
+
+def consensus_legal_representatives(
+    first_pass: List[Dict[str, str]],
+    second_pass: List[Dict[str, str]],
+) -> List[Dict[str, str]]:
+    confirmed: List[Dict[str, str]] = []
+    used_second_indexes: set[int] = set()
+
+    for first in first_pass:
+        for index, second in enumerate(second_pass):
+            if index in used_second_indexes:
+                continue
+            if legal_representative_candidate_agrees(first, second):
+                confirmed.append(merge_legal_representative_candidates(first, second))
+                used_second_indexes.add(index)
+                break
+
+    return normalize_extracted_legal_representatives(confirmed)
+
+
+def legal_representative_candidate_agrees(left: Dict[str, str], right: Dict[str, str]) -> bool:
+    left_number_variants = identity_number_variants(left.get("documentNumber"))
+    right_number_variants = identity_number_variants(right.get("documentNumber"))
+    if left_number_variants and right_number_variants:
+        return document_numbers_match(left.get("documentNumber"), right.get("documentNumber"))
+
+    left_text = " ".join(
+        item
+        for item in [
+            left.get("firstName", ""),
+            left.get("lastName", ""),
+            left.get("role", ""),
+            left.get("rawText", ""),
+        ]
+        if item
+    )
+    right_text = " ".join(
+        item
+        for item in [
+            right.get("firstName", ""),
+            right.get("lastName", ""),
+            right.get("role", ""),
+            right.get("rawText", ""),
+        ]
+        if item
+    )
+
+    if not names_match(left_text, right_text):
+        return False
+
+    left_role = normalize_text_for_matching(left.get("role"))
+    right_role = normalize_text_for_matching(right.get("role"))
+    return not left_role or not right_role or left_role in right_text or right_role in left_text
+
+
+def merge_legal_representative_candidates(left: Dict[str, str], right: Dict[str, str]) -> Dict[str, str]:
+    return {
+        "firstName": left.get("firstName") or right.get("firstName") or "",
+        "lastName": left.get("lastName") or right.get("lastName") or "",
+        "documentNumber": left.get("documentNumber") or right.get("documentNumber") or "",
+        "role": left.get("role") or right.get("role") or "",
+        "rawText": left.get("rawText") or right.get("rawText") or "",
+    }
+
+
 def build_prompt(
     *,
     file_name: str,
@@ -717,6 +1001,7 @@ def build_prompt(
     raw_slot: str,
     slot_label: str,
     classification: Dict[str, Any],
+    expected_legal_representatives: Optional[List[Dict[str, str]]] = None,
 ) -> str:
     rule = DOC_VALIDATION_RULES[country][slot]
     detected_document_type = normalize_detected_document_type(classification.get("detected_document_type"))
@@ -725,7 +1010,16 @@ def build_prompt(
     classifier_keywords = normalize_string_list(classification.get("keywords_found"))
 
     should_extract_identity = slot in IDENTITY_EXTRACTION_SLOTS
-    should_extract_legal_representatives = country == "ve" and slot == "documentoConstitucion"
+    should_extract_legal_representatives = False
+    should_match_expected_representative = (
+        country == "ve"
+        and slot == "documentoRepresentante"
+        and expected_legal_representatives is not None
+    )
+    expected_legal_representatives_json = json.dumps(
+        expected_legal_representatives or [],
+        ensure_ascii=False,
+    )
 
     extraction_rules = """
 Si el slot es "documentoIdentidad" o "documentoRepresentante", adicionalmente intenta extraer esta salida minima:
@@ -764,12 +1058,36 @@ Reglas para extractedLegalRepresentatives:
 - Incluye solo personas naturales mencionadas dentro del documento constitutivo/registral.
 - Prioriza personas mencionadas junto a cargos o frases como representante legal, presidente, director, gerente, administrador,
   junta directiva, autorizado para representar, obligado por su firma o facultado para actuar por la sociedad.
-- documentNumber debe ser la cedula visible si aparece, por ejemplo V-12345678 o E-12345678. Si no aparece, devuelve cadena vacia.
+- documentNumber debe ser la cedula visible si aparece. Si no aparece, devuelve cadena vacia.
 - rawText debe contener la frase corta visible que justifica la extraccion.
 - No inventes nombres, cedulas ni cargos.
+- No uses datos de ejemplo, placeholders, muestras o valores ficticios.
+- Cada persona devuelta debe aparecer de forma visible en el documento. Si no puedes copiar una frase visible que la justifique, excluyela.
 - Si no puedes identificar representantes legales con confianza razonable, devuelve una lista vacia.
 """.strip()
     no_legal_representative_rules = "Devuelve extractedLegalRepresentatives como lista vacia."
+    legal_representative_match_rules = f"""
+Para Venezuela y slot "documentoRepresentante", valida tambien si la cedula visible pertenece a una de las
+personas esperadas extraidas previamente del Registro Mercantil / Acta Constitutiva. Estas personas pueden ser
+representantes legales, miembros de junta directiva, organo de administracion o autoridades societarias con cargo visible.
+
+Representantes legales esperados:
+{expected_legal_representatives_json}
+
+Reglas para legalRepresentativeMatch:
+- Compara solo contra la persona visible en la cedula cargada, no contra el nombre del archivo.
+- Primero compara cedula/documentNumber ignorando puntos, espacios, guiones y prefijos V/E.
+- Si el numero no se puede leer completo, compara nombres y apellidos visibles contra los representantes esperados.
+- legalRepresentativeMatch debe ser true si la cedula corresponde razonablemente a cualquiera de las personas esperadas.
+- legalRepresentativeMatch debe ser false si la persona visible no corresponde a ninguno o si no puedes leer datos suficientes.
+- matchedRepresentativeRole debe ser el cargo esperado que coincide, si existe.
+- matchedRepresentativeEvidence debe explicar brevemente que nombre o cedula visible coincide.
+- visibleIdentityEvidence debe incluir solo datos visibles en la cedula cargada: nombres, apellidos y numero de cedula leidos.
+- No copies representantes esperados dentro de visibleIdentityEvidence.
+""".strip()
+    no_legal_representative_match_rules = """
+Devuelve legalRepresentativeMatch como null, matchedRepresentativeRole como cadena vacia, matchedRepresentativeEvidence como cadena vacia y visibleIdentityEvidence como cadena vacia.
+""".strip()
 
     return f"""
 Eres un validador documental para un onboarding empresarial multi-pais.
@@ -817,6 +1135,7 @@ Instrucciones:
 - El nombre del archivo es solo una pista secundaria.
 - {extraction_rules if should_extract_identity else no_extraction_rules}
 - {legal_representative_rules if should_extract_legal_representatives else no_legal_representative_rules}
+- {legal_representative_match_rules if should_match_expected_representative else no_legal_representative_match_rules}
 
 Tu respuesta DEBE ser JSON puro, sin markdown, con esta forma exacta:
 {{
@@ -841,7 +1160,11 @@ Tu respuesta DEBE ser JSON puro, sin markdown, con esta forma exacta:
       "role": "",
       "rawText": ""
     }}
-  ]
+  ],
+  "legalRepresentativeMatch": null,
+  "matchedRepresentativeRole": "",
+  "matchedRepresentativeEvidence": "",
+  "visibleIdentityEvidence": ""
 }}
 
 Reglas adicionales:
@@ -855,6 +1178,7 @@ Reglas adicionales:
 - Si el archivo es parcialmente legible pero tiene indicadores fuertes del documento esperado, responde "warning".
 - Si el slot no requiere extraccion de identidad, devuelve extractedIdentity con strings vacios.
 - Si el slot no requiere extraccion de representantes legales, devuelve extractedLegalRepresentatives como lista vacia.
+- Si no se recibieron representantes legales esperados para comparar, devuelve legalRepresentativeMatch null.
 
 Datos del archivo:
 - file_name: {file_name}
@@ -1093,6 +1417,23 @@ def apply_post_validation_guards(
         else:
             analysis["document_type_match"] = True
 
+        if not normalize_extracted_legal_representatives(analysis.get("extractedLegalRepresentatives")):
+            analysis["status"] = "warning"
+            analysis["document_type_match"] = True
+            analysis["summary"] = (
+                "El documento parece corresponder a un Registro Mercantil o Acta Constitutiva, "
+                "pero no se pudieron extraer representantes legales o miembros de junta directiva con confianza."
+            )
+            warnings = normalize_string_list(analysis.get("warnings"))
+            analysis["warnings"] = sorted(
+                set(
+                    warnings
+                    + [
+                        "No se identificaron representantes legales o miembros de junta directiva legibles para validar la cedula.",
+                    ]
+                )
+            )
+
     # Guardrail Argentina: CUIT/ARCA/AFIP no puede aprobarse como Estatuto / Contrato social.
     if country == "ar" and slot == "documentoConstitucion" and detected == "documentoFiscal":
         analysis["status"] = "error"
@@ -1159,21 +1500,28 @@ def apply_expected_legal_representative_guard(
     if country != "ve" or slot != "documentoRepresentante" or expected_legal_representatives is None:
         return analysis
 
-    if normalize_status(analysis.get("status")) == "error":
-        return analysis
-
     if not expected_legal_representatives:
         analysis["status"] = "error"
         analysis["document_type_match"] = False
-        analysis["summary"] = "Primero cargue un Registro Mercantil / Acta Constitutiva donde se identifique el representante legal."
+        analysis["summary"] = (
+            "Primero cargue un Registro Mercantil / Acta Constitutiva donde se identifiquen representantes legales "
+            "o miembros de junta directiva."
+        )
         analysis["warnings"] = []
         analysis["reasons"] = [
-            "No se recibieron representantes legales extraidos del documento constitutivo.",
-            "La cedula del representante debe validarse contra una persona que aparezca como representante legal en el acta.",
+            "No se recibieron representantes legales ni miembros de junta directiva extraidos del documento constitutivo.",
+            "La cedula debe validarse contra una persona que aparezca como representante legal o miembro de junta directiva en el acta.",
         ]
         return analysis
 
     identity = normalize_extracted_identity(analysis.get("extractedIdentity"))
+    evidence_text = build_representative_match_evidence_text(identity=identity, analysis=analysis)
+    detected_document_type = normalize_detected_document_type(analysis.get("detected_document_type"))
+    incompatible_detected_types = INCOMPATIBLE_DETECTED_TYPES.get("documentoRepresentante", set())
+
+    if detected_document_type in incompatible_detected_types:
+        return analysis
+
     identity_text = " ".join(
         item
         for item in [
@@ -1181,26 +1529,56 @@ def apply_expected_legal_representative_guard(
             identity.get("lastName", ""),
             identity.get("documentNumber", ""),
             identity.get("rawText", ""),
+            evidence_text,
         ]
         if item
     )
 
-    if any(
-        legal_representative_matches(identity=identity, identity_text=identity_text, representative=representative)
-        for representative in expected_legal_representatives
-    ):
+    for representative in expected_legal_representatives:
+        if legal_representative_matches(identity=identity, identity_text=identity_text, representative=representative):
+            analysis["legalRepresentativeMatch"] = True
+            if not str(analysis.get("matchedRepresentativeRole") or "").strip():
+                analysis["matchedRepresentativeRole"] = representative.get("role", "")
+            if not str(analysis.get("matchedRepresentativeEvidence") or "").strip():
+                analysis["matchedRepresentativeEvidence"] = (
+                    "La identidad extraida coincide con una persona esperada del acta."
+                )
+            if normalize_status(analysis.get("status")) == "error":
+                analysis["status"] = "valid"
+                analysis["document_type_match"] = True
+                analysis["summary"] = "Documento aceptado."
+                analysis["warnings"] = normalize_string_list(analysis.get("warnings"))
+            return analysis
+
+    if normalize_status(analysis.get("status")) == "error":
         return analysis
 
+    analysis["legalRepresentativeMatch"] = False
     analysis["status"] = "error"
     analysis["document_type_match"] = False
     analysis["summary"] = (
-        "La persona de esta cedula no aparece como representante legal en el Registro Mercantil / Acta Constitutiva cargado."
+        "La persona de esta cedula no aparece como representante legal ni miembro de junta directiva en el Registro Mercantil / Acta Constitutiva cargado."
     )
     analysis["warnings"] = []
     analysis["reasons"] = normalize_string_list(analysis.get("reasons")) + [
-        "La identidad extraida de la cedula no coincide con los representantes legales extraidos del acta.",
+        "La identidad extraida de la cedula no coincide con las personas extraidas del acta.",
     ]
     return analysis
+
+
+def build_representative_match_evidence_text(*, identity: Dict[str, str], analysis: Dict[str, Any]) -> str:
+    return " ".join(
+        item
+        for item in [
+            identity.get("rawText", ""),
+            str(analysis.get("visibleIdentityEvidence") or ""),
+            str(analysis.get("summary") or ""),
+            str(analysis.get("matchedRepresentativeEvidence") or ""),
+            " ".join(normalize_string_list(analysis.get("keywords_found"))),
+            str(analysis.get("classifier_summary") or ""),
+        ]
+        if item
+    )
 
 
 def legal_representative_matches(
@@ -1209,6 +1587,11 @@ def legal_representative_matches(
     identity_text: str,
     representative: Dict[str, str],
 ) -> bool:
+    identity_number_variants_list = identity_number_variants(identity.get("documentNumber"))
+    representative_number_variants_list = identity_number_variants(representative.get("documentNumber"))
+    if identity_number_variants_list and representative_number_variants_list:
+        return document_numbers_match(identity.get("documentNumber"), representative.get("documentNumber"))
+
     representative_text = " ".join(
         item
         for item in [
@@ -1222,8 +1605,7 @@ def legal_representative_matches(
     )
 
     return (
-        document_numbers_match(identity.get("documentNumber"), representative.get("documentNumber"))
-        or document_number_appears_in_text(representative.get("documentNumber"), identity_text)
+        document_number_appears_in_text(representative.get("documentNumber"), identity_text)
         or document_number_appears_in_text(identity.get("documentNumber"), representative_text)
         or names_match(identity_text, representative_text)
     )
@@ -1306,6 +1688,81 @@ def parse_json_from_text(text: str) -> Dict[str, Any]:
     return data
 
 
+def build_extraction_debug_payload(
+    *,
+    country: str,
+    slot: str,
+    analysis: Dict[str, Any],
+    expected_legal_representatives: Optional[List[Dict[str, str]]],
+) -> Dict[str, Any]:
+    identity = normalize_extracted_identity(analysis.get("extractedIdentity"))
+    extracted_representatives = normalize_extracted_legal_representatives(
+        analysis.get("extractedLegalRepresentatives")
+    )
+    expected_representatives = (
+        normalize_extracted_legal_representatives(expected_legal_representatives)
+        if expected_legal_representatives is not None
+        else None
+    )
+
+    return {
+        "country": country,
+        "slot": slot,
+        "status": normalize_status(analysis.get("status")),
+        "detectedDocumentType": normalize_detected_document_type(analysis.get("detected_document_type")),
+        "detectedCountry": normalize_detected_country(analysis.get("detected_country")),
+        "legalRepresentativeMatch": (
+            analysis.get("legalRepresentativeMatch")
+            if isinstance(analysis.get("legalRepresentativeMatch"), bool)
+            else None
+        ),
+        "extractedIdentity": truncate_debug_identity(identity),
+        "visibleIdentityEvidence": truncate_debug_text(analysis.get("visibleIdentityEvidence")),
+        "matchedRepresentativeRole": truncate_debug_text(analysis.get("matchedRepresentativeRole")),
+        "matchedRepresentativeEvidence": truncate_debug_text(analysis.get("matchedRepresentativeEvidence")),
+        "extractedLegalRepresentatives": [
+            truncate_debug_representative(representative)
+            for representative in extracted_representatives
+        ],
+        "expectedLegalRepresentatives": (
+            [
+                truncate_debug_representative(representative)
+                for representative in expected_representatives
+            ]
+            if expected_representatives is not None
+            else "not_sent"
+        ),
+        "reasons": [truncate_debug_text(reason) for reason in normalize_string_list(analysis.get("reasons"))],
+        "warnings": [truncate_debug_text(warning) for warning in normalize_string_list(analysis.get("warnings"))],
+    }
+
+
+def truncate_debug_identity(identity: Dict[str, str]) -> Dict[str, str]:
+    return {
+        "firstName": truncate_debug_text(identity.get("firstName")),
+        "lastName": truncate_debug_text(identity.get("lastName")),
+        "documentNumber": truncate_debug_text(identity.get("documentNumber")),
+        "rawText": truncate_debug_text(identity.get("rawText"), limit=500),
+    }
+
+
+def truncate_debug_representative(representative: Dict[str, str]) -> Dict[str, str]:
+    return {
+        "firstName": truncate_debug_text(representative.get("firstName")),
+        "lastName": truncate_debug_text(representative.get("lastName")),
+        "documentNumber": truncate_debug_text(representative.get("documentNumber")),
+        "role": truncate_debug_text(representative.get("role")),
+        "rawText": truncate_debug_text(representative.get("rawText"), limit=500),
+    }
+
+
+def truncate_debug_text(value: Any, *, limit: int = 240) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit].rstrip()}..."
+
+
 def build_validation_response(
     *,
     file_name: str,
@@ -1327,6 +1784,7 @@ def build_validation_response(
     extracted_legal_representatives = normalize_extracted_legal_representatives(
         analysis.get("extractedLegalRepresentatives")
     )
+    legal_representative_match = analysis.get("legalRepresentativeMatch")
     detected_document_type = normalize_detected_document_type(analysis.get("detected_document_type"))
     detected_country = normalize_detected_country(analysis.get("detected_country"))
 
@@ -1371,6 +1829,10 @@ def build_validation_response(
         },
         "extractedIdentity": extracted_identity,
         "extractedLegalRepresentatives": extracted_legal_representatives,
+        "legalRepresentativeMatch": legal_representative_match if isinstance(legal_representative_match, bool) else None,
+        "matchedRepresentativeRole": str(analysis.get("matchedRepresentativeRole") or "").strip(),
+        "matchedRepresentativeEvidence": str(analysis.get("matchedRepresentativeEvidence") or "").strip(),
+        "visibleIdentityEvidence": str(analysis.get("visibleIdentityEvidence") or "").strip(),
         "uiStatus": {
             "state": "error" if status == "error" else "warning" if status == "warning" else "ok",
             "title": ui_title,
@@ -1412,10 +1874,54 @@ def normalize_extracted_legal_representatives(value: Any) -> List[Dict[str, str]
             "role": str(item.get("role") or "").strip(),
             "rawText": str(item.get("rawText") or "").strip(),
         }
+        if representative["documentNumber"] and not document_number_appears_in_text(
+            representative["documentNumber"],
+            representative["rawText"],
+        ):
+            continue
+        if is_placeholder_legal_representative(representative):
+            continue
         if any(representative.values()):
             representatives.append(representative)
 
     return representatives
+
+
+def is_placeholder_legal_representative(representative: Dict[str, str]) -> bool:
+    text = normalize_text_for_matching(
+        " ".join(
+            item
+            for item in [
+                representative.get("firstName", ""),
+                representative.get("lastName", ""),
+                representative.get("documentNumber", ""),
+                representative.get("rawText", ""),
+            ]
+            if item
+        )
+    )
+    compact = re.sub(r"[^a-z0-9]", "", text)
+
+    if not text:
+        return False
+
+    if any(word in text for word in PLACEHOLDER_WORDS):
+        return True
+
+    return is_obvious_sample_identity_number(representative.get("documentNumber", ""))
+
+
+def is_obvious_sample_identity_number(value: str) -> bool:
+    digits = re.sub(r"\D", "", value)
+    if len(digits) < 6:
+        return False
+
+    if len(set(digits)) == 1:
+        return True
+
+    ascending = "012345678901234567890"
+    descending = "987654321098765432109"
+    return digits in ascending or digits in descending
 
 
 def normalize_status(value: Any) -> str:

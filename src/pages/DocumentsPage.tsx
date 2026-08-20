@@ -60,7 +60,13 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
   const showRepresentatives = requiresRepresentatives(state.country, state.personType);
   const isVenezuelaJuridica = state.country === 've' && state.personType === 'juridica';
   const constitutionValidation = state.documents.registroMercantil.validation;
-  const canUploadRepresentative = !isVenezuelaJuridica || constitutionValidation.status === 'valid';
+  const legalRepresentatives = constitutionValidation.extractedLegalRepresentatives ?? [];
+  const canUploadRepresentative =
+    !isVenezuelaJuridica || (constitutionValidation.status === 'valid' && legalRepresentatives.length > 0);
+  const representativeDisabledMessage =
+    constitutionValidation.status === 'valid'
+      ? 'Vuelva a cargar el Registro Mercantil / Acta Constitutiva para extraer representantes legales o junta directiva.'
+      : 'Primero cargue y valide el Registro Mercantil / Acta Constitutiva.';
 
   async function handleUploadBase(docType: DocumentType, file: File) {
     const key: UploadKey = docType;
@@ -148,7 +154,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       },
       isVenezuelaJuridica
         ? {
-            expectedLegalRepresentatives: constitutionValidation.extractedLegalRepresentatives ?? []
+            expectedLegalRepresentatives: legalRepresentatives
           }
         : undefined
     );
@@ -256,7 +262,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
             validationProgress={validationProgressMap.rep1}
             previewFile={runtimeFiles.rep1}
             disabled={!canUploadRepresentative}
-            disabledMessage="Primero cargue y valide el Registro Mercantil / Acta Constitutiva."
+            disabledMessage={representativeDisabledMessage}
             onSelectFile={(file) => handleUploadRepresentative(1, file)}
             onRemoveFile={() => handleRemoveRepresentative(1)}
           />
@@ -279,7 +285,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
             validationProgress={validationProgressMap.rep2}
             previewFile={runtimeFiles.rep2}
             disabled={!canUploadRepresentative}
-            disabledMessage="Primero cargue y valide el Registro Mercantil / Acta Constitutiva."
+            disabledMessage={representativeDisabledMessage}
             onSelectFile={(file) => handleUploadRepresentative(2, file)}
             onRemoveFile={() => handleRemoveRepresentative(2)}
           />
