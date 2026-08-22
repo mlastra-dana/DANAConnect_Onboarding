@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import uuid
+import time
 from email.message import EmailMessage
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlencode
@@ -20,6 +21,9 @@ LOGGER.setLevel(logging.INFO)
 AWS_REGION = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-1"
 BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
 MAX_FILE_BYTES = int(os.environ.get("MAX_FILE_BYTES", str(10 * 1024 * 1024)))
+DOCUMENT_BUCKET = os.environ.get("DOCUMENT_BUCKET", "").strip()
+TEXTRACT_POLL_SECONDS = int(os.environ.get("TEXTRACT_POLL_SECONDS", "2"))
+TEXTRACT_MAX_WAIT_SECONDS = int(os.environ.get("TEXTRACT_MAX_WAIT_SECONDS", "90"))
 DEFAULT_SMTP_HOST = "cloudsmtp.danaconnect.com"
 DEFAULT_SMTP_PORT = 587
 DEFAULT_FILE_UPLOAD_URL = "https://appserv.danaconnect.com/dana/conversation/http/rest/file/upload"
@@ -61,6 +65,8 @@ BEDROCK_CLIENT = boto3.client(
     region_name=AWS_REGION,
     config=Config(retries={"max_attempts": 3}),
 )
+S3_CLIENT = boto3.client("s3", region_name=AWS_REGION, config=Config(retries={"max_attempts": 3}))
+TEXTRACT_CLIENT = boto3.client("textract", region_name=AWS_REGION, config=Config(retries={"max_attempts": 3}))
 
 ALLOWED_MIME_TYPES = {
     "application/pdf",
@@ -526,11 +532,13 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         analysis["_raw_classifier_text"] = classification.get("_raw_classifier_text", "")
         analysis["classifier_summary"] = classification.get("summary", "")
         if country == "ve" and slot == "documentoConstitucion" and analysis["detected_document_type"] == "documentoConstitucion":
-            analysis["extractedLegalRepresentatives"] = run_bedrock_legal_representative_extraction(
+            representative_extraction = run_legal_representative_extraction(
                 file_bytes=file_bytes,
                 file_name=file_name,
                 content_type=content_type,
             )
+            analysis["extractedLegalRepresentatives"] = representative_extraction["representatives"]
+            analysis["representativeExtractionDiagnostics"] = representative_extraction["diagnostics"]
 
         # 6) Guardrails finales por si la validacion intenta aprobar algo incompatible.
         analysis = apply_post_validation_guards(
@@ -1056,7 +1064,7 @@ def run_bedrock_classification(
     bedrock_response = BEDROCK_CLIENT.converse(
         modelId=BEDROCK_MODEL_ID,
         messages=[{"role": "user", "content": user_content}],
-        inferenceConfig={"temperature": 0, "topP": 0.9, "maxTokens": 900},
+        inferenceConfig={"temperature": 0, "maxTokens": 900},
     )
 
     text = extract_bedrock_text(bedrock_response)
@@ -1157,13 +1165,350 @@ def run_bedrock_validation(
     bedrock_response = BEDROCK_CLIENT.converse(
         modelId=BEDROCK_MODEL_ID,
         messages=[{"role": "user", "content": user_content}],
-        inferenceConfig={"temperature": 0, "topP": 0.9, "maxTokens": 1600},
+        inferenceConfig={"temperature": 0, "maxTokens": 1600},
     )
 
     text = extract_bedrock_text(bedrock_response)
     parsed = parse_json_from_text(text)
     parsed["_raw_model_text"] = text
     return parsed
+
+
+def run_legal_representative_extraction(
+    *,
+    file_bytes: bytes,
+    file_name: str,
+    content_type: str,
+) -> Dict[str, Any]:
+    diagnostics: Dict[str, Any] = {
+        "provider": "textract+bedrock",
+        "bucketConfigured": bool(DOCUMENT_BUCKET),
+        "textractPages": 0,
+        "textractLines": 0,
+        "bedrockCandidates": 0,
+        "confirmedRepresentatives": 0,
+    }
+
+    try:
+        ocr_result = extract_document_text_with_textract(
+            file_bytes=file_bytes,
+            file_name=file_name,
+            content_type=content_type,
+        )
+        diagnostics["textractPages"] = ocr_result["pageCount"]
+        diagnostics["textractLines"] = len(ocr_result["lines"])
+        diagnostics["textractProvider"] = ocr_result["provider"]
+
+        if not ocr_result["text"].strip():
+            diagnostics["error"] = "textract_empty_text"
+            return {"representatives": [], "diagnostics": diagnostics}
+
+        candidates = run_bedrock_legal_representative_extraction_from_ocr(
+            ocr_text=build_representative_ocr_context(ocr_result["lines"]),
+        )
+        diagnostics["bedrockCandidates"] = len(candidates)
+        confirmed = filter_representatives_by_ocr_evidence(
+            candidates,
+            ocr_text=ocr_result["text"],
+        )
+        diagnostics["confirmedRepresentatives"] = len(confirmed)
+
+        LOGGER.info(
+            "representative_textract_extraction file=%s pages=%s lines=%s candidates=%s confirmed=%s",
+            file_name,
+            diagnostics["textractPages"],
+            diagnostics["textractLines"],
+            diagnostics["bedrockCandidates"],
+            diagnostics["confirmedRepresentatives"],
+        )
+        return {"representatives": confirmed, "diagnostics": diagnostics}
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.exception("representative_textract_extraction_failed")
+        diagnostics["error"] = str(exc)
+        return {"representatives": [], "diagnostics": diagnostics}
+
+
+def extract_document_text_with_textract(
+    *,
+    file_bytes: bytes,
+    file_name: str,
+    content_type: str,
+) -> Dict[str, Any]:
+    if content_type == "application/pdf" or file_name.lower().endswith(".pdf"):
+        if not DOCUMENT_BUCKET:
+            raise ValueError("DOCUMENT_BUCKET es requerido para OCR de PDFs con Textract")
+        return extract_pdf_text_with_textract(
+            file_bytes=file_bytes,
+            file_name=file_name,
+        )
+
+    return extract_image_text_with_textract(file_bytes=file_bytes)
+
+
+def extract_pdf_text_with_textract(*, file_bytes: bytes, file_name: str) -> Dict[str, Any]:
+    key = build_document_bucket_key(file_name)
+    try:
+        S3_CLIENT.put_object(
+            Bucket=DOCUMENT_BUCKET,
+            Key=key,
+            Body=file_bytes,
+            ContentType="application/pdf",
+        )
+        start_response = TEXTRACT_CLIENT.start_document_text_detection(
+            DocumentLocation={
+                "S3Object": {
+                    "Bucket": DOCUMENT_BUCKET,
+                    "Name": key,
+                }
+            }
+        )
+        job_id = start_response["JobId"]
+        blocks = wait_for_textract_text_detection(job_id)
+        lines = textract_lines_from_blocks(blocks)
+        return {
+            "provider": "textract:start_document_text_detection",
+            "lines": lines,
+            "pageCount": max([line["page"] for line in lines], default=0),
+            "text": "\n".join(line["text"] for line in lines),
+        }
+    finally:
+        try:
+            S3_CLIENT.delete_object(Bucket=DOCUMENT_BUCKET, Key=key)
+        except Exception:  # noqa: BLE001
+            LOGGER.warning("document_bucket_cleanup_failed bucket=%s key=%s", DOCUMENT_BUCKET, key)
+
+
+def extract_image_text_with_textract(*, file_bytes: bytes) -> Dict[str, Any]:
+    result = TEXTRACT_CLIENT.detect_document_text(Document={"Bytes": file_bytes})
+    lines = textract_lines_from_blocks(result.get("Blocks") or [])
+    return {
+        "provider": "textract:detect_document_text",
+        "lines": lines,
+        "pageCount": max([line["page"] for line in lines], default=1),
+        "text": "\n".join(line["text"] for line in lines),
+    }
+
+
+def build_document_bucket_key(file_name: str) -> str:
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", file_name.strip() or "documento.pdf").strip("-")
+    if not safe_name:
+        safe_name = "documento.pdf"
+    return f"document-validation/{uuid.uuid4().hex}/{safe_name[:180]}"
+
+
+def wait_for_textract_text_detection(job_id: str) -> List[Dict[str, Any]]:
+    deadline = time.time() + TEXTRACT_MAX_WAIT_SECONDS
+
+    while time.time() < deadline:
+        result = TEXTRACT_CLIENT.get_document_text_detection(JobId=job_id)
+        status = str(result.get("JobStatus") or "")
+        if status == "SUCCEEDED":
+            blocks = list(result.get("Blocks") or [])
+            next_token = result.get("NextToken")
+            while next_token:
+                page = TEXTRACT_CLIENT.get_document_text_detection(JobId=job_id, NextToken=next_token)
+                blocks.extend(page.get("Blocks") or [])
+                next_token = page.get("NextToken")
+            return blocks
+
+        if status in {"FAILED", "PARTIAL_SUCCESS"}:
+            message = str(result.get("StatusMessage") or status)
+            raise ValueError(f"Textract no pudo leer el documento: {message}")
+
+        time.sleep(max(1, TEXTRACT_POLL_SECONDS))
+
+    raise TimeoutError("Textract no termino dentro del tiempo maximo configurado")
+
+
+def textract_lines_from_blocks(blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    lines: List[Dict[str, Any]] = []
+    for block in blocks:
+        if block.get("BlockType") != "LINE":
+            continue
+        text = str(block.get("Text") or "").strip()
+        if not text:
+            continue
+        lines.append(
+            {
+                "page": int(block.get("Page") or 1),
+                "text": text,
+                "confidence": float(block.get("Confidence") or 0.0),
+            }
+        )
+    return lines
+
+
+def build_representative_ocr_context(lines: List[Dict[str, Any]]) -> str:
+    pages: Dict[int, List[str]] = {}
+    for line in lines:
+        pages.setdefault(int(line["page"]), []).append(str(line["text"]))
+
+    chunks: List[str] = []
+    for page in sorted(pages):
+        page_text = "\n".join(pages[page])
+        if page_has_representative_keywords(page_text):
+            chunks.append(f"[PAGINA {page}]\n{page_text}")
+
+    if not chunks:
+        for page in sorted(pages):
+            chunks.append(f"[PAGINA {page}]\n" + "\n".join(pages[page]))
+
+    text = "\n\n".join(chunks)
+    return text[:120000]
+
+
+def page_has_representative_keywords(text: str) -> bool:
+    normalized = normalize_text_for_matching(text)
+    keywords = [
+        "junta directiva",
+        "administracion",
+        "administrador",
+        "presidente",
+        "director",
+        "directores",
+        "gerente",
+        "representante legal",
+        "representacion",
+        "facultado",
+        "facultades",
+        "obligar a la sociedad",
+        "cedula de identidad",
+    ]
+    return any(keyword in normalized for keyword in keywords)
+
+
+def run_bedrock_legal_representative_extraction_from_ocr(*, ocr_text: str) -> List[Dict[str, str]]:
+    prompt = f"""
+Eres un extractor estricto de representantes y autoridades societarias venezolanas.
+
+Recibiras texto OCR producido por Amazon Textract. El OCR puede tener errores menores, pero tu respuesta debe basarse
+exclusivamente en el texto provisto. No tienes permitido usar memoria, intuicion, ejemplos ni el nombre del archivo.
+
+Extrae solo personas naturales que aparezcan en el OCR como:
+- representante legal,
+- miembro de junta directiva,
+- presidente,
+- director,
+- gerente,
+- administrador,
+- autoridad societaria,
+- apoderado,
+- persona facultada para representar u obligar a la sociedad.
+
+Reglas criticas:
+- No inventes nombres, apellidos, cedulas ni cargos.
+- Si un dato no aparece en el OCR, devuelvelo como cadena vacia.
+- Si documentNumber tiene valor, ese numero debe aparecer en rawText.
+- rawText debe ser un fragmento breve del OCR donde aparezcan juntos o cercanos el nombre, cargo y cedula si existe.
+- Excluye accionistas, comisarios, regentes, abogados, registradores, notarios o terceros si no tienen cargo de administracion/representacion.
+- Si no hay evidencia textual suficiente, devuelve lista vacia.
+
+Devuelve JSON puro, sin markdown, con esta forma exacta:
+{{
+  "representatives": [
+    {{
+      "firstName": "",
+      "lastName": "",
+      "documentNumber": "",
+      "role": "",
+      "rawText": ""
+    }}
+  ]
+}}
+
+Texto OCR:
+{ocr_text}
+""".strip()
+
+    bedrock_response = BEDROCK_CLIENT.converse(
+        modelId=BEDROCK_MODEL_ID,
+        messages=[{"role": "user", "content": [{"text": prompt}]}],
+        inferenceConfig={"temperature": 0, "maxTokens": 1800},
+    )
+
+    text = extract_bedrock_text(bedrock_response)
+    parsed = parse_json_from_text(text)
+    return normalize_extracted_legal_representatives(parsed.get("representatives"))
+
+
+def filter_representatives_by_ocr_evidence(
+    representatives: List[Dict[str, str]],
+    *,
+    ocr_text: str,
+) -> List[Dict[str, str]]:
+    normalized_ocr = normalize_text_for_matching(ocr_text)
+    confirmed: List[Dict[str, str]] = []
+
+    for representative in normalize_extracted_legal_representatives(representatives):
+        if not representative_has_allowed_role(representative):
+            continue
+
+        document_number = representative.get("documentNumber", "")
+        if document_number and not document_number_appears_in_text(document_number, ocr_text):
+            continue
+
+        name_text = " ".join(
+            item
+            for item in [representative.get("firstName", ""), representative.get("lastName", "")]
+            if item
+        )
+        name_tokens = significant_name_tokens(name_text)
+        if not name_tokens:
+            continue
+
+        matched_name_tokens = [
+            token for token in name_tokens
+            if normalize_text_for_matching(token) in normalized_ocr
+        ]
+        minimum_matches = 2 if document_number else 3
+        if len(matched_name_tokens) < min(minimum_matches, len(name_tokens)):
+            continue
+
+        confirmed.append(representative)
+
+    return dedupe_legal_representatives(confirmed)
+
+
+def representative_has_allowed_role(representative: Dict[str, str]) -> bool:
+    role_text = normalize_text_for_matching(
+        " ".join(
+            item
+            for item in [representative.get("role", ""), representative.get("rawText", "")]
+            if item
+        )
+    )
+    allowed = [
+        "representante legal",
+        "junta directiva",
+        "administracion",
+        "administrador",
+        "presidente",
+        "director",
+        "gerente",
+        "apoderado",
+        "facultado",
+        "representacion",
+        "obligar a la sociedad",
+    ]
+    denied = ["comisario", "regente", "registrador", "notario", "abogado"]
+    return any(item in role_text for item in allowed) and not any(item in role_text for item in denied)
+
+
+def dedupe_legal_representatives(representatives: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    deduped: List[Dict[str, str]] = []
+    seen: set[str] = set()
+
+    for representative in representatives:
+        number_variants = identity_number_variants(representative.get("documentNumber"))
+        key = number_variants[0] if number_variants else normalize_text_for_matching(
+            f"{representative.get('firstName', '')} {representative.get('lastName', '')} {representative.get('role', '')}"
+        )
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(representative)
+
+    return deduped
 
 
 def run_bedrock_legal_representative_extraction(
@@ -1281,7 +1626,7 @@ def run_bedrock_legal_representative_extraction_pass(
     bedrock_response = BEDROCK_CLIENT.converse(
         modelId=BEDROCK_MODEL_ID,
         messages=[{"role": "user", "content": user_content}],
-        inferenceConfig={"temperature": 0, "topP": 0.9, "maxTokens": 1200},
+        inferenceConfig={"temperature": 0, "maxTokens": 1200},
     )
 
     text = extract_bedrock_text(bedrock_response)
@@ -1341,7 +1686,7 @@ Si confirmas candidatos, usa objetos con esta forma:
     bedrock_response = BEDROCK_CLIENT.converse(
         modelId=BEDROCK_MODEL_ID,
         messages=[{"role": "user", "content": user_content}],
-        inferenceConfig={"temperature": 0, "topP": 0.9, "maxTokens": 1200},
+        inferenceConfig={"temperature": 0, "maxTokens": 1200},
     )
 
     text = extract_bedrock_text(bedrock_response)
@@ -2216,6 +2561,7 @@ def build_extraction_debug_payload(
             if expected_representatives is not None
             else "not_sent"
         ),
+        "representativeExtractionDiagnostics": analysis.get("representativeExtractionDiagnostics") or {},
         "reasons": [truncate_debug_text(reason) for reason in normalize_string_list(analysis.get("reasons"))],
         "warnings": [truncate_debug_text(warning) for warning in normalize_string_list(analysis.get("warnings"))],
     }
@@ -2324,6 +2670,7 @@ def build_validation_response(
         },
         "providerDiagnostics": {
             "bedrockModelId": BEDROCK_MODEL_ID,
+            "representativeExtraction": analysis.get("representativeExtractionDiagnostics") or {},
             "rawClassifierText": analysis.get("_raw_classifier_text", ""),
             "rawModelText": analysis.get("_raw_model_text", ""),
         },

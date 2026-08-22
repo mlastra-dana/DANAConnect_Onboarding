@@ -14,13 +14,20 @@ Handler configurado en AWS: `lambda_function.lambda_handler`.
 3. Hace una clasificacion documental neutral con Amazon Bedrock usando `converse`.
 4. Aplica guardrails por pais, nombre de archivo y tipo documental detectado.
 5. Valida si el documento coincide con el `slot` esperado para el pais indicado.
-6. Devuelve un JSON listo para integrar con el frontend.
+6. Para Venezuela juridico, cuando el slot es `documentoConstitucion`, extrae texto con Amazon Textract
+   usando S3 como almacenamiento temporal y solo luego usa Bedrock para estructurar posibles representantes
+   legales o miembros de junta directiva desde ese OCR.
+7. Filtra en backend cualquier representante que no tenga evidencia en el texto OCR.
+8. Devuelve un JSON listo para integrar con el frontend.
 
 ## Variables de entorno
 
 - `AWS_REGION`
 - `BEDROCK_MODEL_ID`
 - `MAX_FILE_BYTES` opcional, default `10485760`
+- `DOCUMENT_BUCKET` bucket S3 temporal para OCR de PDFs con Textract. Ej: `dc-files-vzla-demo`
+- `TEXTRACT_POLL_SECONDS` opcional, default `2`
+- `TEXTRACT_MAX_WAIT_SECONDS` opcional, default `90`
 
 Modelo usado en la demo:
 
@@ -60,7 +67,11 @@ Modelo usado en la demo:
 
 ## Notas
 
-- Esta version no usa Textract ni S3; toda la validación se resuelve directamente con Bedrock.
+- La clasificacion y validacion general siguen usando Bedrock. La extraccion de representantes/junta directiva
+  desde actas venezolanas usa Textract + S3 para OCR y Bedrock solo estructura texto ya extraido.
+- El bucket S3 debe permanecer privado, con ACLs deshabilitadas y bloqueo de acceso publico.
+- La Lambda necesita permisos para `s3:PutObject`, `s3:DeleteObject`, `textract:StartDocumentTextDetection`,
+  `textract:GetDocumentTextDetection` y `textract:DetectDocumentText`.
 - Soporta estos paises en el handler actual: `ve`, `pe`, `bo`, `mx`, `ar`, `usa`.
 - Soporta slots canonicos y aliases legacy:
   - `documentoFiscal` (`rif`, `ruc`, `nit`, `rfc`, `cuit`)
