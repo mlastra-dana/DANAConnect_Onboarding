@@ -147,6 +147,9 @@ function stripTransientDocuments(state: OnboardingState): OnboardingState {
         }
       }
     ],
-    biometrics: createEmptyBiometric()
+    submission:
+      state.submission.status === 'loading' || state.submission.status === 'error'
+        ? { status: 'idle' }
+        : state.submission
   };
 }

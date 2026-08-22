@@ -186,7 +186,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
           <Button variant="ghost">Volver</Button>
         </Link>
         <Button onClick={() => void submit()} disabled={!canSubmit || !recipientEmailIsValid || state.submission.status === 'loading'}>
-          {state.submission.status === 'loading' ? 'Enviando...' : 'Enviar onboarding'}
+          {state.submission.status === 'loading' ? 'Enviando...' : 'Enviar'}
         </Button>
       </div>
     </div>

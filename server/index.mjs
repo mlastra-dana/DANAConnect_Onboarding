@@ -225,6 +225,13 @@ function resolveFileUploadPassword() {
   return optionalEnv('DANA_FILE_UPLOAD_PASS') || requiredEnv('DANA_SMTP_PASS');
 }
 
+function previewResponseBody(value) {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 500);
+}
+
 async function uploadFileToDanaConnect(fileItem, { idCompany }) {
   const fileName = String(fileItem.fileName || fileItem.file_name || '').trim();
   const contentType = String(fileItem.contentType || fileItem.content_type || 'application/octet-stream').trim();
@@ -242,6 +249,10 @@ async function uploadFileToDanaConnect(fileItem, { idCompany }) {
   const auth = Buffer.from(`${username}:${password}`).toString('base64');
   const uploadUrl = optionalEnv('DANA_FILE_UPLOAD_URL') || DEFAULT_FILE_UPLOAD_URL;
 
+  console.log(
+    `[mail-api] uploading file name="${fileName}" type="${contentType}" bytes=${bytes.length} url="${uploadUrl}"`
+  );
+
   const response = await fetch(uploadUrl, {
     method: 'POST',
     headers: {
@@ -253,19 +264,28 @@ async function uploadFileToDanaConnect(fileItem, { idCompany }) {
   });
 
   const responseText = await response.text();
+  const responseContentType = response.headers.get('content-type') || 'unknown';
   let parsed;
   try {
     parsed = JSON.parse(responseText);
   } catch {
+    console.error(
+      `[mail-api] file upload non-json name="${fileName}" status=${response.status} contentType="${responseContentType}" body="${previewResponseBody(responseText)}"`
+    );
     throw new Error(`File Upload API devolvio una respuesta no JSON para ${fileName}`);
   }
 
   if (!response.ok) {
+    console.error(
+      `[mail-api] file upload rejected name="${fileName}" status=${response.status} contentType="${responseContentType}" body=${JSON.stringify(parsed).slice(0, 500)}`
+    );
     throw new Error(parsed.error || parsed.message || `File Upload API rechazo ${fileName}`);
   }
 
   const fileID = String(parsed.fileID || '').trim();
   if (!fileID) throw new Error(`File Upload API no devolvio fileID para ${fileName}`);
+
+  console.log(`[mail-api] file uploaded name="${fileName}" fileID="${fileID}"`);
 
   return {
     fileID,
@@ -329,6 +349,7 @@ app.post('/api/send-email', async (req, res) => {
     const config = getMailConfig();
 
     const { subject, body, data, files } = req.body ?? {};
+    console.log(`[mail-api] send-email requested files=${Array.isArray(files) ? files.length : 0}`);
 
     if (!subject) {
       res.status(400).json({ ok: false, error: 'subject es requerido' });
@@ -373,6 +394,7 @@ app.post('/api/send-email', async (req, res) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error desconocido al enviar correo';
+    console.error(`[mail-api] send-email failed: ${message}`);
     res.status(500).json({ ok: false, error: message });
   }
 });

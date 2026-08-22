@@ -120,7 +120,7 @@ function OnboardingContent({
       {stepKey === 'documents' ? <DocumentsPage companyId={companyId} /> : null}
       {stepKey === 'biometria' ? <BiometricPage companyId={companyId} /> : null}
       {stepKey === 'review' ? <ReviewPage companyId={companyId} /> : null}
-      {stepKey === 'success' ? <SuccessPage companyId={companyId} /> : null}
+      {stepKey === 'success' ? <SuccessPage /> : null}
       {stepKey === 'notfound' ? (
         <Card className="text-center">
           <h1 className="text-xl font-bold text-dark">Paso no encontrado</h1>
