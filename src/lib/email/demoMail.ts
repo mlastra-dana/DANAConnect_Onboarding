@@ -268,7 +268,7 @@ function buildConversationData({
         .trim()
     : '';
 
-  return {
+  const data: Record<string, string> = {
     EMAIL: recipientEmail,
     NOMBRE_CLIENTE: fullName || state.tenant.name,
     NOMBRE_EMPRESA: state.tenant.name,
@@ -284,6 +284,24 @@ function buildConversationData({
       '',
     REPRESENTANTE_LEGAL: representativeName || statusLabel(state.representatives[0].document.validation.status)
   };
+
+  if (state.personType === 'natural') {
+    addConversationField(data, 'NOMBRES', state.personalInfo.firstName);
+    addConversationField(data, 'APELLIDOS', state.personalInfo.lastName);
+    addConversationField(data, 'NUMERO_IDENTIFICACION', state.personalInfo.documentNumber);
+  }
+
+  return data;
+}
+
+function addConversationField(data: Record<string, string>, field: string, value?: string) {
+  const cleaned = cleanDanaFieldValue(value ?? '');
+  if (!cleaned) return;
+  data[field] = cleaned;
+}
+
+function cleanDanaFieldValue(value: string) {
+  return value.replace(/\s+/g, ' ').trim();
 }
 
 function statusLabel(status: string) {

@@ -32,7 +32,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
   async function submit() {
     setErrorToast(null);
     if (!recipientEmailIsValid) {
-      setErrorToast('Ingrese un correo destino válido.');
+      setErrorToast('Ingrese un correo electrónico válido.');
       return;
     }
     setSubmission({ status: 'loading' });
@@ -157,9 +157,8 @@ export function ReviewPage({ companyId }: { companyId: string }) {
       </Card>
 
       <Card>
-        <h2 className="text-lg font-semibold text-dark">Destino de notificación</h2>
-        <label className="mt-4 block space-y-2">
-          <span className="text-sm font-medium text-dark">Correo destino</span>
+        <label className="block space-y-2">
+          <span className="text-sm font-medium text-dark">Correo electrónico</span>
           <input
             type="email"
             value={recipientEmail}
