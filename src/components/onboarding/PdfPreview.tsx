@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { FileText } from 'lucide-react';
 import { renderPdfPageToCanvas } from '../../lib/pdf/pdfUtils';
 
 export function PdfPreview({ file }: { file: File }) {
@@ -15,8 +16,7 @@ export function PdfPreview({ file }: { file: File }) {
         containerRef.current.appendChild(canvas);
       })
       .catch(() => {
-        if (!containerRef.current) return;
-        containerRef.current.innerHTML = '<p class="text-sm text-red-600">No se pudo renderizar el PDF.</p>';
+        // La validacion del documento no depende de la miniatura local.
       });
 
     return () => {
@@ -24,5 +24,13 @@ export function PdfPreview({ file }: { file: File }) {
     };
   }, [file]);
 
-  return <div ref={containerRef} aria-label="Vista previa PDF" className="overflow-hidden rounded-lg border border-borderLight bg-surface" />;
+  return (
+    <div ref={containerRef} aria-label="Vista previa PDF" className="overflow-hidden rounded-lg border border-borderLight bg-surface">
+      <div className="flex min-h-36 flex-col items-center justify-center gap-2 px-4 py-6 text-center text-sm text-grayText">
+        <FileText className="h-8 w-8 text-primary" />
+        <span className="font-medium text-dark">PDF cargado</span>
+        <span className="max-w-full truncate">{file.name}</span>
+      </div>
+    </div>
+  );
 }

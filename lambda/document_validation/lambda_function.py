@@ -475,6 +475,12 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         if len(file_bytes) > MAX_FILE_BYTES:
             return response(400, {"ok": False, "error": f"Archivo excede el maximo permitido de {MAX_FILE_BYTES} bytes"})
 
+        content_type = reconcile_content_type_with_bytes(
+            content_type=content_type,
+            file_name=file_name,
+            file_bytes=file_bytes,
+        )
+
         # 1) Clasificacion neutral: no se le dice al modelo que valide contra el slot.
         classification = run_bedrock_classification(
             file_bytes=file_bytes,
@@ -511,16 +517,23 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             return response(200, final)
 
         # 4) Validacion contextual solo si no hubo incompatibilidad clara.
-        analysis = run_bedrock_validation(
-            file_bytes=file_bytes,
-            file_name=file_name,
-            content_type=content_type,
-            country=country,
-            slot=slot,
-            raw_slot=raw_slot,
-            classification=classification,
-            expected_legal_representatives=expected_legal_representatives,
-        )
+        # Para actas venezolanas evitamos una segunda lectura completa del PDF con Bedrock:
+        # Textract hara la lectura pesada y Bedrock solo estructurara el OCR.
+        if country == "ve" and slot == "documentoConstitucion" and normalize_detected_document_type(
+            classification.get("detected_document_type")
+        ) == "documentoConstitucion":
+            analysis = build_constitution_analysis_from_classification(classification)
+        else:
+            analysis = run_bedrock_validation(
+                file_bytes=file_bytes,
+                file_name=file_name,
+                content_type=content_type,
+                country=country,
+                slot=slot,
+                raw_slot=raw_slot,
+                classification=classification,
+                expected_legal_representatives=expected_legal_representatives,
+            )
 
         # 5) Conservamos la clasificacion neutral como fuente de verdad para el tipo documental.
         analysis["detected_document_type"] = normalize_detected_document_type(
@@ -986,7 +999,48 @@ def normalize_text_for_matching(value: Any) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def mime_to_bedrock_format(content_type: str, file_name: str) -> str:
+def detect_file_format_from_bytes(file_bytes: bytes) -> str:
+    if file_bytes.startswith(b"%PDF"):
+        return "pdf"
+    if file_bytes.startswith(b"\xff\xd8\xff"):
+        return "jpeg"
+    if file_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if file_bytes.startswith(b"RIFF") and file_bytes[8:12] == b"WEBP":
+        return "webp"
+    return ""
+
+
+def content_type_for_detected_format(file_format: str, fallback: str) -> str:
+    return {
+        "pdf": "application/pdf",
+        "jpeg": "image/jpeg",
+        "png": "image/png",
+        "webp": "image/webp",
+    }.get(file_format, fallback)
+
+
+def reconcile_content_type_with_bytes(*, content_type: str, file_name: str, file_bytes: bytes) -> str:
+    detected_format = detect_file_format_from_bytes(file_bytes)
+    if not detected_format:
+        return content_type
+
+    detected_content_type = content_type_for_detected_format(detected_format, content_type)
+    if detected_content_type != content_type:
+        LOGGER.info(
+            "content_type_corrected file=%s received=%s detected=%s",
+            file_name,
+            content_type,
+            detected_content_type,
+        )
+    return detected_content_type
+
+
+def mime_to_bedrock_format(content_type: str, file_name: str, file_bytes: bytes) -> str:
+    detected_format = detect_file_format_from_bytes(file_bytes)
+    if detected_format:
+        return detected_format
+
     if content_type == "application/pdf" or file_name.lower().endswith(".pdf"):
         return "pdf"
     if content_type == "image/png":
@@ -1019,7 +1073,7 @@ def build_bedrock_user_content(
         {"text": prompt},
         {
             "image": {
-                "format": mime_to_bedrock_format(content_type, file_name),
+                "format": mime_to_bedrock_format(content_type, file_name, file_bytes),
                 "source": {"bytes": file_bytes},
             }
         },
@@ -1172,6 +1226,45 @@ def run_bedrock_validation(
     parsed = parse_json_from_text(text)
     parsed["_raw_model_text"] = text
     return parsed
+
+
+def build_constitution_analysis_from_classification(classification: Dict[str, Any]) -> Dict[str, Any]:
+    confidence = normalize_confidence(classification.get("confidence"))
+    keywords = normalize_string_list(classification.get("keywords_found"))
+    summary = str(classification.get("summary") or "").strip()
+    if not summary:
+        summary = "El documento parece corresponder a un Registro Mercantil o Acta Constitutiva."
+
+    status = "valid" if confidence >= 0.70 else "warning"
+    return {
+        "status": status,
+        "detected_document_type": "documentoConstitucion",
+        "detected_country": normalize_detected_country(classification.get("detected_country")),
+        "document_type_match": True,
+        "confidence": max(confidence, 0.70),
+        "summary": summary,
+        "warnings": [] if status == "valid" else [
+            "El documento parece corresponder al tipo solicitado, pero la clasificacion requiere revision por confianza media."
+        ],
+        "reasons": [
+            "El clasificador detecto un documento constitutivo o registral venezolano.",
+            "La extraccion de representantes se realiza sobre texto OCR de Textract.",
+        ],
+        "keywords_found": keywords,
+        "extractedIdentity": {
+            "firstName": "",
+            "lastName": "",
+            "documentNumber": "",
+            "rawText": "",
+        },
+        "extractedLegalRepresentatives": [],
+        "legalRepresentativeMatch": None,
+        "matchedRepresentativeRole": "",
+        "matchedRepresentativeEvidence": "",
+        "visibleIdentityEvidence": "",
+        "_raw_classifier_text": classification.get("_raw_classifier_text", ""),
+        "_raw_model_text": "",
+    }
 
 
 def run_legal_representative_extraction(
