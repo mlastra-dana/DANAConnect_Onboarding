@@ -33,7 +33,7 @@ API local de correo: `http://localhost:8787`
   - `usa`: licencia de conducir para persona natural, frente y reverso
 - Mensajes al usuario simplificados: éxito `Documento aceptado.` y errores de una sola línea.
 - Pantalla final no técnica con checklist de recibidos y acciones `Copiar resumen`, `Abrir correo`, `Volver al inicio`.
-- Correo amigable vía `mailto` a `mlastra@danaconnect.com` con resumen y link del portal.
+- Envío final vía backend usando DANAConnect Cloud SMTP con activación de conversación por `StartConversationWithData`.
 
 ## Stack
 
@@ -65,4 +65,85 @@ Variable de entorno recomendada en Amplify:
 
 ```bash
 VITE_DOCUMENT_VALIDATION_URL=https://uou6hka7wmyfgtirokika5bkme0wfwzj.lambda-url.us-east-1.on.aws/
+VITE_EMAIL_SEND_URL=https://uou6hka7wmyfgtirokika5bkme0wfwzj.lambda-url.us-east-1.on.aws/
 ```
+
+## Envío por DANAConnect Cloud SMTP
+
+El backend local expone `POST /api/send-email` para desarrollo. En producción, el mismo `lambda_function.py` desplegado en AWS puede enviar el correo si recibe `action: "sendEmail"`. Para activar una conversación, el cuerpo SMTP se arma como una sola línea:
+
+```text
+command=StartConversationWithData&companyName=...&country=...&summary=...
+```
+
+El destinatario se arma como `DANA_ID_CONVERSATION@DANA_ID_COMPANY.email-platform.com`, salvo que se defina `DANA_SMTP_TO`.
+
+Variables requeridas:
+
+```bash
+DANA_ID_COMPANY=your_id_company
+DANA_ID_CONVERSATION=your_conversation_id
+DANA_SMTP_LOGIN=your_danaconnect_login
+DANA_SMTP_PASS=your_danaconnect_password
+DANA_FROM=danademo_comercial@danaconnect.com
+```
+
+Opcionales:
+
+- `DANA_SMTP_USER`: úsalo si ya tienes el usuario completo, por ejemplo `smtp@idcompany`.
+- `DANA_SMTP_TO`: destinatario completo, por ejemplo `577010@simpletv.email-platform.com`.
+- `DANA_CC` / `DANA_BCC`: copias para pruebas internas.
+- `DANA_SMTP_HOST`: default `cloudsmtp.danaconnect.com`.
+- `DANA_SMTP_PORT`: default `587`.
+- `DANA_SMTP_REQUIRE_TLS`: default `true`.
+- `DANA_STATIC_DATA`: campos fijos requeridos por la conversación que no salen del portal.
+- `DANA_FIELD_MAP`: mapea nombres locales a códigos reales de campos DANAConnect.
+
+Para revisar el comando sin enviar SMTP, usa `POST /api/send-email/preview` con el mismo payload de `/api/send-email`.
+
+En AWS Lambda configura estas variables de entorno:
+
+```bash
+DANA_ID_COMPANY=venturestars
+DANA_ID_CONVERSATION=601944
+DANA_SMTP_LOGIN=mlastra
+DANA_SMTP_PASS=<secreto>
+DANA_FROM=danademo_comercial@danaconnect.com
+DANA_SMTP_TO=601944@venturestars.email-platform.com
+DANA_SMTP_MODE=conversation
+```
+
+El frontend llama a `VITE_EMAIL_SEND_URL` con:
+
+```json
+{
+  "action": "sendEmail",
+  "subject": "...",
+  "data": {
+    "EMAIL": "destino@empresa.com",
+    "NOMBRE_CLIENTE": "...",
+    "NOMBRE_EMPRESA": "...",
+    "PAIS": "...",
+    "REPRESENTANTE_LEGAL": "...",
+    "RIF": "...",
+    "ACTA_CONSTITUTIVA": "...",
+    "CEDULA_IDENTIDAD": "...",
+    "TIPO_PERSONA": "..."
+  }
+}
+```
+
+### Carga de documentos antes de iniciar conversación
+
+La misma Lambda también sube los archivos recibidos en `files` usando el File Upload API de DANAConnect antes de enviar el SMTP. El API devuelve `fileID` (`s3://...`) y la Lambda lo coloca en el campo de conversación correspondiente.
+
+Variables opcionales para File Upload:
+
+```bash
+DANA_FILE_UPLOAD_URL=https://appserv.danaconnect.com/dana/conversation/http/rest/file/upload
+DANA_FILE_UPLOAD_USER=mlastra@venturestars
+DANA_FILE_UPLOAD_PASS=<secreto>
+DANA_FILE_FIELD_MAP={"rif":"RIF","registroMercantil":"ACTA_CONSTITUTIVA","cedulaRepresentante":"CEDULA_IDENTIDAD","documentoIdentidad":"CEDULA_IDENTIDAD","licenciaConducirFrente":"LICENCIA_FRONT","licenciaConducirReverso":"LICENCIA_BACK"}
+```
+
+Si `DANA_FILE_UPLOAD_USER` / `DANA_FILE_UPLOAD_PASS` no se configuran, la Lambda usa las mismas credenciales SMTP. Los campos destino deben tener longitud suficiente para guardar el `fileID` (`s3://...`).

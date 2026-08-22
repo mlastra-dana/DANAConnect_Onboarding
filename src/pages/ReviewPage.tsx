@@ -5,13 +5,14 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/ui/Badge';
 import { Toast } from '../components/ui/Toast';
-import { buildDemoEmail, openMailto, sendEmailViaApi } from '../lib/email/demoMail';
+import { buildDemoEmail, sendEmailViaApi } from '../lib/email/demoMail';
 import { getDocumentLabel, getDocumentOrder, getFlowConfig, requiresRepresentatives } from '../config/onboardingCountries';
 import { clearState } from '../app/state';
 
 export function ReviewPage({ companyId }: { companyId: string }) {
   const { state, canSubmit, setSubmission } = useOnboarding();
   const [errorToast, setErrorToast] = useState<string | null>(null);
+  const [recipientEmail, setRecipientEmail] = useState('');
   const navigate = useNavigate();
   const representative1 = state.representatives.find((rep) => rep.id === 1)!;
   const representative2 = state.representatives.find((rep) => rep.id === 2)!;
@@ -25,24 +26,23 @@ export function ReviewPage({ companyId }: { companyId: string }) {
   ];
   const receivedDocumentsCount = requiredDocuments.filter(Boolean).length;
   const requiredDocumentsCount = requiredDocuments.length;
+  const normalizedRecipientEmail = recipientEmail.trim();
+  const recipientEmailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedRecipientEmail);
 
   async function submit() {
     setErrorToast(null);
+    if (!recipientEmailIsValid) {
+      setErrorToast('Ingrese un correo destino válido.');
+      return;
+    }
     setSubmission({ status: 'loading' });
 
     try {
       const externalTrigger = new URLSearchParams(window.location.search).get('externalTrigger');
-      const email = buildDemoEmail(state, companyId, externalTrigger);
-      const sendResult = await sendEmailViaApi(email.subject, email.body);
-      const shouldFallbackToMailto =
-        !sendResult.ok &&
-        Boolean(sendResult.error) &&
-        (sendResult.error?.includes('Falta variable de entorno') ||
-          sendResult.error?.includes('No se pudo conectar con el servicio de envío.'));
+      const email = buildDemoEmail(state, companyId, externalTrigger, normalizedRecipientEmail);
+      const sendResult = await sendEmailViaApi(email.subject, email.body, email.data, email.files);
 
-      if (shouldFallbackToMailto) {
-        openMailto(email.subject, email.body);
-      } else if (!sendResult.ok) {
+      if (!sendResult.ok) {
         setSubmission({ status: 'error', error: sendResult.error ?? 'No se pudo completar el envío.' });
         setErrorToast(sendResult.error ?? 'No se pudo completar el envío.');
         return;
@@ -54,14 +54,14 @@ export function ReviewPage({ companyId }: { companyId: string }) {
         submittedAt: email.submittedAtISO,
         emailSubject: email.subject,
         emailBody: email.body,
-        emailTo: sendResult.to ?? 'mlastra@danaconnect.com (mailto)'
+        emailTo: sendResult.to ?? 'DANAConnect Cloud SMTP'
       });
 
       const payload = {
         companyId,
         registrationId: email.trackingId,
         submittedAt: email.submittedAtISO,
-        to: sendResult.to ?? 'mlastra@danaconnect.com (mailto)',
+        to: sendResult.to ?? 'DANAConnect Cloud SMTP',
         documents: state.documents,
         biometrics: state.biometrics
       };
@@ -156,11 +156,25 @@ export function ReviewPage({ companyId }: { companyId: string }) {
         </ul>
       </Card>
 
+      <Card>
+        <h2 className="text-lg font-semibold text-dark">Destino de notificación</h2>
+        <label className="mt-4 block space-y-2">
+          <span className="text-sm font-medium text-dark">Correo destino</span>
+          <input
+            type="email"
+            value={recipientEmail}
+            onChange={(event) => setRecipientEmail(event.target.value)}
+            className="w-full rounded-lg border border-borderLight px-3 py-2.5 text-sm text-dark outline-none transition-colors focus:border-primary"
+            placeholder="correo@empresa.com"
+          />
+        </label>
+      </Card>
+
       <div className="flex flex-wrap justify-between gap-3">
         <Link to={`/onboarding/${companyId}/biometria`}>
           <Button variant="ghost">Volver</Button>
         </Link>
-        <Button onClick={() => void submit()} disabled={!canSubmit || state.submission.status === 'loading'}>
+        <Button onClick={() => void submit()} disabled={!canSubmit || !recipientEmailIsValid || state.submission.status === 'loading'}>
           {state.submission.status === 'loading' ? 'Enviando...' : 'Enviar onboarding'}
         </Button>
       </div>

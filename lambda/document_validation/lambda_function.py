@@ -1,9 +1,14 @@
 import base64
+import smtplib
 import json
 import logging
 import os
 import re
+import uuid
+from email.message import EmailMessage
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 import boto3
 from botocore.config import Config
@@ -15,6 +20,28 @@ LOGGER.setLevel(logging.INFO)
 AWS_REGION = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-1"
 BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
 MAX_FILE_BYTES = int(os.environ.get("MAX_FILE_BYTES", str(10 * 1024 * 1024)))
+DEFAULT_SMTP_HOST = "cloudsmtp.danaconnect.com"
+DEFAULT_SMTP_PORT = 587
+DEFAULT_FILE_UPLOAD_URL = "https://appserv.danaconnect.com/dana/conversation/http/rest/file/upload"
+DEFAULT_FIELD_LIMITS = {
+    "ACTA_CONSTITUTIVA": 50,
+    "CEDULA_IDENTIDAD": 10,
+    "EMAIL": 100,
+    "NOMBRE_CLIENTE": 100,
+    "NOMBRE_EMPRESA": 100,
+    "PAIS": 50,
+    "REPRESENTANTE_LEGAL": 100,
+    "RIF": 10,
+    "TIPO_PERSONA": 100,
+}
+DEFAULT_FILE_FIELD_MAP = {
+    "rif": "RIF",
+    "registroMercantil": "ACTA_CONSTITUTIVA",
+    "cedulaRepresentante": "CEDULA_IDENTIDAD",
+    "documentoIdentidad": "CEDULA_IDENTIDAD",
+    "licenciaConducirFrente": "LICENCIA_FRONT",
+    "licenciaConducirReverso": "LICENCIA_BACK",
+}
 
 BEDROCK_CLIENT = boto3.client(
     "bedrock-runtime",
@@ -400,6 +427,12 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
     try:
         payload = parse_json_body(event)
+        action = str(payload.get("action") or "").strip()
+        if action in {"sendEmail", "send_email"}:
+            return response(200, send_cloud_smtp_email(payload))
+        if action in {"previewEmail", "preview_email"}:
+            return response(200, preview_cloud_smtp_email(payload))
+
         file_name = require_string(payload, "file_name")
         content_type = normalize_content_type(require_string(payload, "content_type"))
         file_base64 = require_string(payload, "file_base64")
@@ -566,6 +599,288 @@ def require_string(payload: Dict[str, Any], key: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{key} es requerido")
     return value.strip()
+
+
+def optional_env(name: str) -> Optional[str]:
+    value = os.environ.get(name)
+    if value and value.strip():
+        return value.strip()
+    return None
+
+
+def required_env(name: str) -> str:
+    value = optional_env(name)
+    if not value:
+        raise ValueError(f"Falta variable de entorno: {name}")
+    return value
+
+
+def parse_json_object_env(name: str) -> Dict[str, Any]:
+    raw = optional_env(name)
+    if not raw:
+        return {}
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{name} invalido: JSON invalido") from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"{name} debe ser un objeto JSON")
+    return value
+
+
+def normalize_field_name(value: Any) -> str:
+    name = str(value or "").strip()
+    name = (
+        name.replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+        .replace("ñ", "n")
+        .replace("Á", "A")
+        .replace("É", "E")
+        .replace("Í", "I")
+        .replace("Ó", "O")
+        .replace("Ú", "U")
+        .replace("Ñ", "N")
+    )
+    return re.sub(r"[^A-Za-z0-9_]", "", name)
+
+
+def normalize_field_value(name: str, value: Any) -> str:
+    text = str(value or "").strip()
+    if text.startswith("s3://"):
+        return text
+    limit = DEFAULT_FIELD_LIMITS.get(name)
+    if limit:
+        return text[:limit]
+    return text
+
+
+def resolve_smtp_user(id_company: str) -> str:
+    explicit_user = optional_env("DANA_SMTP_USER")
+    if explicit_user:
+        return explicit_user
+    login = required_env("DANA_SMTP_LOGIN")
+    return f"{login}@{id_company}"
+
+
+def resolve_smtp_recipient(id_company: str) -> str:
+    explicit_to = optional_env("DANA_SMTP_TO")
+    if explicit_to:
+        return explicit_to
+    id_conversation = required_env("DANA_ID_CONVERSATION")
+    return f"{id_conversation}@{id_company}.email-platform.com"
+
+
+def build_start_conversation_with_data(data: Any) -> str:
+    if not isinstance(data, dict):
+        raise ValueError("data es requerido para activar conversaciones por SMTP")
+
+    field_map = parse_json_object_env("DANA_FIELD_MAP")
+    static_data = parse_json_object_env("DANA_STATIC_DATA")
+    merged_data = {**static_data, **data}
+    params: Dict[str, str] = {"command": "StartConversationWithData"}
+
+    for key, value in merged_data.items():
+        if value is None:
+            continue
+        field_name = normalize_field_name(field_map.get(key, key))
+        if not field_name:
+            continue
+        params[field_name] = normalize_field_value(field_name, value)
+
+    if len(params) <= 1:
+        raise ValueError("data no contiene campos para enviar a DANAConnect")
+
+    return urlencode(params)
+
+
+def resolve_file_field(document_type: str, requested_field: str) -> str:
+    env_map = parse_json_object_env("DANA_FILE_FIELD_MAP")
+    mapped = env_map.get(document_type) or requested_field or DEFAULT_FILE_FIELD_MAP.get(document_type)
+    return normalize_field_name(mapped)
+
+
+def resolve_file_upload_user(id_company: str) -> str:
+    explicit_user = optional_env("DANA_FILE_UPLOAD_USER")
+    if explicit_user:
+        return explicit_user
+    return resolve_smtp_user(id_company)
+
+
+def resolve_file_upload_password() -> str:
+    return optional_env("DANA_FILE_UPLOAD_PASS") or required_env("DANA_SMTP_PASS")
+
+
+def encode_multipart_file(*, field_name: str, file_name: str, content_type: str, file_bytes: bytes) -> Tuple[bytes, str]:
+    boundary = f"----DanaConnectBoundary{uuid.uuid4().hex}"
+    safe_file_name = file_name.replace('"', "")
+    parts = [
+        f"--{boundary}\r\n".encode("utf-8"),
+        f'Content-Disposition: form-data; name="{field_name}"; filename="{safe_file_name}"\r\n'.encode("utf-8"),
+        f"Content-Type: {content_type or 'application/octet-stream'}\r\n\r\n".encode("utf-8"),
+        file_bytes,
+        b"\r\n",
+        f"--{boundary}--\r\n".encode("utf-8"),
+    ]
+    return b"".join(parts), boundary
+
+
+def upload_file_to_danaconnect(file_item: Dict[str, Any], *, id_company: str) -> Dict[str, Any]:
+    file_name = str(file_item.get("fileName") or file_item.get("file_name") or "").strip()
+    content_type = str(file_item.get("contentType") or file_item.get("content_type") or "application/octet-stream").strip()
+    file_base64 = str(file_item.get("fileBase64") or file_item.get("file_base64") or "").strip()
+
+    if not file_name:
+        raise ValueError("Cada archivo debe incluir fileName")
+    if not file_base64:
+        raise ValueError(f"El archivo {file_name} no incluye fileBase64")
+
+    try:
+        file_bytes = base64.b64decode(file_base64, validate=True)
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"fileBase64 invalido para {file_name}") from exc
+
+    body, boundary = encode_multipart_file(
+        field_name="file",
+        file_name=file_name,
+        content_type=content_type,
+        file_bytes=file_bytes,
+    )
+
+    upload_url = optional_env("DANA_FILE_UPLOAD_URL") or DEFAULT_FILE_UPLOAD_URL
+    username = resolve_file_upload_user(id_company)
+    password = resolve_file_upload_password()
+    auth = base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")
+
+    request = Request(
+        upload_url,
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Basic {auth}",
+            "Accept": "application/json",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "X-DEBUG": "1",
+        },
+    )
+
+    with urlopen(request, timeout=int(optional_env("DANA_FILE_UPLOAD_TIMEOUT_SECONDS") or 30)) as result:
+        response_body = result.read().decode("utf-8")
+
+    parsed = json.loads(response_body)
+    file_id = str(parsed.get("fileID") or "").strip()
+    if not file_id:
+        raise ValueError(f"File Upload API no devolvio fileID para {file_name}")
+
+    return {
+        "fileID": file_id,
+        "fileName": parsed.get("fileName") or file_name,
+        "idCompany": parsed.get("idCompany") or id_company,
+        "requestID": parsed.get("requestID"),
+    }
+
+
+def upload_files_and_merge_data(payload: Dict[str, Any], *, id_company: str) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    data = dict(payload.get("data") or {})
+    files = payload.get("files")
+    uploaded_files: List[Dict[str, Any]] = []
+
+    if not isinstance(files, list) or not files:
+        return data, uploaded_files
+
+    for item in files:
+        if not isinstance(item, dict):
+            continue
+        document_type = str(item.get("documentType") or item.get("document_type") or "").strip()
+        requested_field = str(item.get("field") or "").strip()
+        field_name = resolve_file_field(document_type, requested_field)
+        if not field_name:
+            continue
+
+        uploaded = upload_file_to_danaconnect(item, id_company=id_company)
+        data[field_name] = uploaded["fileID"]
+        uploaded_files.append({
+            "documentType": document_type,
+            "field": field_name,
+            **uploaded,
+        })
+
+    return data, uploaded_files
+
+
+def get_cloud_smtp_config(*, require_password: bool = True) -> Dict[str, Any]:
+    id_company = required_env("DANA_ID_COMPANY")
+    return {
+        "host": optional_env("DANA_SMTP_HOST") or DEFAULT_SMTP_HOST,
+        "port": int(optional_env("DANA_SMTP_PORT") or DEFAULT_SMTP_PORT),
+        "user": resolve_smtp_user(id_company),
+        "password": required_env("DANA_SMTP_PASS") if require_password else optional_env("DANA_SMTP_PASS"),
+        "from": required_env("DANA_FROM"),
+        "to": resolve_smtp_recipient(id_company),
+        "cc": optional_env("DANA_CC"),
+        "bcc": optional_env("DANA_BCC"),
+        "mode": (optional_env("DANA_SMTP_MODE") or "conversation").lower(),
+    }
+
+
+def build_cloud_smtp_body(payload: Dict[str, Any], mode: str) -> str:
+    if mode == "plain":
+        return str(payload.get("body") or "").strip()
+    return build_start_conversation_with_data(payload.get("data"))
+
+
+def preview_cloud_smtp_email(payload: Dict[str, Any]) -> Dict[str, Any]:
+    config = get_cloud_smtp_config(require_password=False)
+    subject = str(payload.get("subject") or "")
+    body = build_cloud_smtp_body(payload, config["mode"])
+    return {
+        "ok": True,
+        "to": config["to"],
+        "from": config["from"],
+        "cc": config["cc"],
+        "bcc": config["bcc"],
+        "subject": subject,
+        "mode": config["mode"],
+        "body": body,
+    }
+
+
+def send_cloud_smtp_email(payload: Dict[str, Any]) -> Dict[str, Any]:
+    config = get_cloud_smtp_config(require_password=True)
+    subject = str(payload.get("subject") or "").strip()
+    if not subject:
+        raise ValueError("subject es requerido")
+
+    merged_data, uploaded_files = upload_files_and_merge_data(payload, id_company=required_env("DANA_ID_COMPANY"))
+    payload = {**payload, "data": merged_data}
+    body = build_cloud_smtp_body(payload, config["mode"])
+    if not body:
+        raise ValueError("body es requerido")
+
+    message = EmailMessage()
+    message["From"] = config["from"]
+    message["To"] = config["to"]
+    if config["cc"]:
+        message["Cc"] = config["cc"]
+    if config["bcc"]:
+        message["Bcc"] = config["bcc"]
+    message["Subject"] = subject
+    message.set_content(body)
+
+    recipients = [config["to"]]
+    if config["cc"]:
+        recipients.extend([item.strip() for item in config["cc"].split(",") if item.strip()])
+    if config["bcc"]:
+        recipients.extend([item.strip() for item in config["bcc"].split(",") if item.strip()])
+
+    with smtplib.SMTP(config["host"], config["port"], timeout=int(optional_env("DANA_SMTP_TIMEOUT_SECONDS") or 15)) as smtp:
+        smtp.starttls()
+        smtp.login(config["user"], config["password"])
+        smtp.send_message(message, to_addrs=recipients)
+
+    return {"ok": True, "to": config["to"], "mode": config["mode"], "uploadedFiles": uploaded_files}
 
 
 def normalize_country(value: Any) -> str:

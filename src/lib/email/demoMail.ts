@@ -6,16 +6,30 @@ export type DemoEmailPayload = {
   submittedAtISO: string;
   subject: string;
   body: string;
+  data: Record<string, string>;
+  files: Array<{
+    field: string;
+    documentType: string;
+    fileName: string;
+    contentType: string;
+    fileBase64: string;
+  }>;
 };
 
 export type SendEmailResult = {
   ok: boolean;
   to?: string;
   messageId?: string;
+  mode?: string;
   error?: string;
 };
 
-export function buildDemoEmail(state: OnboardingState, companyId: string, externalTrigger?: string | null): DemoEmailPayload {
+export function buildDemoEmail(
+  state: OnboardingState,
+  companyId: string,
+  externalTrigger?: string | null,
+  recipientEmail?: string
+): DemoEmailPayload {
   const trackingId = crypto.randomUUID();
   const submittedAtISO = new Date().toISOString();
   const portalLink = `${window.location.origin}/onboarding/${companyId}${
@@ -63,7 +77,18 @@ export function buildDemoEmail(state: OnboardingState, companyId: string, extern
     'Gracias.'
   ].join('\n');
 
-  return { trackingId, submittedAtISO, subject, body };
+  const data = buildConversationData({
+    state,
+    companyId,
+    trackingId,
+    submittedAtISO,
+    portalLink,
+    summaryLines,
+    recipientEmail: recipientEmail ?? ''
+  });
+  const files = buildConversationFiles(state);
+
+  return { trackingId, submittedAtISO, subject, body, data, files };
 }
 
 export function buildFriendlySummaryLines(state: OnboardingState) {
@@ -123,31 +148,142 @@ export async function copyEmailToClipboard(subject: string, body: string) {
   await navigator.clipboard.writeText(content);
 }
 
-export async function sendEmailViaApi(subject: string, body: string): Promise<SendEmailResult> {
+export async function sendEmailViaApi(
+  subject: string,
+  body: string,
+  conversationData?: Record<string, string>,
+  files?: DemoEmailPayload['files']
+): Promise<SendEmailResult> {
+  const endpoint = import.meta.env.VITE_EMAIL_SEND_URL?.trim() || '/api/send-email';
+  const isLambdaEndpoint = endpoint !== '/api/send-email';
   try {
-    const response = await fetch('/api/send-email', {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ subject, body })
+      body: JSON.stringify({
+        action: isLambdaEndpoint ? 'sendEmail' : undefined,
+        subject,
+        body,
+        data: conversationData,
+        files
+      })
     });
 
-    const data = (await response.json()) as SendEmailResult;
-    if (!response.ok || !data.ok) {
+    const result = (await response.json()) as SendEmailResult;
+    if (!response.ok || !result.ok) {
       return {
         ok: false,
-        error: data.error ?? 'No se pudo enviar el correo'
+        error: result.error ?? 'No se pudo enviar el correo'
       };
     }
 
-    return data;
+    return result;
   } catch {
     return {
       ok: false,
       error: 'No se pudo conectar con el servicio de envío.'
     };
   }
+}
+
+function buildConversationFiles(state: OnboardingState): DemoEmailPayload['files'] {
+  const files: DemoEmailPayload['files'] = [];
+  const addDocument = (field: string, documentType: string, record = state.documents[documentType as keyof typeof state.documents]) => {
+    if (!record?.fileBase64 || !record.fileName) return;
+    files.push({
+      field,
+      documentType,
+      fileName: record.fileName,
+      contentType: record.fileType || inferContentType(record.fileName),
+      fileBase64: record.fileBase64
+    });
+  };
+
+  addDocument('RIF', 'rif');
+  addDocument('ACTA_CONSTITUTIVA', 'registroMercantil');
+  addDocument('CEDULA_IDENTIDAD', 'documentoIdentidad');
+  addDocument('LICENCIA_FRONT', 'licenciaConducirFrente');
+  addDocument('LICENCIA_BACK', 'licenciaConducirReverso');
+
+  const representative1 = state.representatives[0];
+  if (representative1.enabled) {
+    addDocument('CEDULA_IDENTIDAD', 'cedulaRepresentante', representative1.document);
+  }
+
+  return files;
+}
+
+function inferContentType(fileName: string) {
+  const normalized = fileName.toLowerCase();
+  if (normalized.endsWith('.pdf')) return 'application/pdf';
+  if (normalized.endsWith('.png')) return 'image/png';
+  if (normalized.endsWith('.webp')) return 'image/webp';
+  return 'image/jpeg';
+}
+
+function buildConversationData({
+  state,
+  companyId,
+  trackingId,
+  submittedAtISO,
+  portalLink,
+  summaryLines,
+  recipientEmail
+}: {
+  state: OnboardingState;
+  companyId: string;
+  trackingId: string;
+  submittedAtISO: string;
+  portalLink: string;
+  summaryLines: string[];
+  recipientEmail: string;
+}) {
+  const flow = getFlowConfig(state.country, state.personType);
+  const documentStatusByType = (type: string) => {
+    if (type === 'rif') return statusLabel(state.documents.rif.validation.status);
+    if (type === 'registroMercantil') return statusLabel(state.documents.registroMercantil.validation.status);
+    if (type === 'cedulaRepresentante') return statusLabel(state.representatives[0].document.validation.status);
+    if (type === 'documentoIdentidad') return statusLabel(state.documents.documentoIdentidad.validation.status);
+    if (type === 'licenciaConducirFrente') return statusLabel(state.documents.licenciaConducirFrente.validation.status);
+    return '';
+  };
+  const documentLabelByType = (type: string) => {
+    if (type === 'rif') return state.documents.rif.fileName || '';
+    if (type === 'registroMercantil') return state.documents.registroMercantil.fileName || '';
+    if (type === 'cedulaRepresentante') return state.representatives[0].document.fileName || '';
+    if (type === 'documentoIdentidad') return state.documents.documentoIdentidad.fileName || '';
+    if (type === 'licenciaConducirFrente') return state.documents.licenciaConducirFrente.fileName || '';
+    return '';
+  };
+  const fullName = [state.personalInfo.firstName, state.personalInfo.lastName].filter(Boolean).join(' ').trim();
+  const representativeName = state.representatives[0].document.validation.extractedIdentity
+    ? [
+        state.representatives[0].document.validation.extractedIdentity.firstName,
+        state.representatives[0].document.validation.extractedIdentity.lastName
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .trim()
+    : '';
+
+  return {
+    EMAIL: recipientEmail,
+    NOMBRE_CLIENTE: fullName || state.tenant.name,
+    NOMBRE_EMPRESA: state.tenant.name,
+    PAIS: state.country.toUpperCase(),
+    TIPO_PERSONA: flow.personTypeLabel,
+    RIF: state.personalInfo.documentNumber || documentStatusByType('rif') || '',
+    ACTA_CONSTITUTIVA: documentStatusByType('registroMercantil') || documentLabelByType('registroMercantil'),
+    CEDULA_IDENTIDAD:
+      state.personalInfo.documentNumber ||
+      documentStatusByType('cedulaRepresentante') ||
+      documentStatusByType('documentoIdentidad') ||
+      documentStatusByType('licenciaConducirFrente') ||
+      '',
+    REPRESENTANTE_LEGAL: representativeName || statusLabel(state.representatives[0].document.validation.status)
+  };
 }
 
 function statusLabel(status: string) {

@@ -79,6 +79,7 @@ export type DocumentRecord = {
   fileName?: string;
   fileType?: string;
   fileSize?: number;
+  fileBase64?: string;
   previewUrl?: string;
   validation: DocumentValidationResult;
 };

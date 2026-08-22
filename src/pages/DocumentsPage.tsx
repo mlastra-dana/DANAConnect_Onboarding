@@ -89,6 +89,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     if (previousPreview) URL.revokeObjectURL(previousPreview);
 
     const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
+    const fileBase64 = await fileToBase64(file);
     setRuntimeFiles((prev) => ({ ...prev, [key]: file }));
 
     const result = await validateDocumentFile(docType, file, state.country, (progress) => {
@@ -100,6 +101,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       fileName: file.name,
       fileSize: file.size,
       fileType: file.type,
+      fileBase64,
       previewUrl,
       validation: result
     };
@@ -151,6 +153,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     }
 
     const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
+    const fileBase64 = await fileToBase64(file);
     setRuntimeFiles((prev) => ({ ...prev, [key]: file }));
 
     const result = await validateDocumentFile(
@@ -175,6 +178,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type,
+        fileBase64,
         previewUrl,
         validation: result
       }
@@ -379,5 +383,22 @@ async function simulateUpload(onProgress: (progress: number) => void) {
       }
       onProgress(value);
     }, 35);
+  });
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      const base64 = result.includes(',') ? result.split(',', 2)[1] : result;
+      if (!base64) {
+        reject(new Error('No se pudo codificar el archivo.'));
+        return;
+      }
+      resolve(base64);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('No se pudo leer el archivo.'));
+    reader.readAsDataURL(file);
   });
 }
