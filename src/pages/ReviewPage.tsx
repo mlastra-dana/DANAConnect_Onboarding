@@ -28,9 +28,12 @@ export function ReviewPage({ companyId }: { companyId: string }) {
   const requiredDocumentsCount = requiredDocuments.length;
   const normalizedRecipientEmail = recipientEmail.trim();
   const recipientEmailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedRecipientEmail);
+  const showSubmissionError = canSubmit && state.submission.status === 'error';
 
   async function submit() {
     setErrorToast(null);
+    if (!canSubmit) return;
+
     if (!recipientEmailIsValid) {
       setErrorToast('Ingrese un correo electrónico válido.');
       return;
@@ -62,11 +65,20 @@ export function ReviewPage({ companyId }: { companyId: string }) {
         registrationId: email.trackingId,
         submittedAt: email.submittedAtISO,
         to: sendResult.to ?? 'DANAConnect Cloud SMTP',
-        documents: state.documents,
+        documents: summarizeDocuments(state.documents),
+        representatives: state.representatives.map((representative) => ({
+          id: representative.id,
+          enabled: representative.enabled,
+          document: summarizeDocument(representative.document)
+        })),
         biometrics: state.biometrics
       };
 
-      localStorage.setItem(`onboarding_submission:${companyId}:${email.trackingId}`, JSON.stringify(payload));
+      try {
+        localStorage.setItem(`onboarding_submission:${companyId}:${email.trackingId}`, JSON.stringify(payload));
+      } catch (storageError) {
+        console.warn('No se pudo guardar el comprobante local del envío.', storageError);
+      }
       clearState(companyId);
       navigate(`/onboarding/${companyId}/success`);
     } catch {
@@ -78,7 +90,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
   return (
     <div className="space-y-6">
       {errorToast ? <Toast type="error" message={errorToast} /> : null}
-      {state.submission.status === 'error' ? (
+      {showSubmissionError ? (
         <Card className="border border-[#F9C9C3] bg-errorSoft">
           <h3 className="text-base font-semibold text-red-800">No se pudo completar el envío</h3>
           <p className="mt-1 text-sm text-red-700">Revise su conexión y vuelva a intentar.</p>
@@ -177,13 +189,6 @@ export function ReviewPage({ companyId }: { companyId: string }) {
           {state.submission.status === 'loading' ? 'Enviando...' : 'Enviar onboarding'}
         </Button>
       </div>
-
-      {!canSubmit ? (
-        <Toast
-          type="error"
-          message="No puede enviar todavía: complete documentos y prueba de vida en estado válido."
-        />
-      ) : null}
     </div>
   );
 }
@@ -199,4 +204,19 @@ function biometricStatusLabel(status: 'pending' | 'processing' | 'passed' | 'fai
   if (status === 'processing') return 'Validación en curso';
   if (status === 'failed') return 'Validación fallida';
   return 'Pendiente';
+}
+
+function summarizeDocuments(documents: ReturnType<typeof useOnboarding>['state']['documents']) {
+  return Object.fromEntries(
+    Object.entries(documents).map(([type, document]) => [type, summarizeDocument(document)])
+  );
+}
+
+function summarizeDocument(document: ReturnType<typeof useOnboarding>['state']['documents'][keyof ReturnType<typeof useOnboarding>['state']['documents']]) {
+  return {
+    type: document.type,
+    fileName: document.fileName,
+    fileType: document.fileType,
+    validation: document.validation
+  };
 }

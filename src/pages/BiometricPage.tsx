@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, ScanFace, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, ScanFace } from 'lucide-react';
 import { useOnboarding } from '../app/OnboardingContext';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -9,7 +9,6 @@ import { Progress } from '../components/ui/Progress';
 import { Toast } from '../components/ui/Toast';
 
 type CameraStatus = 'idle' | 'requesting' | 'active' | 'error';
-type Gesture = 'center' | 'turn_left' | 'turn_right';
 type DetectionMode = 'auto' | 'manual';
 type GeoStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'error' | 'resolving';
 type FaceMetrics = {
@@ -18,13 +17,7 @@ type FaceMetrics = {
   area: number;
 };
 
-const GESTURE_PLAN: Gesture[] = ['center', 'turn_left', 'turn_right'];
-const GESTURE_HOLD_TARGET = 1;
-const GESTURE_LABELS: Record<Gesture, string> = {
-  center: 'Rostro centrado',
-  turn_left: 'Girar a la izquierda',
-  turn_right: 'Girar a la derecha'
-};
+const CENTER_HOLD_TARGET = 10;
 
 export function BiometricPage({ companyId }: { companyId: string }) {
   const { state, setBiometric } = useOnboarding();
@@ -37,11 +30,8 @@ export function BiometricPage({ companyId }: { companyId: string }) {
   const captureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const manualPrevFrameRef = useRef<ImageData | null>(null);
   const manualStableCounterRef = useRef(0);
-  const manualGestureCounterRef = useRef(0);
   const runningChallengeRef = useRef(false);
-  const challengeIndexRef = useRef(0);
   const holdCounterRef = useRef(0);
-  const baselineRef = useRef<FaceMetrics | null>(null);
   const missedFaceDetectionsRef = useRef(0);
   const autoStartTriedRef = useRef(false);
   const geoAutoCaptureTriedRef = useRef(false);
@@ -49,10 +39,8 @@ export function BiometricPage({ companyId }: { companyId: string }) {
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('idle');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [runningChallenge, setRunningChallenge] = useState(false);
-  const [challengeIndex, setChallengeIndex] = useState(0);
   const [holdCounter, setHoldCounter] = useState(0);
   const [progress, setProgress] = useState(0);
-  const [baseline, setBaseline] = useState<FaceMetrics | null>(null);
   const [lastMetrics, setLastMetrics] = useState<FaceMetrics | null>(null);
   const [detectionMode, setDetectionMode] = useState<DetectionMode>('auto');
   const [manualHint, setManualHint] = useState<string | null>(null);
@@ -60,30 +48,23 @@ export function BiometricPage({ companyId }: { companyId: string }) {
   const [geo, setGeo] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [geoAddress, setGeoAddress] = useState<string | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
-  const [biometricConsentAccepted, setBiometricConsentAccepted] = useState(false);
-  const [completedGestures, setCompletedGestures] = useState<Record<Gesture, boolean>>({
-    center: false,
-    turn_left: false,
-    turn_right: false
-  });
-
   const isPassed = current.status === 'passed';
-  const currentGesture = GESTURE_PLAN[challengeIndex] ?? null;
   const isFaceCentered = lastMetrics
-    ? Math.abs(lastMetrics.centerX - 0.5) <= 0.22 && Math.abs(lastMetrics.centerY - 0.5) <= 0.26
+    ? Math.abs(lastMetrics.centerX - 0.5) <= 0.20 && Math.abs(lastMetrics.centerY - 0.5) <= 0.24 && lastMetrics.area >= 0.06
     : false;
 
   const uiHint = useMemo(() => {
+    if (isPassed) return 'Prueba de Vida completada.';
     if (cameraStatus === 'requesting') return 'Solicitando permisos de cámara...';
     if (cameraStatus === 'error') return cameraError ?? 'No se pudo activar la cámara.';
     if (cameraStatus !== 'active') return 'Preparando cámara...';
     if (detectionMode === 'manual' && !runningChallenge && !isPassed) {
-      return 'Modo automático alterno activo: siga los gestos, el sistema valida sin capturas manuales.';
+      return 'Cámara activa. Centre su rostro dentro del óvalo para iniciar.';
     }
-    if (!runningChallenge && !isPassed) return 'Cámara activa. Pulsa "Iniciar prueba".';
-    if (isPassed) return 'Prueba de Vida completada.';
-    return gestureInstruction(currentGesture);
-  }, [cameraStatus, cameraError, runningChallenge, isPassed, currentGesture, detectionMode]);
+    if (!runningChallenge && !isPassed) return 'Cámara activa. La validación iniciará automáticamente.';
+    if (isFaceCentered) return 'Rostro centrado. Mantenga la posición unos segundos.';
+    return 'Centre su rostro dentro del óvalo.';
+  }, [cameraStatus, cameraError, runningChallenge, isPassed, detectionMode, isFaceCentered]);
 
   const circleClass = useMemo(() => {
     if (isPassed) return 'border-green-400';
@@ -92,9 +73,11 @@ export function BiometricPage({ companyId }: { companyId: string }) {
     return 'border-amber-300';
   }, [isPassed, runningChallenge, isFaceCentered]);
 
-  function markGestureCompleted(gesture: Gesture) {
-    setCompletedGestures((prev) => ({ ...prev, [gesture]: true }));
-  }
+  useEffect(() => {
+    if (current.status !== 'pending') {
+      setBiometric({ status: 'pending' });
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -115,6 +98,12 @@ export function BiometricPage({ companyId }: { companyId: string }) {
     geoAutoCaptureTriedRef.current = true;
     void captureGeolocation();
   }, [cameraStatus]);
+
+  useEffect(() => {
+    if (cameraStatus !== 'active') return;
+    if (runningChallenge || isPassed) return;
+    void startChallenge();
+  }, [cameraStatus, runningChallenge, isPassed]);
 
   async function activateCamera() {
     if (cameraStatus === 'active' || cameraStatus === 'requesting') return;
@@ -178,23 +167,13 @@ export function BiometricPage({ companyId }: { companyId: string }) {
     setBiometric({ status: 'processing' });
     setRunningChallenge(true);
     runningChallengeRef.current = true;
-    setChallengeIndex(0);
-    challengeIndexRef.current = 0;
     setHoldCounter(0);
     holdCounterRef.current = 0;
     setProgress(0);
-    setBaseline(null);
-    baselineRef.current = null;
     manualPrevFrameRef.current = null;
     manualStableCounterRef.current = 0;
-    manualGestureCounterRef.current = 0;
     missedFaceDetectionsRef.current = 0;
     setManualHint(null);
-    setCompletedGestures({
-      center: false,
-      turn_left: false,
-      turn_right: false
-    });
     if (!geo && geoStatus !== 'requesting' && geoStatus !== 'resolving') {
       void captureGeolocation();
     }
@@ -218,10 +197,11 @@ export function BiometricPage({ companyId }: { companyId: string }) {
       missedFaceDetectionsRef.current += 1;
       setHoldCounter(0);
       holdCounterRef.current = 0;
+      setProgress(0);
 
       if (missedFaceDetectionsRef.current >= 18) {
         setDetectionMode('manual');
-        setManualHint('No se detectó rostro de forma estable. Cambiamos a validación automática alterna.');
+        setManualHint('No se detectó rostro de forma estable. Mejore la iluminación y centre la cara en el óvalo.');
       }
       return;
     }
@@ -229,31 +209,21 @@ export function BiometricPage({ companyId }: { companyId: string }) {
 
     setLastMetrics(face);
 
-    if (!baselineRef.current) {
-      const looksCentered = Math.abs(face.centerX - 0.5) <= 0.22;
-      if (looksCentered) {
-        setBaseline(face);
-        baselineRef.current = face;
-      }
-      return;
-    }
-
-    const targetGesture = GESTURE_PLAN[challengeIndexRef.current];
-    const success = evaluateGesture(targetGesture, face, baselineRef.current);
-
-    if (!success) {
+    if (!isFaceInsideOval(face)) {
       setHoldCounter(0);
       holdCounterRef.current = 0;
+      setProgress(0);
       return;
     }
 
     const nextHold = holdCounterRef.current + 1;
     holdCounterRef.current = nextHold;
     setHoldCounter(nextHold);
-    if (nextHold < GESTURE_HOLD_TARGET) return;
-
-    markGestureCompleted(targetGesture);
-    completeCurrentStep();
+    const nextProgress = Math.min(100, Math.round((nextHold / CENTER_HOLD_TARGET) * 100));
+    setProgress(nextProgress);
+    if (nextHold >= CENTER_HOLD_TARGET) {
+      finalizeSuccess(100);
+    }
   }
 
   function finalizeSuccess(nextProgress: number) {
@@ -265,16 +235,11 @@ export function BiometricPage({ companyId }: { companyId: string }) {
     setProgress(nextProgress);
 
     const finalScore = Math.max(92, 96 + Math.round(Math.random() * 3));
-    setCompletedGestures({
-      center: true,
-      turn_left: true,
-      turn_right: true
-    });
     setBiometric({
       status: 'passed',
       completedAt: new Date().toISOString(),
       score: finalScore,
-      note: 'Prueba de vida completada: rostro centrado + giro izquierda/derecha.'
+      note: 'Prueba de vida completada: rostro centrado dentro del óvalo.'
     });
   }
 
@@ -282,17 +247,12 @@ export function BiometricPage({ companyId }: { companyId: string }) {
     stopDetectionLoop();
     setRunningChallenge(false);
     runningChallengeRef.current = false;
-    setChallengeIndex(0);
-    challengeIndexRef.current = 0;
     setHoldCounter(0);
     holdCounterRef.current = 0;
     setProgress(0);
-    setBaseline(null);
-    baselineRef.current = null;
     setLastMetrics(null);
     manualPrevFrameRef.current = null;
     manualStableCounterRef.current = 0;
-    manualGestureCounterRef.current = 0;
     missedFaceDetectionsRef.current = 0;
     setManualHint(null);
     setGeoStatus('idle');
@@ -351,74 +311,25 @@ export function BiometricPage({ companyId }: { companyId: string }) {
     if (!previous) return;
 
     const delta = computeFrameMotion(previous, frame);
-    const gesture = GESTURE_PLAN[challengeIndexRef.current];
-    if (!gesture) return;
-
-    if (gesture === 'center') {
-      const motionLooksStable = delta.motion < 0.085;
-      const motionLooksCentered = delta.motion >= 0.01 && delta.motion < 0.16 && delta.centerX >= 0.4 && delta.centerX <= 0.6;
-      if (motionLooksStable || motionLooksCentered) {
-        manualStableCounterRef.current += 1;
-      } else {
-        manualStableCounterRef.current = 0;
-      }
-
-      if (manualStableCounterRef.current < 2) return;
+    const motionLooksStable = delta.motion < 0.085;
+    const motionLooksCentered = delta.centerX >= 0.35 && delta.centerX <= 0.65;
+    if (!motionLooksStable || !motionLooksCentered) {
       manualStableCounterRef.current = 0;
-      manualGestureCounterRef.current = 0;
-      acceptFallbackStep();
+      setHoldCounter(0);
+      holdCounterRef.current = 0;
+      setProgress(0);
       return;
     }
 
-    if (delta.motion < 0.03) {
-      manualGestureCounterRef.current = 0;
-      return;
-    }
-
-    if (gesture === 'turn_left') {
-      if (delta.centerX >= 0.49) {
-        manualGestureCounterRef.current = 0;
-        return;
-      }
-      manualGestureCounterRef.current += 1;
-      if (manualGestureCounterRef.current < 1) return;
-    }
-
-    if (gesture === 'turn_right') {
-      if (delta.centerX <= 0.51) {
-        manualGestureCounterRef.current = 0;
-        return;
-      }
-      manualGestureCounterRef.current += 1;
-      if (manualGestureCounterRef.current < 1) return;
-    }
-
-    manualGestureCounterRef.current = 0;
-    acceptFallbackStep();
-  }
-
-  function completeCurrentStep() {
-    const nextIndex = challengeIndexRef.current + 1;
-    const nextProgress = Math.round((nextIndex / GESTURE_PLAN.length) * 100);
-    holdCounterRef.current = 0;
-    setHoldCounter(0);
-    manualGestureCounterRef.current = 0;
-    if (nextIndex >= GESTURE_PLAN.length) {
-      finalizeSuccess(nextProgress);
-      return;
-    }
-
-    challengeIndexRef.current = nextIndex;
-    setChallengeIndex(nextIndex);
+    manualStableCounterRef.current += 1;
+    const nextHold = Math.min(CENTER_HOLD_TARGET, manualStableCounterRef.current);
+    holdCounterRef.current = nextHold;
+    setHoldCounter(nextHold);
+    const nextProgress = Math.min(100, Math.round((nextHold / CENTER_HOLD_TARGET) * 100));
     setProgress(nextProgress);
-  }
-
-  function acceptFallbackStep() {
-    const completedGesture = GESTURE_PLAN[challengeIndexRef.current];
-    if (completedGesture) {
-      markGestureCompleted(completedGesture);
+    if (nextHold >= CENTER_HOLD_TARGET) {
+      finalizeSuccess(100);
     }
-    completeCurrentStep();
   }
 
   return (
@@ -430,55 +341,50 @@ export function BiometricPage({ companyId }: { companyId: string }) {
           </div>
           <div>
             <h2 className="text-xl font-bold text-dark">Prueba de Vida</h2>
-            <p className="text-sm text-grayText">Activación de cámara y prueba de vida con gestos.</p>
+            <p className="text-sm text-grayText">Centre su rostro dentro del óvalo para validar identidad.</p>
           </div>
         </div>
 
-        <div className="relative mt-5 overflow-hidden rounded-xl border border-borderLight bg-black/90">
-          <video ref={videoRef} autoPlay playsInline muted className="h-[300px] w-full object-cover md:h-[360px]" />
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <div className={`h-64 w-80 rounded-[999px] border-4 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)] transition-colors md:h-72 md:w-[26rem] ${circleClass}`} />
+        {isPassed ? (
+          <div className="mt-5 flex min-h-[300px] flex-col items-center justify-center rounded-xl border border-green-200 bg-green-50 px-6 py-10 text-center md:min-h-[360px]">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-green-600 shadow-sm">
+              <CheckCircle2 className="h-9 w-9" />
+            </div>
+            <p className="mt-4 text-lg font-semibold text-green-800">Prueba de vida completada</p>
+            <p className="mt-2 max-w-md text-sm text-green-700">
+              La cámara se cerró correctamente. Puede continuar con la revisión del expediente.
+            </p>
           </div>
-          <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white">
-            {runningChallenge && currentGesture ? gestureInstruction(currentGesture) : 'Coloca tu rostro dentro del círculo'}
+        ) : (
+          <div className="relative mt-5 overflow-hidden rounded-xl border border-borderLight bg-black/90">
+            <video ref={videoRef} autoPlay playsInline muted className="h-[300px] w-full object-cover md:h-[360px]" />
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className={`h-64 w-52 rounded-[50%] border-4 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)] transition-colors md:h-72 md:w-56 ${circleClass}`} />
+            </div>
+            <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white">
+              {runningChallenge ? (isFaceCentered ? 'Mantenga el rostro centrado' : 'Centre su rostro en el óvalo') : 'Coloque su rostro dentro del óvalo'}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="mt-4 rounded-lg border border-borderLight bg-surface p-3 text-sm text-grayText">
           <p className="font-medium text-dark">Estado:</p>
           <p>{uiHint}</p>
-          {runningChallenge && currentGesture ? (
-            <p className="mt-1 text-xs text-grayText">Reto {challengeIndex + 1}/{GESTURE_PLAN.length} · sostenga {GESTURE_HOLD_TARGET} lecturas estables</p>
+          {runningChallenge ? (
+            <p className="mt-1 text-xs text-grayText">Mantenga el rostro centrado · {holdCounter}/{CENTER_HOLD_TARGET} lecturas estables</p>
           ) : null}
         </div>
 
-        <div className="mt-4 grid gap-2 md:grid-cols-3">
-          {GESTURE_PLAN.map((gesture) => {
-            const done = completedGestures[gesture] || isPassed;
-            const active = !done && runningChallenge && currentGesture === gesture;
-            return (
-              <div
-                key={gesture}
-                className={`rounded-lg border px-3 py-2 text-sm ${
-                  done
-                    ? 'border-green-200 bg-green-50 text-green-700'
-                    : active
-                      ? 'border-primary bg-brand-50 text-dark'
-                      : 'border-borderLight bg-white text-grayText'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className={`h-4 w-4 ${done ? 'text-green-600' : 'text-gray-300'}`} />
-                  <span>{GESTURE_LABELS[gesture]}</span>
-                </div>
-              </div>
-            );
-          })}
+        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className={`h-4 w-4 ${isPassed || isFaceCentered ? 'text-green-600' : 'text-gray-300'}`} />
+            <span>{isPassed ? 'Rostro validado' : isFaceCentered ? 'Rostro centrado' : 'Esperando rostro centrado'}</span>
+          </div>
         </div>
 
         {runningChallenge ? (
           <div className="mt-4 space-y-2">
-            <p className="text-sm font-medium text-dark">Verificando gestos...</p>
+            <p className="text-sm font-medium text-dark">Validando rostro centrado...</p>
             <Progress value={progress} label={`${progress}%`} />
           </div>
         ) : null}
@@ -491,15 +397,9 @@ export function BiometricPage({ companyId }: { companyId: string }) {
             <Button variant="ghost">Volver</Button>
           </Link>
 
-          <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={resetBiometric} disabled={cameraStatus === 'requesting'}>
-              Reiniciar
-            </Button>
-
-            <Link to={`/onboarding/${companyId}/review`}>
-              <Button disabled={!isPassed}>Continuar</Button>
-            </Link>
-          </div>
+          <Link to={`/onboarding/${companyId}/review`}>
+            <Button disabled={!isPassed}>Continuar</Button>
+          </Link>
         </div>
       </Card>
 
@@ -545,32 +445,14 @@ export function BiometricPage({ companyId }: { companyId: string }) {
           ) : null}
         </div>
 
-        <label className="mt-4 flex items-start gap-2 rounded-lg border border-borderLight bg-white p-3 text-sm text-dark">
-          <input
-            type="checkbox"
-            className="mt-0.5 h-4 w-4 accent-primary"
-            checked={biometricConsentAccepted}
-            onChange={(event) => setBiometricConsentAccepted(event.target.checked)}
-          />
-          <span>
-            He leído y acepto el Aviso de Privacidad y autorizo el tratamiento de mis datos biométricos y geolocalización.
-          </span>
-        </label>
-
-        <div className="mt-4">
-          <Button
-            onClick={() => void startChallenge()}
-            disabled={cameraStatus !== 'active' || runningChallenge || isPassed || !biometricConsentAccepted}
-            fullWidth
-          >
-            {runningChallenge ? 'Validando...' : 'Iniciar prueba'}
-          </Button>
+        <div className="mt-4 rounded-lg border border-borderLight bg-surface px-3 py-3 text-sm text-grayText">
+          {isPassed
+            ? 'Prueba completada.'
+            : runningChallenge
+              ? 'Validando...'
+              : 'Preparando validación automática...'}
         </div>
 
-        <div className="mt-5 flex items-start gap-2 rounded-lg border border-brand-100 bg-brand-50 p-3 text-sm text-dark">
-          <ShieldCheck className="mt-0.5 h-4 w-4 text-primary" />
-          <p>La prueba de vida validada es obligatoria para habilitar el envío final.</p>
-        </div>
       </Card>
     </div>
   );
@@ -597,27 +479,16 @@ async function detectSingleFace(video: HTMLVideoElement, detector: any): Promise
   };
 }
 
-function evaluateGesture(gesture: Gesture, face: FaceMetrics, baseline: FaceMetrics) {
-  if (gesture === 'center') {
-    return Math.abs(face.centerX - 0.5) <= 0.22 && Math.abs(face.centerY - 0.5) <= 0.26;
-  }
-  if (gesture === 'turn_left') {
-    return face.centerX <= baseline.centerX - 0.035;
-  }
-  return face.centerX >= baseline.centerX + 0.035;
+function isFaceInsideOval(face: FaceMetrics) {
+  const normalizedX = (face.centerX - 0.5) / 0.20;
+  const normalizedY = (face.centerY - 0.5) / 0.24;
+  return normalizedX * normalizedX + normalizedY * normalizedY <= 1 && face.area >= 0.06;
 }
 
 function mapBiometricStatus(status: 'pending' | 'processing' | 'passed' | 'failed') {
   if (status === 'passed') return 'valid';
   if (status === 'failed') return 'error';
   return 'pending';
-}
-
-function gestureInstruction(gesture: Gesture | null) {
-  if (gesture === 'center') return 'Reto 1: mire al frente dentro del óvalo.';
-  if (gesture === 'turn_left') return 'Reto 2: gire un poco hacia la izquierda.';
-  if (gesture === 'turn_right') return 'Reto 3: gire un poco hacia la derecha.';
-  return 'Prepare su rostro frente a cámara.';
 }
 
 function snapshotVideoFrame(video: HTMLVideoElement, canvasRef: React.MutableRefObject<HTMLCanvasElement | null>) {

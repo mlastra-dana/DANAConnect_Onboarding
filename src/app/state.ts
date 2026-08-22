@@ -122,17 +122,31 @@ function stripTransientDocuments(state: OnboardingState): OnboardingState {
 
   return {
     ...state,
-    documents: createEmptyDocuments(),
+    documents: Object.fromEntries(
+      Object.entries(state.documents).map(([type, document]) => [
+        type,
+        {
+          ...document,
+          previewUrl: undefined
+        }
+      ])
+    ) as OnboardingState['documents'],
     representatives: [
       {
         ...representative1,
-        document: createEmptyDocument('cedulaRepresentante')
+        document: {
+          ...representative1.document,
+          previewUrl: undefined
+        }
       },
       {
         ...representative2,
-        document: createEmptyDocument('cedulaRepresentante')
+        document: {
+          ...representative2.document,
+          previewUrl: undefined
+        }
       }
     ],
-    personalInfo: createEmptyPersonalInfo()
+    biometrics: createEmptyBiometric()
   };
 }

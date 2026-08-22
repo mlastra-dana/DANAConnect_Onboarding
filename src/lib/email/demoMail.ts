@@ -185,7 +185,16 @@ export async function sendEmailViaApi(
       })
     });
 
-    const result = (await response.json()) as SendEmailResult;
+    const responseText = await response.text();
+    let result: SendEmailResult;
+    try {
+      result = responseText ? (JSON.parse(responseText) as SendEmailResult) : { ok: response.ok };
+    } catch {
+      result = {
+        ok: false,
+        error: response.ok ? 'El servicio de envío devolvió una respuesta inválida.' : `Error del servicio de envío (${response.status}).`
+      };
+    }
     if (!response.ok || !result.ok) {
       return {
         ok: false,
@@ -224,6 +233,11 @@ function buildConversationFiles(state: OnboardingState): DemoEmailPayload['files
   const representative1 = state.representatives[0];
   if (representative1.enabled) {
     addDocument('DOCUMENTO_REPRESENTANTE', 'cedulaRepresentante', representative1.document);
+  }
+
+  const representative2 = state.representatives[1];
+  if (representative2.enabled) {
+    addDocument('DOCUMENTO_REPRESENTANTE', 'cedulaRepresentante', representative2.document);
   }
 
   return files;
