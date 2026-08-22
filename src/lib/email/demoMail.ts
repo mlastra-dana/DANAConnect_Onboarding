@@ -1,4 +1,4 @@
-import { OnboardingState } from '../../app/types';
+import { DocumentType, OnboardingState } from '../../app/types';
 import { getDocumentLabel, getDocumentOrder, getFlowConfig, requiresRepresentatives } from '../../config/onboardingCountries';
 
 export type DemoEmailPayload = {
@@ -22,6 +22,20 @@ export type SendEmailResult = {
   messageId?: string;
   mode?: string;
   error?: string;
+};
+
+const DANA_DOCUMENT_FIELD_BY_TYPE: Partial<Record<DocumentType, string>> = {
+  rif: 'DOCUMENTO_FISCAL',
+  documentoFiscal: 'DOCUMENTO_FISCAL',
+  registroMercantil: 'DOCUMENTO_CONSTITUCION',
+  documentoConstitucion: 'DOCUMENTO_CONSTITUCION',
+  actaDesignacionAutoridades: 'FACULTADES_REPRESENTANTE',
+  facultadesRepresentante: 'FACULTADES_REPRESENTANTE',
+  cedulaRepresentante: 'DOCUMENTO_REPRESENTANTE',
+  documentoRepresentante: 'DOCUMENTO_REPRESENTANTE',
+  documentoIdentidad: 'DOCUMENTO_IDENTIDAD',
+  licenciaConducirFrente: 'LICENCIA_FRONT',
+  licenciaConducirReverso: 'LICENCIA_BACK'
 };
 
 export function buildDemoEmail(
@@ -201,15 +215,15 @@ function buildConversationFiles(state: OnboardingState): DemoEmailPayload['files
     });
   };
 
-  addDocument('RIF', 'rif');
-  addDocument('ACTA_CONSTITUTIVA', 'registroMercantil');
-  addDocument('CEDULA_IDENTIDAD', 'documentoIdentidad');
-  addDocument('LICENCIA_FRONT', 'licenciaConducirFrente');
-  addDocument('LICENCIA_BACK', 'licenciaConducirReverso');
+  getDocumentOrder(state.country, state.personType).forEach((documentType) => {
+    const field = DANA_DOCUMENT_FIELD_BY_TYPE[documentType];
+    if (!field) return;
+    addDocument(field, documentType);
+  });
 
   const representative1 = state.representatives[0];
   if (representative1.enabled) {
-    addDocument('CEDULA_IDENTIDAD', 'cedulaRepresentante', representative1.document);
+    addDocument('DOCUMENTO_REPRESENTANTE', 'cedulaRepresentante', representative1.document);
   }
 
   return files;
@@ -243,16 +257,26 @@ function buildConversationData({
   const flow = getFlowConfig(state.country, state.personType);
   const documentStatusByType = (type: string) => {
     if (type === 'rif') return statusLabel(state.documents.rif.validation.status);
+    if (type === 'documentoFiscal') return statusLabel(state.documents.documentoFiscal.validation.status);
     if (type === 'registroMercantil') return statusLabel(state.documents.registroMercantil.validation.status);
+    if (type === 'documentoConstitucion') return statusLabel(state.documents.documentoConstitucion.validation.status);
+    if (type === 'actaDesignacionAutoridades') return statusLabel(state.documents.actaDesignacionAutoridades.validation.status);
+    if (type === 'facultadesRepresentante') return statusLabel(state.documents.facultadesRepresentante.validation.status);
     if (type === 'cedulaRepresentante') return statusLabel(state.representatives[0].document.validation.status);
+    if (type === 'documentoRepresentante') return statusLabel(state.documents.documentoRepresentante.validation.status);
     if (type === 'documentoIdentidad') return statusLabel(state.documents.documentoIdentidad.validation.status);
     if (type === 'licenciaConducirFrente') return statusLabel(state.documents.licenciaConducirFrente.validation.status);
     return '';
   };
   const documentLabelByType = (type: string) => {
     if (type === 'rif') return state.documents.rif.fileName || '';
+    if (type === 'documentoFiscal') return state.documents.documentoFiscal.fileName || '';
     if (type === 'registroMercantil') return state.documents.registroMercantil.fileName || '';
+    if (type === 'documentoConstitucion') return state.documents.documentoConstitucion.fileName || '';
+    if (type === 'actaDesignacionAutoridades') return state.documents.actaDesignacionAutoridades.fileName || '';
+    if (type === 'facultadesRepresentante') return state.documents.facultadesRepresentante.fileName || '';
     if (type === 'cedulaRepresentante') return state.representatives[0].document.fileName || '';
+    if (type === 'documentoRepresentante') return state.documents.documentoRepresentante.fileName || '';
     if (type === 'documentoIdentidad') return state.documents.documentoIdentidad.fileName || '';
     if (type === 'licenciaConducirFrente') return state.documents.licenciaConducirFrente.fileName || '';
     return '';
@@ -274,14 +298,23 @@ function buildConversationData({
     NOMBRE_EMPRESA: state.tenant.name,
     PAIS: state.country.toUpperCase(),
     TIPO_PERSONA: flow.personTypeLabel,
-    RIF: state.personalInfo.documentNumber || documentStatusByType('rif') || '',
-    ACTA_CONSTITUTIVA: documentStatusByType('registroMercantil') || documentLabelByType('registroMercantil'),
-    CEDULA_IDENTIDAD:
+    DOCUMENTO_FISCAL: state.personalInfo.documentNumber || documentStatusByType('rif') || documentStatusByType('documentoFiscal') || '',
+    DOCUMENTO_CONSTITUCION:
+      documentStatusByType('registroMercantil') ||
+      documentStatusByType('documentoConstitucion') ||
+      documentLabelByType('registroMercantil') ||
+      documentLabelByType('documentoConstitucion'),
+    FACULTADES_REPRESENTANTE:
+      documentStatusByType('actaDesignacionAutoridades') ||
+      documentStatusByType('facultadesRepresentante') ||
+      documentLabelByType('actaDesignacionAutoridades') ||
+      documentLabelByType('facultadesRepresentante'),
+    DOCUMENTO_IDENTIDAD:
       state.personalInfo.documentNumber ||
-      documentStatusByType('cedulaRepresentante') ||
       documentStatusByType('documentoIdentidad') ||
       documentStatusByType('licenciaConducirFrente') ||
       '',
+    DOCUMENTO_REPRESENTANTE: documentStatusByType('cedulaRepresentante') || documentStatusByType('documentoRepresentante') || '',
     REPRESENTANTE_LEGAL: representativeName || statusLabel(state.representatives[0].document.validation.status)
   };
 

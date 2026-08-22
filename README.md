@@ -125,9 +125,16 @@ El frontend llama a `VITE_EMAIL_SEND_URL` con:
     "NOMBRE_EMPRESA": "...",
     "PAIS": "...",
     "REPRESENTANTE_LEGAL": "...",
-    "RIF": "...",
-    "ACTA_CONSTITUTIVA": "...",
-    "CEDULA_IDENTIDAD": "...",
+    "DOCUMENTO_FISCAL": "...",
+    "DOCUMENTO_CONSTITUCION": "...",
+    "FACULTADES_REPRESENTANTE": "...",
+    "DOCUMENTO_REPRESENTANTE": "...",
+    "DOCUMENTO_IDENTIDAD": "...",
+    "LICENCIA_FRONT": "...",
+    "LICENCIA_BACK": "...",
+    "NOMBRES": "...",
+    "APELLIDOS": "...",
+    "NUMERO_IDENTIFICACION": "...",
     "TIPO_PERSONA": "..."
   }
 }
@@ -143,7 +150,7 @@ Variables opcionales para File Upload:
 DANA_FILE_UPLOAD_URL=https://appserv.danaconnect.com/dana/conversation/http/rest/file/upload
 DANA_FILE_UPLOAD_USER=mlastra@venturestars
 DANA_FILE_UPLOAD_PASS=<secreto>
-DANA_FILE_FIELD_MAP={"rif":"RIF","registroMercantil":"ACTA_CONSTITUTIVA","cedulaRepresentante":"CEDULA_IDENTIDAD","documentoIdentidad":"CEDULA_IDENTIDAD","licenciaConducirFrente":"LICENCIA_FRONT","licenciaConducirReverso":"LICENCIA_BACK"}
+DANA_FILE_FIELD_MAP={"rif":"DOCUMENTO_FISCAL","documentoFiscal":"DOCUMENTO_FISCAL","registroMercantil":"DOCUMENTO_CONSTITUCION","documentoConstitucion":"DOCUMENTO_CONSTITUCION","actaDesignacionAutoridades":"FACULTADES_REPRESENTANTE","facultadesRepresentante":"FACULTADES_REPRESENTANTE","cedulaRepresentante":"DOCUMENTO_REPRESENTANTE","documentoRepresentante":"DOCUMENTO_REPRESENTANTE","documentoIdentidad":"DOCUMENTO_IDENTIDAD","licenciaConducirFrente":"LICENCIA_FRONT","licenciaConducirReverso":"LICENCIA_BACK"}
 ```
 
 Si `DANA_FILE_UPLOAD_USER` / `DANA_FILE_UPLOAD_PASS` no se configuran, la Lambda usa las mismas credenciales SMTP. Los campos destino deben tener longitud suficiente para guardar el `fileID` (`s3://...`).
