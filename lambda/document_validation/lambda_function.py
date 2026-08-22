@@ -23,6 +23,7 @@ MAX_FILE_BYTES = int(os.environ.get("MAX_FILE_BYTES", str(10 * 1024 * 1024)))
 DEFAULT_SMTP_HOST = "cloudsmtp.danaconnect.com"
 DEFAULT_SMTP_PORT = 587
 DEFAULT_FILE_UPLOAD_URL = "https://appserv.danaconnect.com/dana/conversation/http/rest/file/upload"
+HANDLER_VERSION = "2026-08-21-email-upload-v1"
 DEFAULT_FIELD_LIMITS = {
     "ACTA_CONSTITUTIVA": 50,
     "CEDULA_IDENTIDAD": 10,
@@ -837,6 +838,7 @@ def preview_cloud_smtp_email(payload: Dict[str, Any]) -> Dict[str, Any]:
     body = build_cloud_smtp_body(payload, config["mode"])
     return {
         "ok": True,
+        "handlerVersion": HANDLER_VERSION,
         "to": config["to"],
         "from": config["from"],
         "cc": config["cc"],
@@ -859,6 +861,14 @@ def send_cloud_smtp_email(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not body:
         raise ValueError("body es requerido")
 
+    LOGGER.info(
+        "cloud_smtp_command_ready to=%s from=%s uploaded_files=%s body=%s",
+        config["to"],
+        config["from"],
+        json.dumps(uploaded_files, ensure_ascii=False),
+        body,
+    )
+
     message = EmailMessage()
     message["From"] = config["from"]
     message["To"] = config["to"]
@@ -875,12 +885,33 @@ def send_cloud_smtp_email(payload: Dict[str, Any]) -> Dict[str, Any]:
     if config["bcc"]:
         recipients.extend([item.strip() for item in config["bcc"].split(",") if item.strip()])
 
-    with smtplib.SMTP(config["host"], config["port"], timeout=int(optional_env("DANA_SMTP_TIMEOUT_SECONDS") or 15)) as smtp:
-        smtp.starttls()
-        smtp.login(config["user"], config["password"])
-        smtp.send_message(message, to_addrs=recipients)
+    try:
+        with smtplib.SMTP(config["host"], config["port"], timeout=int(optional_env("DANA_SMTP_TIMEOUT_SECONDS") or 15)) as smtp:
+            smtp.starttls()
+            smtp.login(config["user"], config["password"])
+            smtp.send_message(message, to_addrs=recipients)
+    except smtplib.SMTPDataError as exc:
+        return {
+            "ok": False,
+            "handlerVersion": HANDLER_VERSION,
+            "stage": "smtp_send",
+            "to": config["to"],
+            "mode": config["mode"],
+            "smtpCode": exc.smtp_code,
+            "smtpError": exc.smtp_error.decode("utf-8", errors="replace")
+            if isinstance(exc.smtp_error, bytes)
+            else str(exc.smtp_error),
+            "uploadedFiles": uploaded_files,
+            "body": body,
+        }
 
-    return {"ok": True, "to": config["to"], "mode": config["mode"], "uploadedFiles": uploaded_files}
+    return {
+        "ok": True,
+        "handlerVersion": HANDLER_VERSION,
+        "to": config["to"],
+        "mode": config["mode"],
+        "uploadedFiles": uploaded_files,
+    }
 
 
 def normalize_country(value: Any) -> str:
