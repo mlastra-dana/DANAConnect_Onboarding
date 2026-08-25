@@ -99,7 +99,17 @@ export function getStorageKey(companyId: string) {
 
 export function saveState(state: OnboardingState) {
   const key = getStorageKey(state.companyId);
-  localStorage.setItem(key, JSON.stringify(stripTransientDocuments(state)));
+  const persistentState = stripTransientDocuments(state);
+  try {
+    localStorage.setItem(key, JSON.stringify(persistentState));
+  } catch (error) {
+    console.warn('No se pudo guardar el estado completo del onboarding. Se guardara una version liviana.', error);
+    try {
+      localStorage.setItem(key, JSON.stringify(stripFilePayloadsForStorage(persistentState)));
+    } catch (fallbackError) {
+      console.warn('No se pudo guardar el estado liviano del onboarding.', fallbackError);
+    }
+  }
 }
 
 export function clearState(companyId: string) {
@@ -151,5 +161,41 @@ function stripTransientDocuments(state: OnboardingState): OnboardingState {
       state.submission.status === 'loading' || state.submission.status === 'error'
         ? { status: 'idle' }
         : state.submission
+  };
+}
+
+function stripFilePayloadsForStorage(state: OnboardingState): OnboardingState {
+  const [representative1, representative2] = state.representatives;
+
+  return {
+    ...state,
+    documents: Object.fromEntries(
+      Object.entries(state.documents).map(([type, document]) => [
+        type,
+        {
+          ...document,
+          fileBase64: undefined,
+          previewUrl: undefined
+        }
+      ])
+    ) as OnboardingState['documents'],
+    representatives: [
+      {
+        ...representative1,
+        document: {
+          ...representative1.document,
+          fileBase64: undefined,
+          previewUrl: undefined
+        }
+      },
+      {
+        ...representative2,
+        document: {
+          ...representative2.document,
+          fileBase64: undefined,
+          previewUrl: undefined
+        }
+      }
+    ]
   };
 }

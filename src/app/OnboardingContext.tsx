@@ -148,16 +148,23 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
     const activeDocumentStatuses = getDocumentOrder(state.country, state.personType).map(
       (docType) => state.documents[docType].validation.status
     );
+    const activeDocumentsHavePayload = getDocumentOrder(state.country, state.personType).every(
+      (docType) => Boolean(state.documents[docType].fileBase64)
+    );
     const requiredDocs = [...activeDocumentStatuses];
+    let representativeDocumentsHavePayload = true;
 
     if (requiresRepresentatives(state.country, state.personType) && representative1) {
       requiredDocs.push(representative1.document.validation.status);
+      representativeDocumentsHavePayload = representativeDocumentsHavePayload && Boolean(representative1.document.fileBase64);
       if (representative2?.enabled) {
         requiredDocs.push(representative2.document.validation.status);
+        representativeDocumentsHavePayload = representativeDocumentsHavePayload && Boolean(representative2.document.fileBase64);
       }
     }
 
     const allDocumentsValid = requiredDocs.every((status) => status === 'valid');
+    const allRequiredFilesAvailable = activeDocumentsHavePayload && representativeDocumentsHavePayload;
     const allBiometricsPassed = state.biometrics.status === 'passed';
 
     return {
@@ -180,7 +187,7 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
       },
       allDocumentsValid,
       allBiometricsPassed,
-      canSubmit: allDocumentsValid && allBiometricsPassed
+      canSubmit: allDocumentsValid && allRequiredFilesAvailable && allBiometricsPassed
     };
   }, [companyId, state, tenant]);
 
