@@ -4,6 +4,7 @@ import { validateBasicFile } from './fileValidators';
 const DOCUMENT_VALIDATION_URL =
   import.meta.env.VITE_DOCUMENT_VALIDATION_URL?.trim() ||
   'https://uou6hka7wmyfgtirokika5bkme0wfwzj.lambda-url.us-east-1.on.aws/';
+const DOCUMENT_VALIDATION_TIMEOUT_MS = Number(import.meta.env.VITE_DOCUMENT_VALIDATION_TIMEOUT_MS || 120000);
 
 export async function validateDocumentFile(
   type: DocumentType,
@@ -60,13 +61,29 @@ export async function validateDocumentFile(
   }
 
   onProgress?.(65);
-  const lambdaResponse = await fetch(DOCUMENT_VALIDATION_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(payload)
-  });
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), DOCUMENT_VALIDATION_TIMEOUT_MS);
+  let lambdaResponse: Response;
+  try {
+    lambdaResponse = await fetch(DOCUMENT_VALIDATION_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+  } catch (error) {
+    onProgress?.(100);
+    return buildValidationErrorResult(
+      error instanceof DOMException && error.name === 'AbortError'
+        ? 'La validación tardó demasiado. Intente nuevamente en unos segundos.'
+        : 'No se pudo conectar con el servicio de validación. Revise su conexión e intente nuevamente.',
+      ['lambda_network_error']
+    );
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 
   let responseBody: unknown = null;
   try {
@@ -78,29 +95,7 @@ export async function validateDocumentFile(
   if (!lambdaResponse.ok) {
     onProgress?.(100);
     const errorMessage = extractLambdaError(responseBody) ?? 'No se pudo validar el documento.';
-    return {
-      status: 'error',
-      typeStatus: 'error',
-      validityStatus: 'unknown',
-      checks,
-      reasons: [errorMessage],
-      warnings: [],
-      uiStatus: {
-        state: 'error',
-        title: 'Con errores',
-        message: errorMessage
-      },
-      extracted: {
-        hasText: false,
-        usedOcr: false,
-        keywordsFound: [],
-        datesFound: []
-      },
-      quality: {
-        sharpnessLabel: 'unknown'
-      },
-      internalDiagnostics: ['lambda_http_error']
-    };
+    return buildValidationErrorResult(errorMessage, ['lambda_http_error']);
   }
 
   const result = mapLambdaResponseToValidationResult(responseBody, file.size);
@@ -123,6 +118,35 @@ export async function validateDocumentFile(
     matchedRepresentativeRole: result.matchedRepresentativeRole,
     matchedRepresentativeEvidence: result.matchedRepresentativeEvidence,
     visibleIdentityEvidence: result.visibleIdentityEvidence
+  };
+}
+
+export function buildValidationErrorResult(
+  message: string,
+  internalDiagnostics: string[] = []
+): DocumentValidationResult {
+  return {
+    status: 'error',
+    typeStatus: 'error',
+    validityStatus: 'unknown',
+    checks: [],
+    reasons: [message],
+    warnings: [],
+    uiStatus: {
+      state: 'error',
+      title: 'Con errores',
+      message
+    },
+    extracted: {
+      hasText: false,
+      usedOcr: false,
+      keywordsFound: [],
+      datesFound: []
+    },
+    quality: {
+      sharpnessLabel: 'unknown'
+    },
+    internalDiagnostics
   };
 }
 

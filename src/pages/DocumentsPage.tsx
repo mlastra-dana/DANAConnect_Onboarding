@@ -5,7 +5,7 @@ import { useOnboarding } from '../app/OnboardingContext';
 import { FileUploadCard } from '../components/onboarding/FileUploadCard';
 import { Button } from '../components/ui/Button';
 import { Toast } from '../components/ui/Toast';
-import { validateDocumentFile } from '../lib/validators/documentValidators';
+import { buildValidationErrorResult, validateDocumentFile } from '../lib/validators/documentValidators';
 import { createEmptyDocument, createEmptyRepresentative } from '../app/state';
 import { DocumentRecord, DocumentType, RepresentativeRecord } from '../app/types';
 import { getDocumentLabel, getDocumentOrder, getFlowConfig, requiresRepresentatives } from '../config/onboardingCountries';
@@ -78,59 +78,77 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     setUploadProgressMap((prev) => ({ ...prev, [key]: 0 }));
     setValidationProgressMap((prev) => ({ ...prev, [key]: 0 }));
 
-    await simulateUpload((progress) => {
-      setUploadProgressMap((prev) => ({ ...prev, [key]: progress }));
-    });
-
-    setUploadingMap((prev) => ({ ...prev, [key]: false }));
-    setLoadingMap((prev) => ({ ...prev, [key]: true }));
-
     const previousPreview = state.documents[docType].previewUrl;
-    if (previousPreview) URL.revokeObjectURL(previousPreview);
+    let previewUrl: string | undefined;
+    let fileBase64 = '';
 
-    const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
-    const fileBase64 = await fileToBase64(file);
-    setRuntimeFiles((prev) => ({ ...prev, [key]: file }));
+    try {
+      await simulateUpload((progress) => {
+        setUploadProgressMap((prev) => ({ ...prev, [key]: progress }));
+      });
 
-    const result = await validateDocumentFile(docType, file, state.country, (progress) => {
-      setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
-    });
+      setUploadingMap((prev) => ({ ...prev, [key]: false }));
+      setLoadingMap((prev) => ({ ...prev, [key]: true }));
 
-    const nextDocument: DocumentRecord = {
-      type: docType,
-      fileName: file.name,
-      fileSize: file.size,
-      fileType: file.type,
-      fileBase64,
-      previewUrl,
-      validation: result
-    };
+      if (previousPreview) URL.revokeObjectURL(previousPreview);
 
-    setDocument(docType, nextDocument);
+      previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
+      fileBase64 = await fileToBase64(file);
+      setRuntimeFiles((prev) => ({ ...prev, [key]: file }));
 
-    if (isVenezuelaJuridica && docType === 'registroMercantil') {
-      [representative1, representative2].forEach((representative) => {
-        if (!representative.enabled || representative.document.validation.status === 'pending') return;
-        setRepresentative(representative.id, {
-          ...representative,
-          document: createEmptyDocument('cedulaRepresentante')
+      const result = await validateDocumentFile(docType, file, state.country, (progress) => {
+        setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
+      });
+
+      const nextDocument: DocumentRecord = {
+        type: docType,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        fileBase64,
+        previewUrl,
+        validation: result
+      };
+
+      setDocument(docType, nextDocument);
+
+      if (isVenezuelaJuridica && docType === 'registroMercantil') {
+        [representative1, representative2].forEach((representative) => {
+          if (!representative.enabled || representative.document.validation.status === 'pending') return;
+          setRepresentative(representative.id, {
+            ...representative,
+            document: createEmptyDocument('cedulaRepresentante')
+          });
         });
-      });
-    }
+      }
 
-    if (
-      state.personType === 'natural' &&
-      (docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente') &&
-      result.extractedIdentity
-    ) {
-      setPersonalInfo({
-        firstName: result.extractedIdentity.firstName ?? '',
-        lastName: result.extractedIdentity.lastName ?? '',
-        documentNumber: result.extractedIdentity.documentNumber ?? ''
+      if (
+        state.personType === 'natural' &&
+        (docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente') &&
+        result.extractedIdentity
+      ) {
+        setPersonalInfo({
+          firstName: result.extractedIdentity.firstName ?? '',
+          lastName: result.extractedIdentity.lastName ?? '',
+          documentNumber: result.extractedIdentity.documentNumber ?? ''
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo validar el documento. Intente nuevamente.';
+      setDocument(docType, {
+        type: docType,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        fileBase64,
+        previewUrl,
+        validation: buildValidationErrorResult(message, ['upload_unhandled_error'])
       });
+    } finally {
+      setUploadingMap((prev) => ({ ...prev, [key]: false }));
+      setLoadingMap((prev) => ({ ...prev, [key]: false }));
+      setValidationProgressMap((prev) => ({ ...prev, [key]: 100 }));
     }
-
-    setLoadingMap((prev) => ({ ...prev, [key]: false }));
   }
 
   async function handleUploadRepresentative(repId: 1 | 2, file: File) {
@@ -141,51 +159,72 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     setUploadProgressMap((prev) => ({ ...prev, [key]: 0 }));
     setValidationProgressMap((prev) => ({ ...prev, [key]: 0 }));
 
-    await simulateUpload((progress) => {
-      setUploadProgressMap((prev) => ({ ...prev, [key]: progress }));
-    });
+    let previewUrl: string | undefined;
+    let fileBase64 = '';
 
-    setUploadingMap((prev) => ({ ...prev, [key]: false }));
-    setLoadingMap((prev) => ({ ...prev, [key]: true }));
+    try {
+      await simulateUpload((progress) => {
+        setUploadProgressMap((prev) => ({ ...prev, [key]: progress }));
+      });
 
-    if (currentRep.document.previewUrl) {
-      URL.revokeObjectURL(currentRep.document.previewUrl);
-    }
+      setUploadingMap((prev) => ({ ...prev, [key]: false }));
+      setLoadingMap((prev) => ({ ...prev, [key]: true }));
 
-    const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
-    const fileBase64 = await fileToBase64(file);
-    setRuntimeFiles((prev) => ({ ...prev, [key]: file }));
-
-    const result = await validateDocumentFile(
-      'cedulaRepresentante',
-      file,
-      state.country,
-      (progress) => {
-        setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
-      },
-      isVenezuelaJuridica
-        ? {
-            expectedLegalRepresentatives: legalRepresentatives
-          }
-        : undefined
-    );
-
-    const nextRep: RepresentativeRecord = {
-      ...currentRep,
-      enabled: true,
-      document: {
-        type: 'cedulaRepresentante',
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
-        fileBase64,
-        previewUrl,
-        validation: result
+      if (currentRep.document.previewUrl) {
+        URL.revokeObjectURL(currentRep.document.previewUrl);
       }
-    };
 
-    setRepresentative(repId, nextRep);
-    setLoadingMap((prev) => ({ ...prev, [key]: false }));
+      previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
+      fileBase64 = await fileToBase64(file);
+      setRuntimeFiles((prev) => ({ ...prev, [key]: file }));
+
+      const result = await validateDocumentFile(
+        'cedulaRepresentante',
+        file,
+        state.country,
+        (progress) => {
+          setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
+        },
+        isVenezuelaJuridica
+          ? {
+              expectedLegalRepresentatives: legalRepresentatives
+            }
+          : undefined
+      );
+
+      setRepresentative(repId, {
+        ...currentRep,
+        enabled: true,
+        document: {
+          type: 'cedulaRepresentante',
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          fileBase64,
+          previewUrl,
+          validation: result
+        }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo validar el documento. Intente nuevamente.';
+      setRepresentative(repId, {
+        ...currentRep,
+        enabled: true,
+        document: {
+          type: 'cedulaRepresentante',
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          fileBase64,
+          previewUrl,
+          validation: buildValidationErrorResult(message, ['upload_unhandled_error'])
+        }
+      });
+    } finally {
+      setUploadingMap((prev) => ({ ...prev, [key]: false }));
+      setLoadingMap((prev) => ({ ...prev, [key]: false }));
+      setValidationProgressMap((prev) => ({ ...prev, [key]: 100 }));
+    }
   }
 
   function handleRemoveBase(docType: DocumentType) {

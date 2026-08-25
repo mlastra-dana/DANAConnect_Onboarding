@@ -1296,6 +1296,20 @@ def run_legal_representative_extraction(
             diagnostics["error"] = "textract_empty_text"
             return {"representatives": [], "diagnostics": diagnostics}
 
+        fast_representatives = extract_legal_representatives_from_ocr_patterns(ocr_result["text"])
+        if fast_representatives:
+            diagnostics["provider"] = "textract+patterns"
+            diagnostics["patternCandidates"] = len(fast_representatives)
+            diagnostics["confirmedRepresentatives"] = len(fast_representatives)
+            LOGGER.info(
+                "representative_textract_extraction_fast file=%s pages=%s lines=%s confirmed=%s",
+                file_name,
+                diagnostics["textractPages"],
+                diagnostics["textractLines"],
+                diagnostics["confirmedRepresentatives"],
+            )
+            return {"representatives": fast_representatives, "diagnostics": diagnostics}
+
         candidates = run_bedrock_legal_representative_extraction_from_ocr(
             ocr_text=build_representative_ocr_context(ocr_result["lines"]),
         )
@@ -1468,6 +1482,111 @@ def page_has_representative_keywords(text: str) -> bool:
         "cedula de identidad",
     ]
     return any(keyword in normalized for keyword in keywords)
+
+
+def extract_legal_representatives_from_ocr_patterns(ocr_text: str) -> List[Dict[str, str]]:
+    representatives: List[Dict[str, str]] = []
+    compact_text = re.sub(r"\s+", " ", ocr_text or " ").strip()
+    if not compact_text:
+        return []
+
+    id_pattern = re.compile(r"\b([VEJGP])\s*[-.]?\s*(\d{1,2}(?:[.\s]\d{3}){2})\b", re.IGNORECASE)
+    for match in id_pattern.finditer(compact_text):
+        start = max(0, match.start() - 260)
+        end = min(len(compact_text), match.end() + 160)
+        snippet = compact_text[start:end].strip(" ,.;:-")
+        if not snippet:
+            continue
+
+        role = extract_representative_role_from_snippet(snippet)
+        if not role:
+            continue
+
+        name = extract_representative_name_from_snippet(snippet, role)
+        if not name:
+            continue
+
+        first_name, last_name = split_venezuelan_full_name(name)
+        if not first_name or not last_name:
+            continue
+
+        representatives.append(
+            {
+                "firstName": first_name,
+                "lastName": last_name,
+                "documentNumber": normalize_venezuelan_identity_number(match.group(1), match.group(2)),
+                "role": role,
+                "rawText": snippet[:500],
+            }
+        )
+
+    return filter_representatives_by_ocr_evidence(
+        dedupe_legal_representatives(representatives),
+        ocr_text=ocr_text,
+    )
+
+
+def extract_representative_role_from_snippet(snippet: str) -> str:
+    normalized = normalize_text_for_matching(snippet)
+    role_map = [
+        ("PRESIDENTE", ["presidente"]),
+        ("DIRECTOR", ["director", "directora"]),
+        ("GERENTE", ["gerente"]),
+        ("ADMINISTRADOR", ["administrador", "administradora"]),
+        ("REPRESENTANTE LEGAL", ["representante legal"]),
+        ("APODERADO", ["apoderado", "apoderada"]),
+    ]
+    if any(item in normalized for item in ["comisario", "regente", "registrador", "notario"]):
+        return ""
+    for role, keywords in role_map:
+        if any(keyword in normalized for keyword in keywords):
+            return role
+    if "junta directiva" in normalized:
+        return "MIEMBRO DE JUNTA DIRECTIVA"
+    return ""
+
+
+def extract_representative_name_from_snippet(snippet: str, role: str) -> str:
+    name_chars = r"A-ZÁÉÍÓÚÜÑ\s"
+    patterns = [
+        rf"{re.escape(role)}\s+a\s+la\s+Ciudadan[ao],?\s+([{name_chars}]{{6,90}}?)(?:,|\s+venezolan[ao])",
+        rf"cargo\s+de\s*;?\s*{re.escape(role)}\s+a\s+la\s+Ciudadan[ao],?\s+([{name_chars}]{{6,90}}?)(?:,|\s+venezolan[ao])",
+        rf"Ciudadan[ao],?\s+([{name_chars}]{{6,90}}?)(?:,|\s+venezolan[ao]).{{0,180}}cedula",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, snippet, flags=re.IGNORECASE)
+        if match:
+            return clean_ocr_person_name(match.group(1))
+    return ""
+
+
+def clean_ocr_person_name(value: str) -> str:
+    text = re.sub(r"[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]", " ", value or "")
+    text = re.sub(r"\b(?:LA|EL|CIUDADANA|CIUDADANO|CARGO|DE|DEL|A)\b", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+", " ", text).strip(" ,.;:-").upper()
+    return text
+
+
+def split_venezuelan_full_name(full_name: str) -> Tuple[str, str]:
+    parts = [part for part in re.split(r"\s+", clean_ocr_person_name(full_name)) if len(part) > 1]
+    if len(parts) < 2:
+        return "", ""
+    if len(parts) >= 4:
+        return " ".join(parts[:2]), " ".join(parts[2:])
+    if len(parts) == 3:
+        return parts[0], " ".join(parts[1:])
+    return parts[0], parts[1]
+
+
+def normalize_venezuelan_identity_number(prefix: str, number: str) -> str:
+    digits = re.sub(r"\D", "", number or "")
+    if len(digits) <= 3:
+        formatted = digits
+    elif len(digits) <= 6:
+        formatted = f"{digits[:-3]}.{digits[-3:]}"
+    else:
+        formatted = f"{digits[:-6]}.{digits[-6:-3]}.{digits[-3:]}"
+    return f"{str(prefix or 'V').upper()}-{formatted}"
 
 
 def run_bedrock_legal_representative_extraction_from_ocr(*, ocr_text: str) -> List[Dict[str, str]]:
