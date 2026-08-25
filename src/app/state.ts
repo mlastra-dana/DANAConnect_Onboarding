@@ -105,6 +105,7 @@ export function saveState(state: OnboardingState) {
   } catch (error) {
     console.warn('No se pudo guardar el estado completo del onboarding. Se guardara una version liviana.', error);
     try {
+      localStorage.removeItem(key);
       localStorage.setItem(key, JSON.stringify(stripFilePayloadsForStorage(persistentState)));
     } catch (fallbackError) {
       console.warn('No se pudo guardar el estado liviano del onboarding.', fallbackError);
@@ -113,17 +114,39 @@ export function saveState(state: OnboardingState) {
 }
 
 export function clearState(companyId: string) {
-  localStorage.removeItem(getStorageKey(companyId));
-  localStorage.removeItem(`onboarding-${companyId}`);
+  try {
+    localStorage.removeItem(getStorageKey(companyId));
+    localStorage.removeItem(`onboarding-${companyId}`);
+  } catch (error) {
+    console.warn('No se pudo limpiar el estado local del onboarding.', error);
+  }
 }
 
 export function loadState(companyId: string): OnboardingState | null {
-  const raw = localStorage.getItem(getStorageKey(companyId));
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(getStorageKey(companyId));
+  } catch (error) {
+    console.warn('No se pudo leer el estado local del onboarding.', error);
+    return null;
+  }
   if (!raw) return null;
   try {
     return stripTransientDocuments(JSON.parse(raw) as OnboardingState);
-  } catch {
+  } catch (error) {
+    console.warn('Estado local de onboarding invalido. Se iniciara uno nuevo.', error);
+    clearState(companyId);
     return null;
+  }
+}
+
+export function clearAllOnboardingState() {
+  try {
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith(STORAGE_PREFIX) || key.startsWith('onboarding-'))
+      .forEach((key) => localStorage.removeItem(key));
+  } catch (error) {
+    console.warn('No se pudo limpiar todo el estado local del onboarding.', error);
   }
 }
 
