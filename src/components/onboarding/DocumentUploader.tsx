@@ -114,7 +114,7 @@ export function DocumentUploader({
         </div>
       ) : null}
 
-      {!hasFile ? (
+      {!hasFile && !loading ? (
         <div
           role="button"
           tabIndex={0}
@@ -252,7 +252,7 @@ export function DocumentUploader({
             ))}
           </div>
         ) : null}
-        {feedbackStatus === 'pending' ? <p className="text-grayText">{pendingMessage}</p> : null}
+        {feedbackStatus === 'pending' && hasFile ? <p className="text-grayText">{pendingMessage}</p> : null}
       </div>
     </>
   );
