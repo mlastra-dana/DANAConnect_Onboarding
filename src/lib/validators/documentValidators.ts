@@ -13,6 +13,7 @@ export async function validateDocumentFile(
   onProgress?: (progress: number) => void,
   options?: {
     expectedLegalRepresentatives?: DocumentValidationResult['extractedLegalRepresentatives'];
+    expectedCompany?: DocumentValidationResult['extractedCompany'];
   }
 ): Promise<DocumentValidationResult> {
   const checks: DocumentValidationResult['checks'] = [];
@@ -58,6 +59,9 @@ export async function validateDocumentFile(
   };
   if (options?.expectedLegalRepresentatives) {
     payload.expected_legal_representatives = options.expectedLegalRepresentatives;
+  }
+  if (options?.expectedCompany) {
+    payload.expected_company = options.expectedCompany;
   }
 
   onProgress?.(65);
@@ -114,6 +118,9 @@ export async function validateDocumentFile(
     internalDiagnostics: result.internalDiagnostics,
     extractedIdentity: result.extractedIdentity,
     extractedLegalRepresentatives: result.extractedLegalRepresentatives,
+    extractedCompany: result.extractedCompany,
+    companyDocumentMatch: result.companyDocumentMatch,
+    matchedCompanyEvidence: result.matchedCompanyEvidence,
     legalRepresentativeMatch: result.legalRepresentativeMatch,
     matchedRepresentativeRole: result.matchedRepresentativeRole,
     matchedRepresentativeEvidence: result.matchedRepresentativeEvidence,
@@ -215,6 +222,7 @@ function mapLambdaResponseToValidationResult(body: unknown, fileSize: number) {
   const analysis = isRecord(payload.analysis) ? payload.analysis : {};
   const diagnostics = isRecord(payload.providerDiagnostics) ? payload.providerDiagnostics : {};
   const extractedIdentityPayload = isRecord(payload.extractedIdentity) ? payload.extractedIdentity : {};
+  const extractedCompanyPayload = isRecord(payload.extractedCompany) ? payload.extractedCompany : {};
   const extractedLegalRepresentativesPayload = Array.isArray(payload.extractedLegalRepresentatives)
     ? payload.extractedLegalRepresentatives
     : [];
@@ -266,6 +274,14 @@ function mapLambdaResponseToValidationResult(body: unknown, fileSize: number) {
         role: typeof representative.role === 'string' ? representative.role.trim() : '',
         rawText: typeof representative.rawText === 'string' ? representative.rawText.trim() : ''
       })),
+    extractedCompany: {
+      name: typeof extractedCompanyPayload.name === 'string' ? extractedCompanyPayload.name.trim() : '',
+      rif: typeof extractedCompanyPayload.rif === 'string' ? extractedCompanyPayload.rif.trim() : '',
+      rawText: typeof extractedCompanyPayload.rawText === 'string' ? extractedCompanyPayload.rawText.trim() : ''
+    },
+    companyDocumentMatch: typeof payload.companyDocumentMatch === 'boolean' ? payload.companyDocumentMatch : null,
+    matchedCompanyEvidence:
+      typeof payload.matchedCompanyEvidence === 'string' ? payload.matchedCompanyEvidence.trim() : '',
     legalRepresentativeMatch:
       typeof payload.legalRepresentativeMatch === 'boolean' ? payload.legalRepresentativeMatch : null,
     matchedRepresentativeRole:

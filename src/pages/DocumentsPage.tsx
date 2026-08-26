@@ -63,6 +63,12 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
   const documentOrder = getDocumentOrder(state.country, state.personType);
   const showRepresentatives = requiresRepresentatives(state.country, state.personType);
   const isVenezuelaJuridica = state.country === 've' && state.personType === 'juridica';
+  const rifValidation = state.documents.rif.validation;
+  const rifCompany = rifValidation.extractedCompany;
+  const hasRifCompanyData = Boolean(rifCompany?.name || rifCompany?.rif);
+  const canUploadConstitution = !isVenezuelaJuridica || rifValidation.status === 'valid';
+  const constitutionDisabledMessage =
+    'Primero cargue y valide el RIF para comparar la razón social con el acta.';
   const constitutionValidation = state.documents.registroMercantil.validation;
   const legalRepresentatives = constitutionValidation.extractedLegalRepresentatives ?? [];
   const canUploadRepresentative =
@@ -96,9 +102,19 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       fileBase64 = await fileToBase64(file);
       setRuntimeFiles((prev) => ({ ...prev, [key]: file }));
 
-      const result = await validateDocumentFile(docType, file, state.country, (progress) => {
-        setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
-      });
+      const result = await validateDocumentFile(
+        docType,
+        file,
+        state.country,
+        (progress) => {
+          setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
+        },
+        isVenezuelaJuridica && docType === 'registroMercantil' && hasRifCompanyData
+          ? {
+              expectedCompany: rifCompany
+            }
+          : undefined
+      );
 
       const nextDocument: DocumentRecord = {
         type: docType,
@@ -111,6 +127,10 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       };
 
       setDocument(docType, nextDocument);
+
+      if (isVenezuelaJuridica && docType === 'rif') {
+        clearVenezuelaJuridicaDependentDocuments();
+      }
 
       if (isVenezuelaJuridica && docType === 'registroMercantil') {
         [representative1, representative2].forEach((representative) => {
@@ -234,6 +254,10 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
     setDocument(docType, createEmptyDocument(docType));
     clearUploaderRuntime(key);
+
+    if (isVenezuelaJuridica && docType === 'rif') {
+      clearVenezuelaJuridicaDependentDocuments();
+    }
   }
 
   function handleRemoveRepresentative(repId: 1 | 2) {
@@ -271,26 +295,48 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     setValidationProgressMap((prev) => ({ ...prev, [key]: 0 }));
   }
 
+  function clearVenezuelaJuridicaDependentDocuments() {
+    const constitution = state.documents.registroMercantil;
+    if (constitution.previewUrl) URL.revokeObjectURL(constitution.previewUrl);
+    setDocument('registroMercantil', createEmptyDocument('registroMercantil'));
+    clearUploaderRuntime('registroMercantil');
+
+    [representative1, representative2].forEach((representative) => {
+      if (representative.document.previewUrl) URL.revokeObjectURL(representative.document.previewUrl);
+      setRepresentative(representative.id, {
+        ...representative,
+        document: createEmptyDocument('cedulaRepresentante')
+      });
+      clearUploaderRuntime(representative.id === 1 ? 'rep1' : 'rep2');
+    });
+  }
+
   return (
     <div className="space-y-6">
       <Toast type="info" message={flowConfig.documentsIntro} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {documentOrder.map((docType) => (
-          <FileUploadCard
-            key={docType}
-            docRecord={state.documents[docType] as DocumentRecord}
-            title={getDocumentLabel(state.country, state.personType, docType)}
-            label={getDocumentLabel(state.country, state.personType, docType)}
-            loading={loadingMap[docType] || uploadingMap[docType]}
-            isUploading={uploadingMap[docType]}
-            uploadProgress={uploadProgressMap[docType]}
-            validationProgress={validationProgressMap[docType]}
-            previewFile={runtimeFiles[docType]}
-            onSelectFile={(file) => handleUploadBase(docType, file)}
-            onRemoveFile={() => handleRemoveBase(docType)}
-          />
-        ))}
+        {documentOrder.map((docType) => {
+          const constitutionUploadLocked = isVenezuelaJuridica && docType === 'registroMercantil' && !canUploadConstitution;
+
+          return (
+            <FileUploadCard
+              key={docType}
+              docRecord={state.documents[docType] as DocumentRecord}
+              title={getDocumentLabel(state.country, state.personType, docType)}
+              label={getDocumentLabel(state.country, state.personType, docType)}
+              loading={loadingMap[docType] || uploadingMap[docType]}
+              isUploading={uploadingMap[docType]}
+              uploadProgress={uploadProgressMap[docType]}
+              validationProgress={validationProgressMap[docType]}
+              previewFile={runtimeFiles[docType]}
+              disabled={constitutionUploadLocked}
+              disabledMessage={constitutionDisabledMessage}
+              onSelectFile={(file) => handleUploadBase(docType, file)}
+              onRemoveFile={() => handleRemoveBase(docType)}
+            />
+          );
+        })}
 
         {showRepresentatives ? (
           <FileUploadCard

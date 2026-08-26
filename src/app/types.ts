@@ -27,6 +27,12 @@ export type DocumentCheck = {
   severity?: 'info' | 'warning' | 'error';
 };
 
+export type ExtractedCompany = {
+  name?: string;
+  rif?: string;
+  rawText?: string;
+};
+
 export type DocumentValidationResult = {
   status: ValidationStatus;
   checks: DocumentCheck[];
@@ -67,6 +73,9 @@ export type DocumentValidationResult = {
     role?: string;
     rawText?: string;
   }>;
+  extractedCompany?: ExtractedCompany;
+  companyDocumentMatch?: boolean | null;
+  matchedCompanyEvidence?: string;
   legalRepresentativeMatch?: boolean | null;
   matchedRepresentativeRole?: string;
   matchedRepresentativeEvidence?: string;

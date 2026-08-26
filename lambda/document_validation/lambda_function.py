@@ -463,6 +463,11 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             if "expected_legal_representatives" in payload
             else None
         )
+        expected_company = (
+            normalize_extracted_company(payload.get("expected_company"))
+            if "expected_company" in payload
+            else None
+        )
 
         if content_type not in ALLOWED_MIME_TYPES:
             return response(400, {"ok": False, "error": f"Tipo de archivo no permitido: {content_type}"})
@@ -533,6 +538,7 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
                 raw_slot=raw_slot,
                 classification=classification,
                 expected_legal_representatives=expected_legal_representatives,
+                expected_company=expected_company,
             )
 
         # 5) Conservamos la clasificacion neutral como fuente de verdad para el tipo documental.
@@ -551,6 +557,8 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
                 content_type=content_type,
             )
             analysis["extractedLegalRepresentatives"] = representative_extraction["representatives"]
+            analysis["extractedCompany"] = representative_extraction.get("company") or analysis.get("extractedCompany", {})
+            analysis["companyEvidenceText"] = representative_extraction.get("companyEvidenceText", "")
             analysis["representativeExtractionDiagnostics"] = representative_extraction["diagnostics"]
 
         # 6) Guardrails finales por si la validacion intenta aprobar algo incompatible.
@@ -567,16 +575,27 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             analysis=analysis,
             expected_legal_representatives=expected_legal_representatives,
         )
+        analysis = apply_expected_company_guard(
+            country=country,
+            slot=slot,
+            analysis=analysis,
+            expected_company=expected_company,
+        )
         if country != "ve" or slot != "documentoRepresentante":
             analysis["legalRepresentativeMatch"] = None
+        if country != "ve" or slot != "documentoConstitucion":
+            analysis["companyDocumentMatch"] = None
         LOGGER.info(
-            "document_validation_result country=%s slot=%s status=%s extracted_legal_representatives=%s expected_legal_representatives=%s legal_representative_match=%s",
+            "document_validation_result country=%s slot=%s status=%s extracted_legal_representatives=%s expected_legal_representatives=%s legal_representative_match=%s extracted_company_rif=%s expected_company_rif=%s company_document_match=%s",
             country,
             slot,
             normalize_status(analysis.get("status")),
             len(normalize_extracted_legal_representatives(analysis.get("extractedLegalRepresentatives"))),
             "not_sent" if expected_legal_representatives is None else len(expected_legal_representatives),
             analysis.get("legalRepresentativeMatch"),
+            normalize_extracted_company(analysis.get("extractedCompany")).get("rif"),
+            "not_sent" if expected_company is None else expected_company.get("rif", ""),
+            analysis.get("companyDocumentMatch"),
         )
         LOGGER.info(
             "document_validation_extraction_debug %s",
@@ -586,6 +605,7 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
                     slot=slot,
                     analysis=analysis,
                     expected_legal_representatives=expected_legal_representatives,
+                    expected_company=expected_company,
                 ),
                 ensure_ascii=False,
             ),
@@ -1196,6 +1216,7 @@ def run_bedrock_validation(
     raw_slot: str,
     classification: Dict[str, Any],
     expected_legal_representatives: Optional[List[Dict[str, str]]] = None,
+    expected_company: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     slot_label = DOC_SLOT_LABELS[(country, slot)]
     prompt = build_prompt(
@@ -1207,6 +1228,7 @@ def run_bedrock_validation(
         slot_label=slot_label,
         classification=classification,
         expected_legal_representatives=expected_legal_representatives,
+        expected_company=expected_company,
     )
 
     user_content = build_bedrock_user_content(
@@ -1258,6 +1280,13 @@ def build_constitution_analysis_from_classification(classification: Dict[str, An
             "rawText": "",
         },
         "extractedLegalRepresentatives": [],
+        "extractedCompany": {
+            "name": "",
+            "rif": "",
+            "rawText": "",
+        },
+        "companyDocumentMatch": None,
+        "matchedCompanyEvidence": "",
         "legalRepresentativeMatch": None,
         "matchedRepresentativeRole": "",
         "matchedRepresentativeEvidence": "",
@@ -1291,10 +1320,17 @@ def run_legal_representative_extraction(
         diagnostics["textractPages"] = ocr_result["pageCount"]
         diagnostics["textractLines"] = len(ocr_result["lines"])
         diagnostics["textractProvider"] = ocr_result["provider"]
+        extracted_company = extract_company_from_ocr_patterns(ocr_result["text"])
+        diagnostics["companyPatternFound"] = bool(extracted_company.get("name") or extracted_company.get("rif"))
 
         if not ocr_result["text"].strip():
             diagnostics["error"] = "textract_empty_text"
-            return {"representatives": [], "diagnostics": diagnostics}
+            return {
+                "representatives": [],
+                "company": extracted_company,
+                "companyEvidenceText": "",
+                "diagnostics": diagnostics,
+            }
 
         fast_representatives = extract_legal_representatives_from_ocr_patterns(ocr_result["text"])
         if fast_representatives:
@@ -1308,7 +1344,12 @@ def run_legal_representative_extraction(
                 diagnostics["textractLines"],
                 diagnostics["confirmedRepresentatives"],
             )
-            return {"representatives": fast_representatives, "diagnostics": diagnostics}
+            return {
+                "representatives": fast_representatives,
+                "company": extracted_company,
+                "companyEvidenceText": ocr_result["text"][:120000],
+                "diagnostics": diagnostics,
+            }
 
         candidates = run_bedrock_legal_representative_extraction_from_ocr(
             ocr_text=build_representative_ocr_context(ocr_result["lines"]),
@@ -1328,11 +1369,21 @@ def run_legal_representative_extraction(
             diagnostics["bedrockCandidates"],
             diagnostics["confirmedRepresentatives"],
         )
-        return {"representatives": confirmed, "diagnostics": diagnostics}
+        return {
+            "representatives": confirmed,
+            "company": extracted_company,
+            "companyEvidenceText": ocr_result["text"][:120000],
+            "diagnostics": diagnostics,
+        }
     except Exception as exc:  # noqa: BLE001
         LOGGER.exception("representative_textract_extraction_failed")
         diagnostics["error"] = str(exc)
-        return {"representatives": [], "diagnostics": diagnostics}
+        return {
+            "representatives": [],
+            "company": {"name": "", "rif": "", "rawText": ""},
+            "companyEvidenceText": "",
+            "diagnostics": diagnostics,
+        }
 
 
 def extract_document_text_with_textract(
@@ -1482,6 +1533,112 @@ def page_has_representative_keywords(text: str) -> bool:
         "cedula de identidad",
     ]
     return any(keyword in normalized for keyword in keywords)
+
+
+def extract_company_from_ocr_patterns(ocr_text: str) -> Dict[str, str]:
+    compact_text = re.sub(r"\s+", " ", ocr_text or " ").strip()
+    if not compact_text:
+        return {"name": "", "rif": "", "rawText": ""}
+
+    rif = extract_first_rif(compact_text)
+    name = extract_company_name_from_text(compact_text)
+    raw_text = build_company_raw_evidence(compact_text, name=name, rif=rif)
+    return normalize_extracted_company(
+        {
+            "name": name,
+            "rif": rif,
+            "rawText": raw_text,
+        }
+    )
+
+
+def extract_first_rif(text: str) -> str:
+    patterns = [
+        r"\b([JGVEP])\s*[-.]?\s*(\d{8,10})\s*[-.]?\s*(\d)\b",
+        r"\b([JGVEP])\s*[-.]?\s*(\d{1,3}(?:[.\s]\d{3}){2,3})\s*[-.]?\s*(\d)\b",
+        r"\bRIF\s*[:#-]?\s*([JGVEP])\s*[-.]?\s*(\d{8,10})\s*[-.]?\s*(\d)\b",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if not match:
+            continue
+        prefix = match.group(1)
+        digits = re.sub(r"\D", "", "".join(match.groups()[1:]))
+        if len(digits) >= 9:
+            return format_rif(prefix, digits)
+    return ""
+
+
+def extract_company_name_from_text(text: str) -> str:
+    candidates: List[str] = []
+    patterns = [
+        r"(?:RAZ[OÓ]N SOCIAL|DENOMINACI[OÓ]N(?: COMERCIAL)?|NOMBRE O RAZ[OÓ]N SOCIAL)\s*[:.-]?\s*([A-ZÁÉÍÓÚÑ0-9&.,' -]{5,140})",
+        r"(?:SOCIEDAD MERCANTIL|COMPA[ÑN][IÍ]A AN[OÓ]NIMA|EMPRESA|SOCIEDAD)\s+(?:DENOMINADA|BAJO LA DENOMINACI[OÓ]N DE|QUE GIRAR[AÁ] BAJO LA DENOMINACI[OÓ]N DE)\s+([A-ZÁÉÍÓÚÑ0-9&.,' -]{5,140})",
+        r"\b([A-ZÁÉÍÓÚÑ0-9&.' -]{4,100}\s*,?\s*(?:C\.?\s*A\.?|S\.?\s*A\.?|S\.?R\.?L\.?|C\.?A\.?))\b",
+    ]
+    upper_text = text.upper()
+    for pattern in patterns:
+        for match in re.finditer(pattern, upper_text, re.IGNORECASE):
+            candidate = clean_company_name(match.group(1))
+            if is_plausible_company_name(candidate):
+                candidates.append(candidate)
+
+    if not candidates:
+        return ""
+
+    return max(dedupe_strings(candidates), key=lambda value: len(significant_company_tokens(value)))
+
+
+def clean_company_name(value: str) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip(" ,.;:-")
+    text = re.split(
+        r"\b(?:RIF|DOMICILIO|CAPITAL|OBJETO|REGISTRO|INSCRITA|EXPEDIENTE|TOMO|FOLIO|DURACI[OÓ]N|CLAUSULA|CL[ÁA]USULA)\b",
+        text,
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0]
+    return re.sub(r"\s+", " ", text).strip(" ,.;:-")
+
+
+def is_plausible_company_name(value: str) -> bool:
+    normalized = normalize_text_for_matching(value)
+    if len(normalized) < 5:
+        return False
+    rejected_terms = {
+        "registro mercantil",
+        "republica bolivariana",
+        "servicio nacional",
+        "informacion fiscal",
+        "acta constitutiva",
+        "documento constitutivo",
+        "junta directiva",
+    }
+    if any(term in normalized for term in rejected_terms):
+        return False
+    return len(significant_company_tokens(value)) >= 1
+
+
+def build_company_raw_evidence(text: str, *, name: str, rif: str) -> str:
+    anchors = [item for item in [name, rif] if item]
+    for anchor in anchors:
+        index = normalize_text_for_matching(text).find(normalize_text_for_matching(anchor))
+        if index >= 0:
+            start = max(0, index - 180)
+            end = min(len(text), index + len(anchor) + 220)
+            return text[start:end].strip()
+    return text[:500]
+
+
+def dedupe_strings(values: List[str]) -> List[str]:
+    seen = set()
+    result: List[str] = []
+    for value in values:
+        key = normalize_text_for_matching(value)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        result.append(value)
+    return result
 
 
 def extract_legal_representatives_from_ocr_patterns(ocr_text: str) -> List[Dict[str, str]]:
@@ -1980,6 +2137,7 @@ def build_prompt(
     slot_label: str,
     classification: Dict[str, Any],
     expected_legal_representatives: Optional[List[Dict[str, str]]] = None,
+    expected_company: Optional[Dict[str, str]] = None,
 ) -> str:
     rule = DOC_VALIDATION_RULES[country][slot]
     detected_document_type = normalize_detected_document_type(classification.get("detected_document_type"))
@@ -1998,6 +2156,9 @@ def build_prompt(
         expected_legal_representatives or [],
         ensure_ascii=False,
     )
+    should_extract_company = country == "ve" and slot in {"documentoFiscal", "documentoConstitucion"}
+    should_match_expected_company = country == "ve" and slot == "documentoConstitucion" and expected_company is not None
+    expected_company_json = json.dumps(normalize_extracted_company(expected_company or {}), ensure_ascii=False)
 
     extraction_rules = """
 Si el slot es "documentoIdentidad" o "documentoRepresentante", adicionalmente intenta extraer esta salida minima:
@@ -2072,6 +2233,38 @@ Reglas para legalRepresentativeMatch:
     no_legal_representative_match_rules = """
 Devuelve legalRepresentativeMatch como null, matchedRepresentativeRole como cadena vacia, matchedRepresentativeEvidence como cadena vacia y visibleIdentityEvidence como cadena vacia.
 """.strip()
+    company_extraction_rules = """
+Para Venezuela y slots "documentoFiscal" o "documentoConstitucion", extrae tambien los datos de empresa visibles:
+- extractedCompany.name: razon social o denominacion comercial exacta de la empresa.
+- extractedCompany.rif: numero RIF visible con prefijo si aparece, por ejemplo J-12345678-9.
+- extractedCompany.rawText: frase corta visible que contiene la razon social y/o RIF.
+
+Reglas para extractedCompany:
+- En RIF/SENIAT, usa la razon social y RIF impresos en el documento fiscal.
+- En Registro Mercantil / Acta Constitutiva, usa la denominacion de la sociedad o razon social registrada.
+- No uses nombres de personas naturales, representantes, notarios, registradores ni entes publicos como razon social.
+- No inventes datos. Si no puedes leer un campo con confianza razonable, devuelvelo como cadena vacia.
+""".strip()
+    no_company_extraction_rules = """
+Devuelve extractedCompany con name, rif y rawText como cadenas vacias.
+""".strip()
+    company_match_rules = f"""
+Para Venezuela y slot "documentoConstitucion", valida tambien si el acta corresponde a la empresa esperada extraida previamente del RIF.
+
+Empresa esperada:
+{expected_company_json}
+
+Reglas para companyDocumentMatch:
+- Compara primero el RIF exacto si aparece en ambos documentos, ignorando puntos, espacios y guiones.
+- Si el acta no muestra RIF o no se lee completo, compara la razon social visible del acta contra la razon social esperada del RIF.
+- Ignora diferencias menores de puntuacion, mayusculas, acentos y sufijos societarios como C.A., S.A. o S.R.L.
+- companyDocumentMatch debe ser true si el acta corresponde razonablemente a la misma empresa del RIF.
+- companyDocumentMatch debe ser false si el acta corresponde a otra empresa o no hay datos suficientes para comparar.
+- matchedCompanyEvidence debe explicar brevemente que razon social o RIF coincide.
+""".strip()
+    no_company_match_rules = """
+Devuelve companyDocumentMatch como null y matchedCompanyEvidence como cadena vacia.
+""".strip()
 
     return f"""
 Eres un validador documental para un onboarding empresarial multi-pais.
@@ -2125,8 +2318,10 @@ Instrucciones:
 - No inventes texto ni campos.
 - El nombre del archivo es solo una pista secundaria.
 - {extraction_rules if should_extract_identity else no_extraction_rules}
+- {company_extraction_rules if should_extract_company else no_company_extraction_rules}
 - {legal_representative_rules if should_extract_legal_representatives else no_legal_representative_rules}
 - {legal_representative_match_rules if should_match_expected_representative else no_legal_representative_match_rules}
+- {company_match_rules if should_match_expected_company else no_company_match_rules}
 
 Tu respuesta DEBE ser JSON puro, sin markdown, con esta forma exacta:
 {{
@@ -2143,6 +2338,13 @@ Tu respuesta DEBE ser JSON puro, sin markdown, con esta forma exacta:
     "documentNumber": "",
     "rawText": ""
   }},
+  "extractedCompany": {{
+    "name": "",
+    "rif": "",
+    "rawText": ""
+  }},
+  "companyDocumentMatch": null,
+  "matchedCompanyEvidence": "",
   "extractedLegalRepresentatives": [
     {{
       "firstName": "",
@@ -2168,8 +2370,10 @@ Reglas adicionales:
 - Si el archivo esta vacio o completamente ilegible, responde "error".
 - Si el archivo es parcialmente legible pero tiene indicadores fuertes del documento esperado, responde "warning".
 - Si el slot no requiere extraccion de identidad, devuelve extractedIdentity con strings vacios.
+- Si el slot no requiere extraccion de empresa, devuelve extractedCompany con strings vacios.
 - Si el slot no requiere extraccion de representantes legales, devuelve extractedLegalRepresentatives como lista vacia.
 - Si no se recibieron representantes legales esperados para comparar, devuelve legalRepresentativeMatch null.
+- Si no se recibio empresa esperada para comparar, devuelve companyDocumentMatch null.
 
 Datos del archivo:
 - file_name: {file_name}
@@ -2607,6 +2811,78 @@ def apply_expected_legal_representative_guard(
     return analysis
 
 
+def apply_expected_company_guard(
+    *,
+    country: str,
+    slot: str,
+    analysis: Dict[str, Any],
+    expected_company: Optional[Dict[str, str]],
+) -> Dict[str, Any]:
+    if country != "ve" or slot != "documentoConstitucion" or expected_company is None:
+        return analysis
+
+    expected = normalize_extracted_company(expected_company)
+    if not expected.get("name") and not expected.get("rif"):
+        analysis["status"] = "error"
+        analysis["document_type_match"] = False
+        analysis["companyDocumentMatch"] = False
+        analysis["summary"] = "Primero cargue un RIF donde se identifique la razón social o el número fiscal."
+        analysis["warnings"] = []
+        analysis["reasons"] = [
+            "No se recibieron datos de empresa extraidos del RIF para comparar contra el acta.",
+            "El Registro Mercantil / Acta Constitutiva debe validarse contra el RIF cargado previamente.",
+        ]
+        return analysis
+
+    detected_document_type = normalize_detected_document_type(analysis.get("detected_document_type"))
+    if detected_document_type != "documentoConstitucion":
+        return analysis
+
+    extracted = normalize_extracted_company(analysis.get("extractedCompany"))
+    evidence_text = " ".join(
+        item
+        for item in [
+            extracted.get("name", ""),
+            extracted.get("rif", ""),
+            extracted.get("rawText", ""),
+            str(analysis.get("companyEvidenceText") or ""),
+            str(analysis.get("summary") or ""),
+            str(analysis.get("classifier_summary") or ""),
+        ]
+        if item
+    )
+
+    expected_rif = normalize_rif(expected.get("rif"))
+    extracted_rif = normalize_rif(extracted.get("rif"))
+    if expected_rif and (
+        expected_rif == extracted_rif
+        or rif_appears_in_text(expected_rif, evidence_text)
+    ):
+        analysis["companyDocumentMatch"] = True
+        analysis["matchedCompanyEvidence"] = "El RIF del acta coincide con el RIF cargado previamente."
+        return analysis
+
+    expected_name = expected.get("name", "")
+    extracted_name = extracted.get("name", "")
+    if company_name_matches(expected_name, extracted_name) or company_name_appears_in_text(expected_name, evidence_text):
+        analysis["companyDocumentMatch"] = True
+        analysis["matchedCompanyEvidence"] = "La razón social del acta coincide con el RIF cargado previamente."
+        return analysis
+
+    if normalize_status(analysis.get("status")) == "error":
+        return analysis
+
+    analysis["companyDocumentMatch"] = False
+    analysis["status"] = "error"
+    analysis["document_type_match"] = False
+    analysis["summary"] = "El Registro Mercantil / Acta Constitutiva no corresponde al RIF cargado."
+    analysis["warnings"] = []
+    analysis["reasons"] = normalize_string_list(analysis.get("reasons")) + [
+        "No se encontro coincidencia suficiente entre la razón social o RIF del documento fiscal y el acta.",
+    ]
+    return analysis
+
+
 def build_representative_match_evidence_text(*, identity: Dict[str, str], analysis: Dict[str, Any]) -> str:
     return " ".join(
         item
@@ -2700,6 +2976,94 @@ def significant_name_tokens(value: str) -> List[str]:
     return [token for token in tokens if len(token) >= 3 and token not in ignored]
 
 
+def format_rif(prefix: str, digits: str) -> str:
+    compact_digits = re.sub(r"\D", "", digits or "")
+    if len(compact_digits) < 9:
+        return ""
+    body = compact_digits[:-1]
+    check_digit = compact_digits[-1]
+    return f"{str(prefix or '').upper()}-{body}-{check_digit}"
+
+
+def normalize_rif(value: Any) -> str:
+    text = str(value or "").upper()
+    match = re.search(r"\b([JGVEP])\s*[-.]?\s*(\d{8,10})\s*[-.]?\s*(\d)\b", text)
+    if match:
+        return f"{match.group(1)}{match.group(2)}{match.group(3)}"
+
+    compact = re.sub(r"[^A-Z0-9]", "", text)
+    match = re.search(r"([JGVEP])(\d{9,11})", compact)
+    if match:
+        return f"{match.group(1)}{match.group(2)}"
+
+    digits = re.sub(r"\D", "", text)
+    return digits if len(digits) >= 9 else ""
+
+
+def rif_appears_in_text(expected_rif: str, text: str) -> bool:
+    expected = normalize_rif(expected_rif)
+    if not expected:
+        return False
+    text_compact = re.sub(r"[^A-Z0-9]", "", str(text or "").upper())
+    return expected in text_compact or expected[1:] in text_compact
+
+
+def company_name_matches(left: str, right: str) -> bool:
+    left_tokens = significant_company_tokens(left)
+    right_tokens = set(significant_company_tokens(right))
+    if not left_tokens or not right_tokens:
+        return False
+
+    matched = [token for token in left_tokens if token in right_tokens]
+    required = min(len(left_tokens), 2)
+    return len(matched) >= required
+
+
+def company_name_appears_in_text(expected_name: str, text: str) -> bool:
+    expected_tokens = significant_company_tokens(expected_name)
+    text_tokens = set(significant_company_tokens(text))
+    if not expected_tokens or not text_tokens:
+        return False
+
+    matched = [token for token in expected_tokens if token in text_tokens]
+    required = min(len(expected_tokens), 2)
+    return len(matched) >= required
+
+
+def significant_company_tokens(value: str) -> List[str]:
+    ignored = {
+        "CA",
+        "C",
+        "A",
+        "SA",
+        "S",
+        "RL",
+        "SRL",
+        "CIA",
+        "COMPANIA",
+        "COMPANIA",
+        "ANONIMA",
+        "SOCIEDAD",
+        "MERCANTIL",
+        "EMPRESA",
+        "RIF",
+        "J",
+        "G",
+        "V",
+        "E",
+        "P",
+        "DE",
+        "DEL",
+        "LA",
+        "LAS",
+        "LOS",
+        "EL",
+        "Y",
+    }
+    tokens = normalize_text_for_matching(value).upper().split()
+    return [token for token in tokens if len(token) >= 2 and token not in ignored and not token.isdigit()]
+
+
 def extract_bedrock_text(result: Dict[str, Any]) -> str:
     output = result.get("output") or {}
     message = output.get("message") or {}
@@ -2735,8 +3099,10 @@ def build_extraction_debug_payload(
     slot: str,
     analysis: Dict[str, Any],
     expected_legal_representatives: Optional[List[Dict[str, str]]],
+    expected_company: Optional[Dict[str, str]],
 ) -> Dict[str, Any]:
     identity = normalize_extracted_identity(analysis.get("extractedIdentity"))
+    extracted_company = normalize_extracted_company(analysis.get("extractedCompany"))
     extracted_representatives = normalize_extracted_legal_representatives(
         analysis.get("extractedLegalRepresentatives")
     )
@@ -2745,6 +3111,7 @@ def build_extraction_debug_payload(
         if expected_legal_representatives is not None
         else None
     )
+    normalized_expected_company = normalize_extracted_company(expected_company) if expected_company is not None else None
 
     return {
         "country": country,
@@ -2757,6 +3124,18 @@ def build_extraction_debug_payload(
             if isinstance(analysis.get("legalRepresentativeMatch"), bool)
             else None
         ),
+        "companyDocumentMatch": (
+            analysis.get("companyDocumentMatch")
+            if isinstance(analysis.get("companyDocumentMatch"), bool)
+            else None
+        ),
+        "extractedCompany": truncate_debug_company(extracted_company),
+        "expectedCompany": (
+            truncate_debug_company(normalized_expected_company)
+            if normalized_expected_company is not None
+            else "not_sent"
+        ),
+        "matchedCompanyEvidence": truncate_debug_text(analysis.get("matchedCompanyEvidence")),
         "extractedIdentity": truncate_debug_identity(identity),
         "visibleIdentityEvidence": truncate_debug_text(analysis.get("visibleIdentityEvidence")),
         "matchedRepresentativeRole": truncate_debug_text(analysis.get("matchedRepresentativeRole")),
@@ -2798,6 +3177,14 @@ def truncate_debug_representative(representative: Dict[str, str]) -> Dict[str, s
     }
 
 
+def truncate_debug_company(company: Dict[str, str]) -> Dict[str, str]:
+    return {
+        "name": truncate_debug_text(company.get("name")),
+        "rif": truncate_debug_text(company.get("rif")),
+        "rawText": truncate_debug_text(company.get("rawText"), limit=500),
+    }
+
+
 def truncate_debug_text(value: Any, *, limit: int = 240) -> str:
     text = re.sub(r"\s+", " ", str(value or "")).strip()
     if len(text) <= limit:
@@ -2823,10 +3210,12 @@ def build_validation_response(
     confidence = normalize_confidence(analysis.get("confidence"))
     document_type_match = bool(analysis.get("document_type_match"))
     extracted_identity = normalize_extracted_identity(analysis.get("extractedIdentity"))
+    extracted_company = normalize_extracted_company(analysis.get("extractedCompany"))
     extracted_legal_representatives = normalize_extracted_legal_representatives(
         analysis.get("extractedLegalRepresentatives")
     )
     legal_representative_match = analysis.get("legalRepresentativeMatch")
+    company_document_match = analysis.get("companyDocumentMatch")
     detected_document_type = normalize_detected_document_type(analysis.get("detected_document_type"))
     detected_country = normalize_detected_country(analysis.get("detected_country"))
 
@@ -2870,6 +3259,9 @@ def build_validation_response(
             "detectedCountry": detected_country,
         },
         "extractedIdentity": extracted_identity,
+        "extractedCompany": extracted_company,
+        "companyDocumentMatch": company_document_match if isinstance(company_document_match, bool) else None,
+        "matchedCompanyEvidence": str(analysis.get("matchedCompanyEvidence") or "").strip(),
         "extractedLegalRepresentatives": extracted_legal_representatives,
         "legalRepresentativeMatch": legal_representative_match if isinstance(legal_representative_match, bool) else None,
         "matchedRepresentativeRole": str(analysis.get("matchedRepresentativeRole") or "").strip(),
@@ -2897,6 +3289,21 @@ def normalize_extracted_identity(value: Any) -> Dict[str, str]:
         "firstName": str(value.get("firstName") or "").strip(),
         "lastName": str(value.get("lastName") or "").strip(),
         "documentNumber": str(value.get("documentNumber") or "").strip(),
+        "rawText": str(value.get("rawText") or "").strip(),
+    }
+
+
+def normalize_extracted_company(value: Any) -> Dict[str, str]:
+    if not isinstance(value, dict):
+        return {"name": "", "rif": "", "rawText": ""}
+
+    rif = str(value.get("rif") or "").strip()
+    normalized_rif = normalize_rif(rif)
+    formatted_rif = format_rif(normalized_rif[0], normalized_rif[1:]) if normalized_rif and normalized_rif[0].isalpha() else rif
+
+    return {
+        "name": clean_company_name(str(value.get("name") or "").strip()),
+        "rif": formatted_rif.strip(),
         "rawText": str(value.get("rawText") or "").strip(),
     }
 
