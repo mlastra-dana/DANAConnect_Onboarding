@@ -47,7 +47,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         heroHeadline: 'Portal de onboarding para empresas en Venezuela.',
         heroSubheadline: 'Centralice los adjuntos requeridos en un flujo simple, seguro y validado para su empresa en Venezuela.',
         heroButton: 'Continuar con persona jurídica',
-        documentsIntro: 'Cargue los documentos requeridos para continuar con el onboarding de persona jurídica.',
+        documentsIntro: 'Cargue los documentos requeridos para continuar.',
         documentOrder: ['rif', 'registroMercantil'],
         optionalDocumentOrder: ['actaDesignacionAutoridades'],
         documents: {
@@ -184,7 +184,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         heroHeadline: 'Portal de onboarding para empresas en México.',
         heroSubheadline: 'Centralice los adjuntos requeridos en un flujo simple, seguro y validado para su empresa en México.',
         heroButton: 'Continuar con persona jurídica',
-        documentsIntro: 'Cargue los documentos requeridos para continuar con el onboarding de persona jurídica.',
+        documentsIntro: 'Cargue los documentos requeridos para continuar.',
         documentOrder: ['documentoFiscal', 'documentoConstitucion', 'facultadesRepresentante', 'documentoRepresentante'],
         documents: {
           documentoFiscal: { label: 'Constancia de Situación Fiscal' },
@@ -224,7 +224,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         heroHeadline: 'Portal de onboarding para empresas en Argentina.',
         heroSubheadline: 'Centralice los adjuntos requeridos en un flujo simple, seguro y validado para su empresa en Argentina.',
         heroButton: 'Continuar con persona jurídica',
-        documentsIntro: 'Cargue los documentos requeridos para continuar con el onboarding de persona jurídica.',
+        documentsIntro: 'Cargue los documentos requeridos para continuar.',
         documentOrder: ['rif', 'registroMercantil', 'actaDesignacionAutoridades'],
         documents: {
           rif: { label: 'Constancia de CUIT' },
@@ -270,7 +270,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         heroHeadline: 'Portal de onboarding para empresas en República Dominicana.',
         heroSubheadline: 'Centralice los adjuntos requeridos en un flujo simple, seguro y validado para su empresa en República Dominicana.',
         heroButton: 'Continuar con persona jurídica',
-        documentsIntro: 'Cargue los documentos requeridos para continuar con el onboarding de persona jurídica.',
+        documentsIntro: 'Cargue los documentos requeridos para continuar.',
         documentOrder: ['rif', 'registroMercantil'],
         documents: {
           rif: { label: 'RNC' },
