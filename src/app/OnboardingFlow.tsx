@@ -93,9 +93,10 @@ function OnboardingContent({
   stepKey: string;
   pathname: string;
 }) {
-  const { resetOnboardingState } = useOnboarding();
+  const { state, resetOnboardingState } = useOnboarding();
   const previousPathRef = useRef<string | null>(null);
   const pageTitle = 'Onboarding | Example Company';
+  const isEnglish = state.country === 'usa';
 
   useEffect(() => {
     const previousPath = previousPathRef.current;
@@ -123,8 +124,10 @@ function OnboardingContent({
       {stepKey === 'success' ? <SuccessPage /> : null}
       {stepKey === 'notfound' ? (
         <Card className="text-center">
-          <h1 className="text-xl font-bold text-dark">Paso no encontrado</h1>
-          <p className="mt-2 text-grayText">La ruta no corresponde a un paso válido del onboarding.</p>
+          <h1 className="text-xl font-bold text-dark">{isEnglish ? 'Step not found' : 'Paso no encontrado'}</h1>
+          <p className="mt-2 text-grayText">
+            {isEnglish ? 'This route does not match a valid onboarding step.' : 'La ruta no corresponde a un paso válido del onboarding.'}
+          </p>
         </Card>
       ) : null}
     </AppLayout>

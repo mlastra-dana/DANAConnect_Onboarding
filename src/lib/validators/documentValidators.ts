@@ -243,7 +243,7 @@ function mapLambdaResponseToValidationResult(body: unknown, fileSize: number) {
           : status === 'error'
             ? 'Con errores'
             : status === 'warning'
-              ? 'Aceptado con revision recomendada'
+              ? 'Aceptado con revisión recomendada'
               : 'Documento aceptado',
       message:
         typeof uiStatus.message === 'string' && uiStatus.message.trim() ? uiStatus.message.trim() : summary
@@ -319,6 +319,6 @@ function toStringList(value: unknown): string[] {
 
 function defaultSummary(status: 'valid' | 'warning' | 'error') {
   if (status === 'valid') return 'Documento aceptado.';
-  if (status === 'warning') return 'Documento aceptado con revision recomendada.';
+  if (status === 'warning') return 'Documento aceptado con revisión recomendada.';
   return 'Documento rechazado.';
 }

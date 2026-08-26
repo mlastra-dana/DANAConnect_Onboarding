@@ -1,14 +1,18 @@
 import { CheckCircle2 } from 'lucide-react';
 
-const steps = ['Bienvenida', 'Tipo de Persona', 'Documentos', 'Prueba de Vida', 'Revisión & Envío'];
+const steps = {
+  es: ['Bienvenida', 'Tipo de persona', 'Documentos', 'Prueba de vida', 'Revisión y envío'],
+  en: ['Welcome', 'Person type', 'Documents', 'Liveness check', 'Review and submit']
+};
 
-export function Stepper({ currentStep }: { currentStep: number }) {
+export function Stepper({ currentStep, language = 'es' }: { currentStep: number; language?: 'es' | 'en' }) {
+  const stepLabels = steps[language];
   return (
-    <nav aria-label="Pasos de onboarding" className="mb-8">
+    <nav aria-label={language === 'en' ? 'Onboarding steps' : 'Pasos de onboarding'} className="mb-8">
       <div className="relative hidden md:block">
         <div className="absolute left-[10%] right-[10%] top-4 h-px bg-borderLight" />
         <ol className="relative grid grid-cols-5 gap-4">
-          {steps.map((step, index) => {
+          {stepLabels.map((step, index) => {
             const stepNumber = index + 1;
             const active = currentStep === stepNumber;
             const done = currentStep > stepNumber;
@@ -30,7 +34,7 @@ export function Stepper({ currentStep }: { currentStep: number }) {
       </div>
 
       <ol className="grid grid-cols-1 gap-3 md:hidden">
-        {steps.map((step, index) => {
+        {stepLabels.map((step, index) => {
           const stepNumber = index + 1;
           const active = currentStep === stepNumber;
           const done = currentStep > stepNumber;

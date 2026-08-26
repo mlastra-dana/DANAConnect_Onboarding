@@ -42,12 +42,12 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
     personTypes: {
       juridica: {
         personType: 'juridica',
-        personTypeLabel: 'Persona juridica',
+        personTypeLabel: 'Persona jurídica',
         personTypeDescription: 'Onboarding para empresas o sociedades con representantes legales.',
         heroHeadline: 'Portal de onboarding para empresas en Venezuela.',
         heroSubheadline: 'Centralice los adjuntos requeridos en un flujo simple, seguro y validado para su empresa en Venezuela.',
-        heroButton: 'Continuar con persona juridica',
-        documentsIntro: 'Cargue los documentos requeridos para continuar con el onboarding de persona juridica.',
+        heroButton: 'Continuar con persona jurídica',
+        documentsIntro: 'Cargue los documentos requeridos para continuar con el onboarding de persona jurídica.',
         documentOrder: ['rif', 'registroMercantil'],
         optionalDocumentOrder: ['actaDesignacionAutoridades'],
         documents: {
@@ -70,7 +70,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         personTypeLabel: 'Persona natural',
         personTypeDescription: 'Onboarding individual para personas naturales.',
         heroHeadline: 'Portal de onboarding para personas naturales en Venezuela.',
-        heroSubheadline: 'Cargue su documentacion personal en un flujo guiado, simple y validado para Venezuela.',
+        heroSubheadline: 'Cargue su documentación personal en un flujo guiado, simple y validado para Venezuela.',
         heroButton: 'Continuar con persona natural',
         documentsIntro: 'Cargue el RIF y la cédula requeridos para completar el onboarding de persona natural.',
         documentOrder: ['rif', 'documentoIdentidad'],
@@ -89,12 +89,12 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
     personTypes: {
       juridica: {
         personType: 'juridica',
-        personTypeLabel: 'Persona juridica',
+        personTypeLabel: 'Persona jurídica',
         personTypeDescription: 'Onboarding para empresas con vigencia de poder y representantes legales.',
-        heroHeadline: 'Onboarding documental para empresas en Peru.',
-        heroSubheadline: 'Mantenga el flujo guiado de Example Company, adaptado a los requisitos documentales y de identificacion de Peru.',
-        heroButton: 'Continuar con persona juridica',
-        documentsIntro: 'Cargue la documentacion requerida para completar el onboarding de persona juridica en Peru.',
+        heroHeadline: 'Onboarding documental para empresas en Perú.',
+        heroSubheadline: 'Mantenga el flujo guiado de Example Company, adaptado a los requisitos documentales y de identificación de Perú.',
+        heroButton: 'Continuar con persona jurídica',
+        documentsIntro: 'Cargue la documentación requerida para completar el onboarding de persona jurídica en Perú.',
         documentOrder: ['rif', 'registroMercantil'],
         documents: {
           rif: { label: 'RUC' },
@@ -104,7 +104,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         representativePrimaryTitle: 'DNI o CE del Representante (Obligatorio)',
         representativeSecondaryTitle: 'DNI o CE del segundo representante (Opcional)',
         representativeSectionTitle: 'Representantes legales',
-        representativeSectionDescription: 'Cargue el DNI o Carnet de Extranjeria del representante principal. Puede agregar un segundo representante si aplica.',
+        representativeSectionDescription: 'Cargue el DNI o Carnet de Extranjería del representante principal. Puede agregar un segundo representante si aplica.',
         addSecondRepresentativeLabel: 'Agregar segundo representante',
         removeSecondRepresentativeLabel: 'Quitar segundo representante',
         reviewRepresentativePrimaryLabel: 'DNI o CE del Representante 1',
@@ -114,10 +114,10 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         personType: 'natural',
         personTypeLabel: 'Persona natural',
         personTypeDescription: 'Onboarding individual para personas naturales.',
-        heroHeadline: 'Onboarding documental para personas naturales en Peru.',
-        heroSubheadline: 'Complete el flujo personal de Example Company con los documentos requeridos para Peru.',
+        heroHeadline: 'Onboarding documental para personas naturales en Perú.',
+        heroSubheadline: 'Complete el flujo personal de Example Company con los documentos requeridos para Perú.',
         heroButton: 'Continuar con persona natural',
-        documentsIntro: 'Cargue el RUC y el documento de identidad requeridos para completar el onboarding de persona natural en Peru.',
+        documentsIntro: 'Cargue el RUC y el documento de identidad requeridos para completar el onboarding de persona natural en Perú.',
         documentOrder: ['rif', 'documentoIdentidad'],
         documents: {
           rif: { label: 'RUC' },
@@ -134,22 +134,22 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
     personTypes: {
       juridica: {
         personType: 'juridica',
-        personTypeLabel: 'Persona juridica',
-        personTypeDescription: 'Onboarding para empresas con matricula y representantes legales.',
+        personTypeLabel: 'Persona jurídica',
+        personTypeDescription: 'Onboarding para empresas con matrícula y representantes legales.',
         heroHeadline: 'Onboarding documental para empresas en Bolivia.',
-        heroSubheadline: 'Mantenga el flujo guiado de Example Company, adaptado a los requisitos documentales y de identificacion empresarial de Bolivia.',
-        heroButton: 'Continuar con persona juridica',
-        documentsIntro: 'Cargue la documentacion requerida para completar el onboarding de persona juridica en Bolivia.',
+        heroSubheadline: 'Mantenga el flujo guiado de Example Company, adaptado a los requisitos documentales y de identificación empresarial de Bolivia.',
+        heroButton: 'Continuar con persona jurídica',
+        documentsIntro: 'Cargue la documentación requerida para completar el onboarding de persona jurídica en Bolivia.',
         documentOrder: ['rif', 'registroMercantil'],
         documents: {
           rif: { label: 'NIT' },
-          registroMercantil: { label: 'Matricula de Comercio o Testimonio de Constitucion' },
+          registroMercantil: { label: 'Matrícula de Comercio o Testimonio de Constitución' },
           cedulaRepresentante: { label: 'CI del Representante' }
         },
         representativePrimaryTitle: 'CI del Representante (Obligatorio)',
         representativeSecondaryTitle: 'CI del segundo representante (Opcional)',
         representativeSectionTitle: 'Representantes legales',
-        representativeSectionDescription: 'Cargue la cedula de identidad del representante principal. Puede agregar un segundo representante si aplica.',
+        representativeSectionDescription: 'Cargue la cédula de identidad del representante principal. Puede agregar un segundo representante si aplica.',
         addSecondRepresentativeLabel: 'Agregar segundo representante',
         removeSecondRepresentativeLabel: 'Quitar segundo representante',
         reviewRepresentativePrimaryLabel: 'CI del Representante 1',
@@ -183,8 +183,8 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         personTypeDescription: 'Onboarding para empresas o sociedades con representantes legales.',
         heroHeadline: 'Portal de onboarding para empresas en México.',
         heroSubheadline: 'Centralice los adjuntos requeridos en un flujo simple, seguro y validado para su empresa en México.',
-        heroButton: 'Continuar con persona juridica',
-        documentsIntro: 'Cargue los documentos requeridos para continuar con el onboarding de persona juridica.',
+        heroButton: 'Continuar con persona jurídica',
+        documentsIntro: 'Cargue los documentos requeridos para continuar con el onboarding de persona jurídica.',
         documentOrder: ['documentoFiscal', 'documentoConstitucion', 'facultadesRepresentante', 'documentoRepresentante'],
         documents: {
           documentoFiscal: { label: 'Constancia de Situación Fiscal' },
@@ -199,7 +199,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         personTypeLabel: 'Persona natural',
         personTypeDescription: 'Onboarding individual para personas naturales.',
         heroHeadline: 'Portal de onboarding para personas naturales en México.',
-        heroSubheadline: 'Cargue su documentacion personal en un flujo guiado, simple y validado para México.',
+        heroSubheadline: 'Cargue su documentación personal en un flujo guiado, simple y validado para México.',
         heroButton: 'Continuar con persona natural',
         documentsIntro: 'Cargue el RFC y su documento de identidad para completar el onboarding de persona natural.',
         documentOrder: ['documentoFiscal', 'documentoIdentidad'],
@@ -219,12 +219,12 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
     personTypes: {
       juridica: {
         personType: 'juridica',
-        personTypeLabel: 'Persona juridica',
+        personTypeLabel: 'Persona jurídica',
         personTypeDescription: 'Onboarding para empresas o sociedades con representantes legales.',
         heroHeadline: 'Portal de onboarding para empresas en Argentina.',
         heroSubheadline: 'Centralice los adjuntos requeridos en un flujo simple, seguro y validado para su empresa en Argentina.',
-        heroButton: 'Continuar con persona juridica',
-        documentsIntro: 'Cargue los documentos requeridos para continuar con el onboarding de persona juridica.',
+        heroButton: 'Continuar con persona jurídica',
+        documentsIntro: 'Cargue los documentos requeridos para continuar con el onboarding de persona jurídica.',
         documentOrder: ['rif', 'registroMercantil', 'actaDesignacionAutoridades'],
         documents: {
           rif: { label: 'Constancia de CUIT' },
@@ -246,7 +246,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         personTypeLabel: 'Persona natural',
         personTypeDescription: 'Onboarding individual para personas naturales.',
         heroHeadline: 'Portal de onboarding para personas naturales en Argentina.',
-        heroSubheadline: 'Cargue su documentacion personal en un flujo guiado, simple y validado para Argentina.',
+        heroSubheadline: 'Cargue su documentación personal en un flujo guiado, simple y validado para Argentina.',
         heroButton: 'Continuar con persona natural',
         documentsIntro: 'Cargue el CUIT y el DNI requeridos para completar el onboarding de persona natural.',
         documentOrder: ['rif', 'documentoIdentidad'],
@@ -265,12 +265,12 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
     personTypes: {
       juridica: {
         personType: 'juridica',
-        personTypeLabel: 'Persona juridica',
+        personTypeLabel: 'Persona jurídica',
         personTypeDescription: 'Onboarding para empresas o sociedades con representantes legales.',
         heroHeadline: 'Portal de onboarding para empresas en República Dominicana.',
         heroSubheadline: 'Centralice los adjuntos requeridos en un flujo simple, seguro y validado para su empresa en República Dominicana.',
-        heroButton: 'Continuar con persona juridica',
-        documentsIntro: 'Cargue los documentos requeridos para continuar con el onboarding de persona juridica.',
+        heroButton: 'Continuar con persona jurídica',
+        documentsIntro: 'Cargue los documentos requeridos para continuar con el onboarding de persona jurídica.',
         documentOrder: ['rif', 'registroMercantil'],
         documents: {
           rif: { label: 'RNC' },
@@ -291,7 +291,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         personTypeLabel: 'Persona natural',
         personTypeDescription: 'Onboarding individual para personas naturales.',
         heroHeadline: 'Portal de onboarding para personas naturales en República Dominicana.',
-        heroSubheadline: 'Cargue su documentacion personal en un flujo guiado, simple y validado para República Dominicana.',
+        heroSubheadline: 'Cargue su documentación personal en un flujo guiado, simple y validado para República Dominicana.',
         heroButton: 'Continuar con persona natural',
         documentsIntro: 'Cargue el RNC y la cédula requeridos para completar el onboarding de persona natural.',
         documentOrder: ['rif', 'documentoIdentidad'],
@@ -304,33 +304,33 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
   },
   usa: {
     code: 'usa',
-    name: 'Estados Unidos',
+    name: 'United States',
     flag: '🇺🇸',
     heroEyebrow: '',
     personTypes: {
       juridica: {
         personType: 'juridica',
-        personTypeLabel: 'Empresa',
-        personTypeDescription: 'No disponible para Estados Unidos en este flujo.',
-        heroHeadline: 'Portal de onboarding para empresas en Estados Unidos.',
+        personTypeLabel: 'Business',
+        personTypeDescription: 'Not available for the United States in this flow.',
+        heroHeadline: 'Business onboarding portal for the United States.',
         heroSubheadline: '',
-        heroButton: 'Continuar',
-        documentsIntro: 'Este flujo no está disponible para empresas en Estados Unidos.',
+        heroButton: 'Continue',
+        documentsIntro: 'This flow is not available for businesses in the United States.',
         documentOrder: [],
         documents: {}
       },
       natural: {
         personType: 'natural',
-        personTypeLabel: 'Persona natural',
-        personTypeDescription: 'Onboarding individual con licencia de conducir.',
-        heroHeadline: 'Portal de onboarding para personas naturales en Estados Unidos.',
-        heroSubheadline: 'Cargue el frente y reverso de su licencia de conducir en un flujo guiado y validado.',
-        heroButton: 'Continuar con persona natural',
-        documentsIntro: 'Cargue el frente y reverso de su licencia de conducir para completar el onboarding.',
+        personTypeLabel: 'Individual',
+        personTypeDescription: 'Individual onboarding with a driver license.',
+        heroHeadline: 'Individual onboarding portal for the United States.',
+        heroSubheadline: 'Upload the front and back of your driver license in a guided validation flow.',
+        heroButton: 'Continue as individual',
+        documentsIntro: 'Upload the front and back of your driver license to complete onboarding.',
         documentOrder: ['licenciaConducirFrente', 'licenciaConducirReverso'],
         documents: {
-          licenciaConducirFrente: { label: 'Licencia de conducir - frente' },
-          licenciaConducirReverso: { label: 'Licencia de conducir - reverso' }
+          licenciaConducirFrente: { label: 'Driver license - front' },
+          licenciaConducirReverso: { label: 'Driver license - back' }
         }
       }
     }

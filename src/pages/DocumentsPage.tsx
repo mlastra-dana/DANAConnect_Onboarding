@@ -64,17 +64,21 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
   const representative1 = state.representatives.find((rep) => rep.id === 1)!;
   const representative2 = state.representatives.find((rep) => rep.id === 2)!;
   const isMexicoNatural = state.country === 'mx' && state.personType === 'natural';
-  const firstNameLabel = isMexicoNatural ? 'Nombre(s)' : 'Nombres';
   const flowConfig = getFlowConfig(state.country, state.personType);
   const documentOrder = getDocumentOrder(state.country, state.personType);
   const showRepresentatives = requiresRepresentatives(state.country, state.personType);
   const isVenezuelaJuridica = state.country === 've' && state.personType === 'juridica';
+  const language = state.country === 'usa' ? 'en' : 'es';
+  const isEnglish = language === 'en';
+  const firstNameLabel = isEnglish ? 'First name' : isMexicoNatural ? 'Nombre(s)' : 'Nombres';
   const rifValidation = state.documents.rif.validation;
   const rifCompany = rifValidation.extractedCompany;
   const hasRifCompanyData = Boolean(rifCompany?.name || rifCompany?.rif);
   const canUploadConstitution = !isVenezuelaJuridica || rifValidation.status === 'valid';
   const constitutionDisabledMessage =
-    'Primero cargue y valide el RIF para comparar la razón social con el Registro Mercantil.';
+    isEnglish
+      ? 'Upload and validate the tax document first.'
+      : 'Primero cargue y valide el RIF para comparar la razón social con el Registro Mercantil.';
   const constitutionValidation = state.documents.registroMercantil.validation;
   const assemblyValidation = state.documents.actaDesignacionAutoridades.validation;
   const legalRepresentatives = mergeLegalRepresentatives(
@@ -84,11 +88,15 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
   const canUploadRepresentative =
     !isVenezuelaJuridica || (constitutionValidation.status === 'valid' && legalRepresentatives.length > 0);
   const canUploadAssembly = !isVenezuelaJuridica || constitutionValidation.status === 'valid';
-  const assemblyDisabledMessage = 'Primero cargue y valide el Registro Mercantil.';
+  const assemblyDisabledMessage = isEnglish ? 'Upload and validate the company registration first.' : 'Primero cargue y valide el Registro Mercantil.';
   const representativeDisabledMessage =
     constitutionValidation.status === 'valid'
-      ? 'Cargue un Registro Mercantil o una Asamblea donde se identifique la junta directiva.'
-      : 'Primero cargue y valide el Registro Mercantil.';
+      ? isEnglish
+        ? 'Upload a company registration or assembly document that identifies the board.'
+        : 'Cargue un Registro Mercantil o una Asamblea donde se identifique la junta directiva.'
+      : isEnglish
+        ? 'Upload and validate the company registration first.'
+        : 'Primero cargue y valide el Registro Mercantil.';
 
   async function handleUploadBase(docType: DocumentType, file: File) {
     const key: UploadKey = docType;
@@ -385,6 +393,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                   disabledMessage={constitutionDisabledMessage}
                   embedded
                   hideTitle
+                  language={language}
                   onSelectFile={(file) => handleUploadBase('registroMercantil', file)}
                   onRemoveFile={() => handleRemoveBase('registroMercantil')}
                 />
@@ -423,6 +432,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                       disabled={!canUploadAssembly}
                       disabledMessage={assemblyDisabledMessage}
                       embedded
+                      language={language}
                       onSelectFile={(file) => handleUploadBase('actaDesignacionAutoridades', file)}
                       onRemoveFile={() => handleRemoveBase('actaDesignacionAutoridades')}
                     />
@@ -445,6 +455,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
               previewFile={runtimeFiles[docType]}
               disabled={constitutionUploadLocked}
               disabledMessage={constitutionDisabledMessage}
+              language={language}
               onSelectFile={(file) => handleUploadBase(docType, file)}
               onRemoveFile={() => handleRemoveBase(docType)}
             />
@@ -472,6 +483,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
               disabled={!canUploadRepresentative}
               disabledMessage={representativeDisabledMessage}
               embedded
+              language={language}
               onSelectFile={(file) => handleUploadRepresentative(1, file)}
               onRemoveFile={() => handleRemoveRepresentative(1)}
             />
@@ -510,6 +522,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                   disabled={!canUploadRepresentative}
                   disabledMessage={representativeDisabledMessage}
                   embedded
+                  language={language}
                   onSelectFile={(file) => handleUploadRepresentative(2, file)}
                   onRemoveFile={() => handleRemoveRepresentative(2)}
                 />
@@ -539,7 +552,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
               />
             </label>
             <label className="space-y-2">
-              <span className="text-sm font-medium text-dark">Apellidos</span>
+              <span className="text-sm font-medium text-dark">{isEnglish ? 'Last name' : 'Apellidos'}</span>
               <input
                 type="text"
                 value={state.personalInfo.lastName}
@@ -550,11 +563,11 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                   })
                 }
                 className="w-full rounded-lg border border-borderLight px-3 py-2.5 text-sm text-dark outline-none transition-colors focus:border-primary"
-                placeholder="Apellidos"
+                placeholder={isEnglish ? 'Last name' : 'Apellidos'}
               />
             </label>
             <label className="space-y-2">
-              <span className="text-sm font-medium text-dark">Numero de identificacion</span>
+              <span className="text-sm font-medium text-dark">{isEnglish ? 'Identification number' : 'Número de identificación'}</span>
               <input
                 type="text"
                 value={state.personalInfo.documentNumber}
@@ -565,7 +578,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                   })
                 }
                 className="w-full rounded-lg border border-borderLight px-3 py-2.5 text-sm text-dark outline-none transition-colors focus:border-primary"
-                placeholder="Numero de identificacion"
+                placeholder={isEnglish ? 'Identification number' : 'Número de identificación'}
               />
             </label>
           </div>
@@ -574,10 +587,10 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
       <div className="flex flex-wrap justify-between gap-3">
         <Link to={`/onboarding/${companyId}/tipo-persona`}>
-          <Button variant="ghost">Volver</Button>
+          <Button variant="ghost">{isEnglish ? 'Back' : 'Volver'}</Button>
         </Link>
         <Link to={`/onboarding/${companyId}/biometria`}>
-          <Button disabled={!allDocumentsValid}>Continuar</Button>
+          <Button disabled={!allDocumentsValid}>{isEnglish ? 'Continue' : 'Continuar'}</Button>
         </Link>
       </div>
     </div>

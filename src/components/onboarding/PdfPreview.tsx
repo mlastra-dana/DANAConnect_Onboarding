@@ -16,7 +16,7 @@ export function PdfPreview({ file }: { file: File }) {
         containerRef.current.appendChild(canvas);
       })
       .catch(() => {
-        // La validacion del documento no depende de la miniatura local.
+        // La validación del documento no depende de la miniatura local.
       });
 
     return () => {

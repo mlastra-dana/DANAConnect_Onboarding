@@ -16,8 +16,9 @@ export function AppLayout({
   currentStep: number;
   children: React.ReactNode;
 }) {
-  const { resetOnboarding } = useOnboarding();
+  const { state, resetOnboarding } = useOnboarding();
   const navigate = useNavigate();
+  const language = state.country === 'usa' ? 'en' : 'es';
 
   function handleHomeClick(event: React.MouseEvent<HTMLAnchorElement>) {
     event.preventDefault();
@@ -39,10 +40,11 @@ export function AppLayout({
         onHomeClick={handleHomeClick}
         onExit={handleExit}
         showExit={currentStep > 1}
+        language={language}
       />
 
       <main className={`${currentStep === 1 ? '' : 'mx-auto w-full max-w-7xl px-4 py-8 md:px-6'}`}>
-        {currentStep > 1 ? <Stepper currentStep={currentStep} /> : null}
+        {currentStep > 1 ? <Stepper currentStep={currentStep} language={language} /> : null}
         {children}
       </main>
 

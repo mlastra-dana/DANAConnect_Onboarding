@@ -24,6 +24,7 @@ export function DocumentUploader({
   disabledMessage,
   embedded = false,
   hideTitle = false,
+  language = 'es',
   onSelectFile,
   onRemoveFile
 }: {
@@ -42,6 +43,7 @@ export function DocumentUploader({
   disabledMessage?: string;
   embedded?: boolean;
   hideTitle?: boolean;
+  language?: 'es' | 'en';
   onSelectFile: (file: File) => Promise<void>;
   onRemoveFile: () => void;
 }) {
@@ -62,8 +64,13 @@ export function DocumentUploader({
           ? 'review'
           : 'pending';
   const friendlyErrorMessage =
-    docRecord.validation.uiStatus?.message || 'No pudimos validar este documento. Verifique que sea legible e intente nuevamente.';
-  const pendingMessage = docRecord.validation.uiStatus?.message || 'Aún no hay validaciones ejecutadas.';
+    docRecord.validation.uiStatus?.message ||
+    (language === 'en'
+      ? 'We could not validate this document. Make sure it is legible and try again.'
+      : 'No pudimos validar este documento. Verifique que sea legible e intente nuevamente.');
+  const pendingMessage =
+    docRecord.validation.uiStatus?.message ||
+    (language === 'en' ? 'No validations have been run yet.' : 'Aún no hay validaciones ejecutadas.');
   const warningMessages = docRecord.validation.warnings ?? [];
   const hasFile = Boolean(docRecord.fileName);
   const fileContainerClass =
@@ -93,7 +100,7 @@ export function DocumentUploader({
   const content = (
     <>
       <div className="absolute right-5 top-5">
-        <StatusBadge status={feedbackStatus} />
+        <StatusBadge status={feedbackStatus} language={language} />
       </div>
       {sectionTitle ? (
         <div className="space-y-2 border-b border-borderLight pb-3">
@@ -111,10 +118,16 @@ export function DocumentUploader({
         <div className="space-y-2 rounded-lg border border-borderLight bg-surface p-3">
           <div className="flex items-center gap-2 text-xs font-medium text-dark">
             <Loader2 className="h-3.5 w-3.5 animate-spin text-grayText" />
-            {isUploading ? 'Subiendo archivo...' : 'Validando documento...'}
+            {isUploading
+              ? language === 'en'
+                ? 'Uploading file...'
+                : 'Subiendo archivo...'
+              : language === 'en'
+                ? 'Validating document...'
+                : 'Validando documento...'}
           </div>
-          <Progress value={uploadProgress} max={100} label={`Subida ${Math.round(uploadProgress)}%`} />
-          <Progress value={validationProgress} max={100} label={`Validación ${Math.round(validationProgress)}%`} />
+          <Progress value={uploadProgress} max={100} label={`${language === 'en' ? 'Upload' : 'Subida'} ${Math.round(uploadProgress)}%`} />
+          <Progress value={validationProgress} max={100} label={`${language === 'en' ? 'Validation' : 'Validación'} ${Math.round(validationProgress)}%`} />
         </div>
       ) : null}
 
@@ -122,7 +135,7 @@ export function DocumentUploader({
         <div
           role="button"
           tabIndex={0}
-          aria-label={`Subir ${resolvedLabel}`}
+          aria-label={`${language === 'en' ? 'Upload' : 'Subir'} ${resolvedLabel}`}
           onClick={triggerFileDialog}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
@@ -152,7 +165,7 @@ export function DocumentUploader({
         >
           <div className="flex flex-col items-center gap-2 text-center text-sm text-grayText">
             <UploadCloud className="h-6 w-6 text-primary" />
-            <p>Arrastra tu archivo o selecciónalo.</p>
+            <p>{language === 'en' ? 'Drag your file here or select it.' : 'Arrastre su archivo o selecciónelo.'}</p>
             <input
               id={inputId}
               ref={inputRef}
@@ -165,7 +178,7 @@ export function DocumentUploader({
               }}
             />
             <label htmlFor={inputId} className="sr-only">
-              Seleccionar archivo
+              {language === 'en' ? 'Select file' : 'Seleccionar archivo'}
             </label>
             <Button
               type="button"
@@ -176,9 +189,15 @@ export function DocumentUploader({
                 triggerFileDialog();
               }}
             >
-              Seleccionar archivo
+              {language === 'en' ? 'Select file' : 'Seleccionar archivo'}
             </Button>
-            <p className="text-xs text-grayText">{disabled && disabledMessage ? disabledMessage : 'PDF, JPG, PNG o WEBP. Máx. 10MB.'}</p>
+            <p className="text-xs text-grayText">
+              {disabled && disabledMessage
+                ? disabledMessage
+                : language === 'en'
+                  ? 'PDF, JPG, PNG, or WEBP. Max. 10MB.'
+                  : 'PDF, JPG, PNG o WEBP. Máx. 10MB.'}
+            </p>
           </div>
         </div>
       ) : (
@@ -204,16 +223,18 @@ export function DocumentUploader({
                 <PdfPreview file={previewFile} />
               </div>
             ) : (
-              <p className="mt-3 text-xs text-grayText">Vista previa disponible tras volver a cargar el archivo.</p>
+              <p className="mt-3 text-xs text-grayText">
+                {language === 'en' ? 'Preview available after uploading the file again.' : 'Vista previa disponible tras volver a cargar el archivo.'}
+              </p>
             )
           ) : docRecord.previewUrl ? (
             <img
               src={docRecord.previewUrl}
-              alt={`Vista previa de ${resolvedLabel}`}
+              alt={`${language === 'en' ? 'Preview of' : 'Vista previa de'} ${resolvedLabel}`}
               className="mt-3 max-h-56 rounded-lg"
             />
           ) : (
-            <p className="mt-3 text-xs text-grayText">Vista previa no disponible.</p>
+            <p className="mt-3 text-xs text-grayText">{language === 'en' ? 'Preview not available.' : 'Vista previa no disponible.'}</p>
           )}
         </div>
       ) : null}
@@ -222,33 +243,33 @@ export function DocumentUploader({
         {feedbackStatus === 'valid' ? (
           <p className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700">
             <CheckCircle className="h-4 w-4" />
-            <span>Documento aceptado.</span>
+            <span>{language === 'en' ? 'Document accepted.' : 'Documento aceptado.'}</span>
           </p>
         ) : null}
         {feedbackStatus === 'warning' ? (
           <p className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-700">
             <AlertTriangle className="h-4 w-4" />
-            <span>Aceptado con revision recomendada</span>
+            <span>{language === 'en' ? 'Accepted with recommended review' : 'Aceptado con revisión recomendada'}</span>
           </p>
         ) : null}
         {feedbackStatus === 'error' ? (
           <div>
             <p className="inline-flex items-center gap-1.5 font-medium text-red-700">
               <XCircle className="h-4 w-4" />
-              <span>Documento inválido</span>
+              <span>{language === 'en' ? 'Invalid document' : 'Documento inválido'}</span>
             </p>
             <p className="text-gray-700">{friendlyErrorMessage}</p>
           </div>
         ) : null}
         {feedbackStatus === 'review' ? (
           <div>
-            <p className="font-medium text-amber-700">Revisión requerida</p>
+            <p className="font-medium text-amber-700">{language === 'en' ? 'Review required' : 'Revisión requerida'}</p>
             <p className="text-gray-700">{pendingMessage}</p>
           </div>
         ) : null}
         {warningMessages.length > 0 ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-            <p className="text-sm font-medium text-amber-700">Advertencia</p>
+            <p className="text-sm font-medium text-amber-700">{language === 'en' ? 'Warning' : 'Advertencia'}</p>
             {warningMessages.map((warning, idx) => (
               <p key={`${warning}-${idx}`} className="text-sm text-amber-700">
                 {warning}

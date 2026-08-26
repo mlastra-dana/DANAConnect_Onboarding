@@ -9,6 +9,7 @@ export function PersonTypePage({ companyId }: { companyId: string }) {
   const { state, setPersonType } = useOnboarding();
   const selectedCountry = getCountryConfig(state.country);
   const selectedFlow = getFlowConfig(state.country, state.personType);
+  const isEnglish = state.country === 'usa';
 
   function handlePersonTypeSelect(personType: PersonType) {
     setPersonType(personType);
@@ -26,7 +27,9 @@ export function PersonTypePage({ companyId }: { companyId: string }) {
         />
         <div className="mb-5">
           <p className="text-sm font-medium text-white/75">{selectedCountry.name}</p>
-          <h1 className="mt-1 text-2xl font-bold text-white md:text-3xl">Selecciona tipo de persona</h1>
+          <h1 className="mt-1 text-2xl font-bold text-white md:text-3xl">
+            {isEnglish ? 'Select person type' : 'Seleccione tipo de persona'}
+          </h1>
         </div>
 
         <div className="relative z-10 grid gap-3 md:grid-cols-2">
@@ -55,7 +58,7 @@ export function PersonTypePage({ companyId }: { companyId: string }) {
 
       <div className="flex">
         <Link to={`/onboarding/${companyId}`}>
-          <Button variant="ghost">Volver</Button>
+          <Button variant="ghost">{isEnglish ? 'Back' : 'Volver'}</Button>
         </Link>
       </div>
     </div>

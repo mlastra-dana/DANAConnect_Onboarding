@@ -48,23 +48,24 @@ export function BiometricPage({ companyId }: { companyId: string }) {
   const [geo, setGeo] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [geoAddress, setGeoAddress] = useState<string | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
+  const isEnglish = state.country === 'usa';
   const isPassed = current.status === 'passed';
   const isFaceCentered = lastMetrics
     ? Math.abs(lastMetrics.centerX - 0.5) <= 0.20 && Math.abs(lastMetrics.centerY - 0.5) <= 0.24 && lastMetrics.area >= 0.06
     : false;
 
   const uiHint = useMemo(() => {
-    if (isPassed) return 'Prueba de Vida completada.';
-    if (cameraStatus === 'requesting') return 'Solicitando permisos de cámara...';
-    if (cameraStatus === 'error') return cameraError ?? 'No se pudo activar la cámara.';
-    if (cameraStatus !== 'active') return 'Preparando cámara...';
+    if (isPassed) return isEnglish ? 'Liveness check completed.' : 'Prueba de vida completada.';
+    if (cameraStatus === 'requesting') return isEnglish ? 'Requesting camera permission...' : 'Solicitando permisos de cámara...';
+    if (cameraStatus === 'error') return cameraError ?? (isEnglish ? 'The camera could not be activated.' : 'No se pudo activar la cámara.');
+    if (cameraStatus !== 'active') return isEnglish ? 'Preparing camera...' : 'Preparando cámara...';
     if (detectionMode === 'manual' && !runningChallenge && !isPassed) {
-      return 'Cámara activa. Centre su rostro dentro del óvalo para iniciar.';
+      return isEnglish ? 'Camera active. Center your face inside the oval to start.' : 'Cámara activa. Centre su rostro dentro del óvalo para iniciar.';
     }
-    if (!runningChallenge && !isPassed) return 'Cámara activa. La validación iniciará automáticamente.';
-    if (isFaceCentered) return 'Rostro centrado. Mantenga la posición unos segundos.';
-    return 'Centre su rostro dentro del óvalo.';
-  }, [cameraStatus, cameraError, runningChallenge, isPassed, detectionMode, isFaceCentered]);
+    if (!runningChallenge && !isPassed) return isEnglish ? 'Camera active. Validation will start automatically.' : 'Cámara activa. La validación iniciará automáticamente.';
+    if (isFaceCentered) return isEnglish ? 'Face centered. Hold still for a few seconds.' : 'Rostro centrado. Mantenga la posición unos segundos.';
+    return isEnglish ? 'Center your face inside the oval.' : 'Centre su rostro dentro del óvalo.';
+  }, [cameraStatus, cameraError, runningChallenge, isPassed, detectionMode, isFaceCentered, isEnglish]);
 
   const circleClass = useMemo(() => {
     if (isPassed) return 'border-green-400';
@@ -113,7 +114,7 @@ export function BiometricPage({ companyId }: { companyId: string }) {
 
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error('Tu navegador no soporta acceso a cámara.');
+        throw new Error(isEnglish ? 'Your browser does not support camera access.' : 'Su navegador no soporta acceso a cámara.');
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -139,7 +140,7 @@ export function BiometricPage({ companyId }: { companyId: string }) {
     } catch (error) {
       stopCamera();
       setCameraStatus('error');
-      setCameraError(error instanceof Error ? error.message : 'No se pudo activar la cámara.');
+      setCameraError(error instanceof Error ? error.message : isEnglish ? 'The camera could not be activated.' : 'No se pudo activar la cámara.');
     }
   }
 
@@ -201,7 +202,7 @@ export function BiometricPage({ companyId }: { companyId: string }) {
 
       if (missedFaceDetectionsRef.current >= 18) {
         setDetectionMode('manual');
-        setManualHint('No se detectó rostro de forma estable. Mejore la iluminación y centre la cara en el óvalo.');
+        setManualHint(isEnglish ? 'A face was not detected consistently. Improve the lighting and center your face inside the oval.' : 'No se detectó rostro de forma estable. Mejore la iluminación y centre la cara en el óvalo.');
       }
       return;
     }
@@ -239,7 +240,7 @@ export function BiometricPage({ companyId }: { companyId: string }) {
       status: 'passed',
       completedAt: new Date().toISOString(),
       score: finalScore,
-      note: 'Prueba de vida completada: rostro centrado dentro del óvalo.'
+      note: isEnglish ? 'Liveness check completed: face centered inside the oval.' : 'Prueba de vida completada: rostro centrado dentro del óvalo.'
     });
   }
 
@@ -266,7 +267,7 @@ export function BiometricPage({ companyId }: { companyId: string }) {
   async function captureGeolocation() {
     if (!navigator.geolocation) {
       setGeoStatus('error');
-      setGeoError('Geolocalización no soportada por el navegador.');
+      setGeoError(isEnglish ? 'Geolocation is not supported by this browser.' : 'Geolocalización no soportada por el navegador.');
       return;
     }
 
@@ -287,11 +288,11 @@ export function BiometricPage({ companyId }: { companyId: string }) {
       (error) => {
         if (error.code === error.PERMISSION_DENIED) {
           setGeoStatus('denied');
-          setGeoError('Permiso de ubicación denegado.');
+          setGeoError(isEnglish ? 'Location permission denied.' : 'Permiso de ubicación denegado.');
           return;
         }
         setGeoStatus('error');
-        setGeoError(error.message || 'No se pudo obtener la ubicación.');
+        setGeoError(error.message || (isEnglish ? 'The location could not be obtained.' : 'No se pudo obtener la ubicación.'));
       },
       {
         enableHighAccuracy: true,
@@ -340,8 +341,10 @@ export function BiometricPage({ companyId }: { companyId: string }) {
             <ScanFace className="h-6 w-6" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-dark">Prueba de Vida</h2>
-            <p className="text-sm text-grayText">Centre su rostro dentro del óvalo para validar identidad.</p>
+            <h2 className="text-xl font-bold text-dark">{isEnglish ? 'Liveness check' : 'Prueba de vida'}</h2>
+            <p className="text-sm text-grayText">
+              {isEnglish ? 'Center your face inside the oval to validate your identity.' : 'Centre su rostro dentro del óvalo para validar identidad.'}
+            </p>
           </div>
         </div>
 
@@ -350,9 +353,9 @@ export function BiometricPage({ companyId }: { companyId: string }) {
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-green-600 shadow-sm">
               <CheckCircle2 className="h-9 w-9" />
             </div>
-            <p className="mt-4 text-lg font-semibold text-green-800">Prueba de vida completada</p>
+            <p className="mt-4 text-lg font-semibold text-green-800">{isEnglish ? 'Liveness check completed' : 'Prueba de vida completada'}</p>
             <p className="mt-2 max-w-md text-sm text-green-700">
-              La cámara se cerró correctamente. Puede continuar con la revisión del expediente.
+              {isEnglish ? 'The camera closed successfully. You can continue to review.' : 'La cámara se cerró correctamente. Puede continuar con la revisión del expediente.'}
             </p>
           </div>
         ) : (
@@ -362,84 +365,98 @@ export function BiometricPage({ companyId }: { companyId: string }) {
               <div className={`h-64 w-52 rounded-[50%] border-4 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)] transition-colors md:h-72 md:w-56 ${circleClass}`} />
             </div>
             <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white">
-              {runningChallenge ? (isFaceCentered ? 'Mantenga el rostro centrado' : 'Centre su rostro en el óvalo') : 'Coloque su rostro dentro del óvalo'}
+              {runningChallenge
+                ? isFaceCentered
+                  ? isEnglish ? 'Keep your face centered' : 'Mantenga el rostro centrado'
+                  : isEnglish ? 'Center your face inside the oval' : 'Centre su rostro en el óvalo'
+                : isEnglish ? 'Place your face inside the oval' : 'Coloque su rostro dentro del óvalo'}
             </div>
           </div>
         )}
 
         <div className="mt-4 rounded-lg border border-borderLight bg-surface p-3 text-sm text-grayText">
-          <p className="font-medium text-dark">Estado:</p>
+          <p className="font-medium text-dark">{isEnglish ? 'Status:' : 'Estado:'}</p>
           <p>{uiHint}</p>
           {runningChallenge ? (
-            <p className="mt-1 text-xs text-grayText">Mantenga el rostro centrado · {holdCounter}/{CENTER_HOLD_TARGET} lecturas estables</p>
+            <p className="mt-1 text-xs text-grayText">
+              {isEnglish ? 'Keep your face centered' : 'Mantenga el rostro centrado'} · {holdCounter}/{CENTER_HOLD_TARGET}{' '}
+              {isEnglish ? 'stable readings' : 'lecturas estables'}
+            </p>
           ) : null}
         </div>
 
         <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
           <div className="flex items-center gap-2">
             <CheckCircle2 className={`h-4 w-4 ${isPassed || isFaceCentered ? 'text-green-600' : 'text-gray-300'}`} />
-            <span>{isPassed ? 'Rostro validado' : isFaceCentered ? 'Rostro centrado' : 'Esperando rostro centrado'}</span>
+            <span>
+              {isPassed
+                ? isEnglish ? 'Face validated' : 'Rostro validado'
+                : isFaceCentered
+                  ? isEnglish ? 'Face centered' : 'Rostro centrado'
+                  : isEnglish ? 'Waiting for centered face' : 'Esperando rostro centrado'}
+            </span>
           </div>
         </div>
 
         {runningChallenge ? (
           <div className="mt-4 space-y-2">
-            <p className="text-sm font-medium text-dark">Validando rostro centrado...</p>
+            <p className="text-sm font-medium text-dark">{isEnglish ? 'Validating centered face...' : 'Validando rostro centrado...'}</p>
             <Progress value={progress} label={`${progress}%`} />
           </div>
         ) : null}
 
-        {cameraStatus === 'error' ? <div className="mt-4"><Toast type="error" message={cameraError ?? 'No se pudo usar la cámara.'} /></div> : null}
+        {cameraStatus === 'error' ? <div className="mt-4"><Toast type="error" message={cameraError ?? (isEnglish ? 'The camera could not be used.' : 'No se pudo usar la cámara.')} /></div> : null}
         {manualHint ? <div className="mt-4"><Toast type="info" message={manualHint} /></div> : null}
 
         <div className="mt-6 flex flex-wrap justify-between gap-2">
           <Link to={`/onboarding/${companyId}/documents`}>
-            <Button variant="ghost">Volver</Button>
+            <Button variant="ghost">{isEnglish ? 'Back' : 'Volver'}</Button>
           </Link>
 
           <Link to={`/onboarding/${companyId}/review`}>
-            <Button disabled={!isPassed}>Continuar</Button>
+            <Button disabled={!isPassed}>{isEnglish ? 'Continue' : 'Continuar'}</Button>
           </Link>
         </div>
       </Card>
 
       <Card>
-        <h3 className="text-base font-semibold text-dark">Estado de prueba de vida</h3>
+        <h3 className="text-base font-semibold text-dark">{isEnglish ? 'Liveness check status' : 'Estado de prueba de vida'}</h3>
         <div className="mt-3">
-          <StatusBadge status={mapBiometricStatus(current.status)} />
+          <StatusBadge status={mapBiometricStatus(current.status)} language={isEnglish ? 'en' : 'es'} />
         </div>
 
         <div className="mt-4 rounded-lg border border-borderLight bg-surface p-3 text-sm text-grayText">
           <p>
-            <span className="font-medium text-dark">Resultado:</span> {current.note ?? 'Pendiente de validación.'}
+            <span className="font-medium text-dark">{isEnglish ? 'Result:' : 'Resultado:'}</span>{' '}
+            {current.note ?? (isEnglish ? 'Pending validation.' : 'Pendiente de validación.')}
           </p>
           <p className="mt-1">
-            <span className="font-medium text-dark">Score:</span> {current.score ? `${current.score}%` : 'N/A'}
+            <span className="font-medium text-dark">{isEnglish ? 'Score:' : 'Score:'}</span> {current.score ? `${current.score}%` : 'N/A'}
           </p>
           <p className="mt-1">
-            <span className="font-medium text-dark">Fecha:</span>{' '}
-            {current.completedAt ? new Date(current.completedAt).toLocaleString('es-VE') : 'Sin registro'}
+            <span className="font-medium text-dark">{isEnglish ? 'Date:' : 'Fecha:'}</span>{' '}
+            {current.completedAt ? new Date(current.completedAt).toLocaleString(isEnglish ? 'en-US' : 'es-VE') : isEnglish ? 'No record' : 'Sin registro'}
           </p>
           <p className="mt-2">
-            <span className="font-medium text-dark">Geolocalización:</span>{' '}
+            <span className="font-medium text-dark">{isEnglish ? 'Geolocation:' : 'Geolocalización:'}</span>{' '}
             {geoAddress
               ? geoAddress
               : geoStatus === 'denied'
-                ? 'Permiso denegado'
+                ? isEnglish ? 'Permission denied' : 'Permiso denegado'
                 : geoStatus === 'resolving'
-                  ? 'Resolviendo dirección...'
+                  ? isEnglish ? 'Resolving address...' : 'Resolviendo dirección...'
                 : geoStatus === 'requesting'
-                  ? 'Obteniendo ubicación...'
+                  ? isEnglish ? 'Getting location...' : 'Obteniendo ubicación...'
                   : geoStatus === 'error'
-                    ? geoError ?? 'No se pudo obtener ubicación'
+                    ? geoError ?? (isEnglish ? 'Location could not be obtained' : 'No se pudo obtener ubicación')
                   : geo
-                    ? 'Ubicación capturada, sin dirección legible'
-                    : 'Sin capturar'}
+                    ? isEnglish ? 'Location captured, no readable address' : 'Ubicación capturada, sin dirección legible'
+                    : isEnglish ? 'Not captured' : 'Sin capturar'}
           </p>
           {!geoAddress && geoStatus !== 'requesting' && geoStatus !== 'resolving' ? (
             <div className="mt-2">
               <Button variant="secondary" onClick={() => void captureGeolocation()}>
-                Reintentar ubicación
+                {isEnglish ? 'Retry location' : 'Reintentar ubicación'}
               </Button>
             </div>
           ) : null}
@@ -447,10 +464,10 @@ export function BiometricPage({ companyId }: { companyId: string }) {
 
         <div className="mt-4 rounded-lg border border-borderLight bg-surface px-3 py-3 text-sm text-grayText">
           {isPassed
-            ? 'Prueba completada.'
+            ? isEnglish ? 'Check completed.' : 'Prueba completada.'
             : runningChallenge
-              ? 'Validando...'
-              : 'Preparando validación automática...'}
+              ? isEnglish ? 'Validating...' : 'Validando...'
+              : isEnglish ? 'Preparing automatic validation...' : 'Preparando validación automática...'}
         </div>
 
       </Card>

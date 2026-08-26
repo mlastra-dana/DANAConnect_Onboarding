@@ -80,11 +80,11 @@ export function buildDemoEmail(
     );
   }
   if (state.personType === 'natural') {
-    summaryLines.push(`- Nombres: ${state.personalInfo.firstName || 'No extraidos'}`);
-    summaryLines.push(`- Apellidos: ${state.personalInfo.lastName || 'No extraidos'}`);
-    summaryLines.push(`- Identificacion: ${state.personalInfo.documentNumber || 'No extraida'}`);
+    summaryLines.push(`- Nombres: ${state.personalInfo.firstName || 'No extraídos'}`);
+    summaryLines.push(`- Apellidos: ${state.personalInfo.lastName || 'No extraídos'}`);
+    summaryLines.push(`- Identificación: ${state.personalInfo.documentNumber || 'No extraída'}`);
   }
-  summaryLines.push(`- Prueba de Vida: ${biometricStatusLabel(state.biometrics.status)}`);
+  summaryLines.push(`- Prueba de vida: ${biometricStatusLabel(state.biometrics.status)}`);
   const body = [
     `Hola equipo ${companyName},`,
     '',
@@ -138,9 +138,9 @@ export function buildFriendlySummaryLines(state: OnboardingState) {
   if (state.personType === 'natural') {
     lines.push(`Nombres: ${state.personalInfo.firstName || 'Pendiente'}`);
     lines.push(`Apellidos: ${state.personalInfo.lastName || 'Pendiente'}`);
-    lines.push(`Identificacion: ${state.personalInfo.documentNumber || 'Pendiente'}`);
+    lines.push(`Identificación: ${state.personalInfo.documentNumber || 'Pendiente'}`);
   }
-  lines.push(`Prueba de Vida: ${biometricStatusToFriendly(state.biometrics.status)}`);
+  lines.push(`Prueba de vida: ${biometricStatusToFriendly(state.biometrics.status)}`);
 
   return lines;
 }

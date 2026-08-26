@@ -209,7 +209,7 @@ export async function validateDocumentForSlot(
       }
       return {
         status: 'warning',
-        messages: ['Documento aceptado con revision recomendada.'],
+        messages: ['Documento aceptado con revisión recomendada.'],
         warnings,
         extracted: {
           hasText: false,
@@ -338,7 +338,7 @@ async function validatePeruvianDocumentForSlot(file: File, slot: DocumentType): 
       warnings.push('No pudimos leer con claridad todo el contenido, pero el archivo parece corresponder al documento solicitado.');
       return {
         status: 'warning',
-        messages: ['Documento aceptado con revision recomendada.'],
+        messages: ['Documento aceptado con revisión recomendada.'],
         warnings,
         extracted: {
           hasText: false,
@@ -382,7 +382,7 @@ async function validatePeruvianDocumentForSlot(file: File, slot: DocumentType): 
       warnings.push('La lectura del contenido fue parcial, pero el archivo parece corresponder al documento solicitado.');
       return {
         status: 'warning',
-        messages: ['Documento aceptado con revision recomendada.'],
+        messages: ['Documento aceptado con revisión recomendada.'],
         warnings,
         extracted: {
           hasText: textResult.hasText,
@@ -1202,7 +1202,7 @@ function classifyPeruvianBySlot(slot: DocumentType, rawText: string) {
     }
     return {
       valid: score >= 4,
-      reason: score >= 4 ? '' : 'no coincide con un RUC emitido para Peru.',
+      reason: score >= 4 ? '' : 'no coincide con un RUC emitido para Perú.',
       score,
       keywordsFound
     };
@@ -1250,11 +1250,11 @@ function classifyPeruvianBySlot(slot: DocumentType, rawText: string) {
     keywordsFound.push('PATRON_CE');
   }
   if (antiHits.length >= 2 && score < 5) {
-    return { valid: false, reason: 'el archivo parece no corresponder a un DNI o Carnet de Extranjeria.', score, keywordsFound };
+    return { valid: false, reason: 'el archivo parece no corresponder a un DNI o Carnet de Extranjería.', score, keywordsFound };
   }
   return {
     valid: score >= 4.5,
-    reason: score >= 4.5 ? '' : 'no coincide con un DNI o Carnet de Extranjeria del representante.',
+    reason: score >= 4.5 ? '' : 'no coincide con un DNI o Carnet de Extranjería del representante.',
     score,
     keywordsFound
   };
@@ -1280,7 +1280,7 @@ function parsePeruvianValidityWarnings(slot: DocumentType, rawText: string) {
       const newest = parsedDates.reduce((acc, cur) => (cur.getTime() > acc.getTime() ? cur : acc));
       const fiveYearsMs = 5 * 365 * 24 * 60 * 60 * 1000;
       if (Date.now() - newest.getTime() > fiveYearsMs) {
-        warnings.push('El documento registral luce antiguo. Verifique si requiere una version actualizada.');
+        warnings.push('El documento registral luce antiguo. Verifique si requiere una versión actualizada.');
         return { status: 'warning' as const, warnings };
       }
       return { status: 'ok' as const, warnings };

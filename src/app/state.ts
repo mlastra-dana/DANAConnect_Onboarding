@@ -103,7 +103,7 @@ export function saveState(state: OnboardingState) {
   try {
     localStorage.setItem(key, JSON.stringify(persistentState));
   } catch (error) {
-    console.warn('No se pudo guardar el estado completo del onboarding. Se guardara una version liviana.', error);
+    console.warn('No se pudo guardar el estado completo del onboarding. Se guardará una versión liviana.', error);
     try {
       localStorage.removeItem(key);
       localStorage.setItem(key, JSON.stringify(stripFilePayloadsForStorage(persistentState)));
@@ -134,7 +134,7 @@ export function loadState(companyId: string): OnboardingState | null {
   try {
     return stripTransientDocuments(JSON.parse(raw) as OnboardingState);
   } catch (error) {
-    console.warn('Estado local de onboarding invalido. Se iniciara uno nuevo.', error);
+    console.warn('Estado local de onboarding inválido. Se iniciará uno nuevo.', error);
     clearState(companyId);
     return null;
   }

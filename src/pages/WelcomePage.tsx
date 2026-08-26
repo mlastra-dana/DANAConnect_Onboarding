@@ -9,6 +9,7 @@ export function WelcomePage({ companyId }: { companyId: string }) {
   const navigate = useNavigate();
   const { state, setCountry } = useOnboarding();
   const selectedCountry = getCountryConfig(state.country);
+  const isEnglish = state.country === 'usa';
 
   function handleCountrySelect(country: CountryCode) {
     setCountry(country);
@@ -19,11 +20,13 @@ export function WelcomePage({ companyId }: { companyId: string }) {
     <div>
       <DanaConnectHero
         eyebrow={selectedCountry.heroEyebrow}
-        headline="Portal de onboarding y carga de documentos."
+        headline={isEnglish ? 'Onboarding and document upload portal.' : 'Portal de onboarding y carga de documentos.'}
         subheadline=""
         actions={
           <div className="space-y-4">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/80">Selecciona pais</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/80">
+              {isEnglish ? 'Select country' : 'Seleccione país'}
+            </p>
             <div className="flex flex-wrap items-center gap-4">
               {Object.values(ONBOARDING_COUNTRIES).map((country) => {
                 return (
