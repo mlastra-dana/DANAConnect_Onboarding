@@ -23,6 +23,7 @@ export function DocumentUploader({
   disabled,
   disabledMessage,
   embedded = false,
+  hideTitle = false,
   onSelectFile,
   onRemoveFile
 }: {
@@ -40,6 +41,7 @@ export function DocumentUploader({
   disabled?: boolean;
   disabledMessage?: string;
   embedded?: boolean;
+  hideTitle?: boolean;
   onSelectFile: (file: File) => Promise<void>;
   onRemoveFile: () => void;
 }) {
@@ -101,7 +103,9 @@ export function DocumentUploader({
         </div>
       ) : null}
 
-      <h3 className="pr-24 text-lg font-semibold text-dark">{title ?? resolvedLabel}</h3>
+      {!hideTitle ? (
+        <h3 className={`${embedded ? 'text-base' : 'text-lg'} pr-24 font-semibold text-dark`}>{title ?? resolvedLabel}</h3>
+      ) : null}
 
       {loading ? (
         <div className="space-y-2 rounded-lg border border-borderLight bg-surface p-3">
@@ -192,7 +196,7 @@ export function DocumentUploader({
       )}
 
       {docRecord.fileName ? (
-        <div className={`rounded-xl border p-3 ${fileContainerClass}`}>
+        <div className={`${embedded ? 'rounded-lg' : 'rounded-xl'} border p-3 ${fileContainerClass}`}>
           <FileAttachmentChip fileName={docRecord.fileName} status={docRecord.validation.status} onRemove={handleRemoveClick} />
           {docRecord.fileType?.includes('pdf') ? (
             previewFile ? (

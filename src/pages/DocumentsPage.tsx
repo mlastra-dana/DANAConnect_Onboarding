@@ -74,7 +74,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
   const hasRifCompanyData = Boolean(rifCompany?.name || rifCompany?.rif);
   const canUploadConstitution = !isVenezuelaJuridica || rifValidation.status === 'valid';
   const constitutionDisabledMessage =
-    'Primero cargue y valide el RIF para comparar la razón social con el acta.';
+    'Primero cargue y valide el RIF para comparar la razón social con el Registro Mercantil.';
   const constitutionValidation = state.documents.registroMercantil.validation;
   const assemblyValidation = state.documents.actaDesignacionAutoridades.validation;
   const legalRepresentatives = mergeLegalRepresentatives(
@@ -84,11 +84,11 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
   const canUploadRepresentative =
     !isVenezuelaJuridica || (constitutionValidation.status === 'valid' && legalRepresentatives.length > 0);
   const canUploadAssembly = !isVenezuelaJuridica || constitutionValidation.status === 'valid';
-  const assemblyDisabledMessage = 'Primero cargue y valide el Registro Mercantil / Acta Constitutiva.';
+  const assemblyDisabledMessage = 'Primero cargue y valide el Registro Mercantil.';
   const representativeDisabledMessage =
     constitutionValidation.status === 'valid'
-      ? 'Cargue un Registro Mercantil / Acta Constitutiva o una Asamblea donde se identifique la junta directiva.'
-      : 'Primero cargue y valide el Registro Mercantil / Acta Constitutiva.';
+      ? 'Cargue un Registro Mercantil o una Asamblea donde se identifique la junta directiva.'
+      : 'Primero cargue y valide el Registro Mercantil.';
 
   async function handleUploadBase(docType: DocumentType, file: File) {
     const key: UploadKey = docType;
@@ -365,24 +365,16 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
           if (isVenezuelaJuridica && docType === 'registroMercantil') {
             return (
               <Card key={docType} className="relative space-y-4 animate-fadeUp">
-                <div className="space-y-2 border-b border-borderLight pb-3">
+                <div className="space-y-2">
                   <h3 className="pr-24 text-lg font-semibold text-dark">Registro Mercantil</h3>
                   <p className="text-sm text-grayText">
-                    Cargue el acta constitutiva. Puede agregar una asamblea si renovó la junta directiva o designó autoridades vigentes.
+                    Cargue el Registro Mercantil. Puede agregar una asamblea si complementa o actualiza la información de la empresa.
                   </p>
-                  {!assemblyEnabled ? (
-                    <div className="pt-1">
-                      <Button type="button" variant="secondary" onClick={handleAddAssembly} disabled={!canUploadAssembly}>
-                        <Plus className="h-4 w-4" />
-                        Agregar asamblea
-                      </Button>
-                    </div>
-                  ) : null}
                 </div>
 
                 <FileUploadCard
                   docRecord={state.documents.registroMercantil as DocumentRecord}
-                  title="Acta Constitutiva"
+                  title="Registro Mercantil"
                   label={getDocumentLabel(state.country, state.personType, 'registroMercantil')}
                   loading={loadingMap.registroMercantil || uploadingMap.registroMercantil}
                   isUploading={uploadingMap.registroMercantil}
@@ -392,17 +384,31 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                   disabled={constitutionUploadLocked}
                   disabledMessage={constitutionDisabledMessage}
                   embedded
+                  hideTitle
                   onSelectFile={(file) => handleUploadBase('registroMercantil', file)}
                   onRemoveFile={() => handleRemoveBase('registroMercantil')}
                 />
 
-                {assemblyEnabled ? (
+                {!assemblyEnabled ? (
+                  <div className="border-t border-borderLight pt-4">
+                    <Button type="button" variant="secondary" fullWidth onClick={handleAddAssembly} disabled={!canUploadAssembly}>
+                      <Plus className="h-4 w-4" />
+                      Agregar asamblea
+                    </Button>
+                  </div>
+                ) : (
                   <div className="space-y-4 border-t border-borderLight pt-4">
                     <div className="flex items-center justify-between gap-3">
                       <h4 className="text-base font-semibold text-dark">Asamblea o Acta de Junta Directiva</h4>
-                      <Button type="button" variant="ghost" onClick={handleDeleteAssembly}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-10 w-10 px-0"
+                        aria-label="Quitar asamblea"
+                        title="Quitar asamblea"
+                        onClick={handleDeleteAssembly}
+                      >
                         <Trash2 className="h-4 w-4" />
-                        Quitar
                       </Button>
                     </div>
                     <FileUploadCard
@@ -421,7 +427,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                       onRemoveFile={() => handleRemoveBase('actaDesignacionAutoridades')}
                     />
                   </div>
-                ) : null}
+                )}
               </Card>
             );
           }
@@ -446,53 +452,70 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         })}
 
         {showRepresentatives ? (
-          <FileUploadCard
-            sectionTitle={flowConfig.representativeSectionTitle}
-            sectionDescription={flowConfig.representativeSectionDescription}
-            sectionAction={
-              !representative2.enabled ? (
-                <Button type="button" variant="secondary" onClick={handleAddRepresentative2}>
+          <Card className="relative space-y-4 animate-fadeUp">
+            <div className="space-y-2">
+              <h3 className="pr-24 text-lg font-semibold text-dark">{flowConfig.representativeSectionTitle}</h3>
+              {flowConfig.representativeSectionDescription ? (
+                <p className="text-sm text-grayText">{flowConfig.representativeSectionDescription}</p>
+              ) : null}
+            </div>
+
+            <FileUploadCard
+              title={flowConfig.representativePrimaryTitle}
+              label={getDocumentLabel(state.country, state.personType, 'cedulaRepresentante')}
+              docRecord={{ ...representative1.document, type: 'cedulaRepresentante' }}
+              loading={loadingMap.rep1 || uploadingMap.rep1}
+              isUploading={uploadingMap.rep1}
+              uploadProgress={uploadProgressMap.rep1}
+              validationProgress={validationProgressMap.rep1}
+              previewFile={runtimeFiles.rep1}
+              disabled={!canUploadRepresentative}
+              disabledMessage={representativeDisabledMessage}
+              embedded
+              onSelectFile={(file) => handleUploadRepresentative(1, file)}
+              onRemoveFile={() => handleRemoveRepresentative(1)}
+            />
+
+            {!representative2.enabled ? (
+              <div className="border-t border-borderLight pt-4">
+                <Button type="button" variant="secondary" fullWidth onClick={handleAddRepresentative2}>
                   <Plus className="h-4 w-4" />
                   {flowConfig.addSecondRepresentativeLabel}
                 </Button>
-              ) : undefined
-            }
-            title={flowConfig.representativePrimaryTitle}
-            label={getDocumentLabel(state.country, state.personType, 'cedulaRepresentante')}
-            docRecord={{ ...representative1.document, type: 'cedulaRepresentante' }}
-            loading={loadingMap.rep1 || uploadingMap.rep1}
-            isUploading={uploadingMap.rep1}
-            uploadProgress={uploadProgressMap.rep1}
-            validationProgress={validationProgressMap.rep1}
-            previewFile={runtimeFiles.rep1}
-            disabled={!canUploadRepresentative}
-            disabledMessage={representativeDisabledMessage}
-            onSelectFile={(file) => handleUploadRepresentative(1, file)}
-            onRemoveFile={() => handleRemoveRepresentative(1)}
-          />
-        ) : null}
-
-        {showRepresentatives && representative2.enabled ? (
-          <FileUploadCard
-            title={flowConfig.representativeSecondaryTitle}
-            label={getDocumentLabel(state.country, state.personType, 'cedulaRepresentante')}
-            sectionAction={
-              <Button type="button" variant="ghost" onClick={handleDeleteRepresentative2}>
-                <Trash2 className="h-4 w-4" />
-                {flowConfig.removeSecondRepresentativeLabel}
-              </Button>
-            }
-            docRecord={{ ...representative2.document, type: 'cedulaRepresentante' }}
-            loading={loadingMap.rep2 || uploadingMap.rep2}
-            isUploading={uploadingMap.rep2}
-            uploadProgress={uploadProgressMap.rep2}
-            validationProgress={validationProgressMap.rep2}
-            previewFile={runtimeFiles.rep2}
-            disabled={!canUploadRepresentative}
-            disabledMessage={representativeDisabledMessage}
-            onSelectFile={(file) => handleUploadRepresentative(2, file)}
-            onRemoveFile={() => handleRemoveRepresentative(2)}
-          />
+              </div>
+            ) : (
+              <div className="space-y-4 border-t border-borderLight pt-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h4 className="text-base font-semibold text-dark">{flowConfig.representativeSecondaryTitle}</h4>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-10 w-10 px-0"
+                    aria-label={flowConfig.removeSecondRepresentativeLabel}
+                    title={flowConfig.removeSecondRepresentativeLabel}
+                    onClick={handleDeleteRepresentative2}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <FileUploadCard
+                  title="Segundo representante"
+                  label={getDocumentLabel(state.country, state.personType, 'cedulaRepresentante')}
+                  docRecord={{ ...representative2.document, type: 'cedulaRepresentante' }}
+                  loading={loadingMap.rep2 || uploadingMap.rep2}
+                  isUploading={uploadingMap.rep2}
+                  uploadProgress={uploadProgressMap.rep2}
+                  validationProgress={validationProgressMap.rep2}
+                  previewFile={runtimeFiles.rep2}
+                  disabled={!canUploadRepresentative}
+                  disabledMessage={representativeDisabledMessage}
+                  embedded
+                  onSelectFile={(file) => handleUploadRepresentative(2, file)}
+                  onRemoveFile={() => handleRemoveRepresentative(2)}
+                />
+              </div>
+            )}
+          </Card>
         ) : null}
       </div>
 
