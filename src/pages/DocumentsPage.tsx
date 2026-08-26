@@ -402,27 +402,27 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                   <div className="border-t border-borderLight pt-4">
                     <Button type="button" variant="secondary" fullWidth onClick={handleAddAssembly} disabled={!canUploadAssembly}>
                       <Plus className="h-4 w-4" />
-                      Agregar asamblea
+                      Agregar acta de asamblea
                     </Button>
                   </div>
                 ) : (
                   <div className="space-y-4 border-t border-borderLight pt-4">
                     <div className="flex items-center justify-between gap-3">
-                      <h4 className="text-base font-semibold text-dark">Asamblea o Acta de Junta Directiva</h4>
+                      <h4 className="text-base font-semibold text-dark">Acta de Asamblea</h4>
                       <Button
                         type="button"
                         variant="ghost"
-                        className="h-10 w-10 px-0"
+                        className="h-11 w-11 rounded-lg border border-borderLight bg-white px-0 text-grayText shadow-sm hover:border-red-200 hover:bg-red-50 hover:text-red-700"
                         aria-label="Quitar asamblea"
                         title="Quitar asamblea"
                         onClick={handleDeleteAssembly}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-5 w-5" />
                       </Button>
                     </div>
                     <FileUploadCard
                       docRecord={state.documents.actaDesignacionAutoridades as DocumentRecord}
-                      title="Asamblea (Opcional)"
+                      title="Acta de Asamblea (Opcional)"
                       label={getDocumentLabel(state.country, state.personType, 'actaDesignacionAutoridades')}
                       loading={loadingMap.actaDesignacionAutoridades || uploadingMap.actaDesignacionAutoridades}
                       isUploading={uploadingMap.actaDesignacionAutoridades}
@@ -503,12 +503,12 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                   <Button
                     type="button"
                     variant="ghost"
-                    className="h-10 w-10 px-0"
+                    className="h-11 w-11 rounded-lg border border-borderLight bg-white px-0 text-grayText shadow-sm hover:border-red-200 hover:bg-red-50 hover:text-red-700"
                     aria-label={flowConfig.removeSecondRepresentativeLabel}
                     title={flowConfig.removeSecondRepresentativeLabel}
                     onClick={handleDeleteRepresentative2}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-5 w-5" />
                   </Button>
                 </div>
                 <FileUploadCard

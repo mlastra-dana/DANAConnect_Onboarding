@@ -2256,11 +2256,16 @@ Representantes legales esperados:
 Reglas para legalRepresentativeMatch:
 - Compara solo contra la persona visible en la cedula cargada, no contra el nombre del archivo.
 - Primero compara cedula/documentNumber ignorando puntos, espacios, guiones y prefijos V/E.
-- Si el numero no se puede leer completo, compara nombres y apellidos visibles contra los representantes esperados.
-- legalRepresentativeMatch debe ser true si la cedula corresponde razonablemente a cualquiera de las personas esperadas.
+- Si alguno de los representantes esperados tiene documentNumber, la coincidencia de numero de cedula es obligatoria.
+- Si la cedula visible tiene un numero distinto a todos los documentNumber esperados, legalRepresentativeMatch debe ser false y status debe ser "error".
+- No apruebes por parecido de nombre si la cedula visible tiene un numero legible distinto al numero esperado.
+- Usa nombres y apellidos solo cuando ningun representante esperado tenga documentNumber o cuando el numero de la cedula visible sea ilegible/incompleto.
+- legalRepresentativeMatch debe ser true solo si la cedula pertenece claramente a cualquiera de las personas esperadas.
 - legalRepresentativeMatch debe ser false si la persona visible no corresponde a ninguno o si no puedes leer datos suficientes.
+- Para este slot, status="valid" exige dos condiciones: que el archivo sea una cedula de identidad y que legalRepresentativeMatch sea true.
+- Si legalRepresentativeMatch es false o null, status debe ser "error" aunque el documento sea una cedula real.
 - matchedRepresentativeRole debe ser el cargo esperado que coincide, si existe.
-- matchedRepresentativeEvidence debe explicar brevemente que nombre o cedula visible coincide.
+- matchedRepresentativeEvidence debe explicar brevemente que nombre o cedula visible coincide. Si no coincide, debe decir claramente que no hay coincidencia.
 - visibleIdentityEvidence debe incluir solo datos visibles en la cedula cargada: nombres, apellidos y numero de cedula leidos.
 - No copies representantes esperados dentro de visibleIdentityEvidence.
 """.strip()
@@ -2404,6 +2409,10 @@ Reglas adicionales:
 - confidence debe estar entre 0 y 1.
 - Si status="valid", document_type_match debe ser true.
 - Si status="error", document_type_match debe ser false.
+- Para Venezuela y slot "documentoRepresentante", si se recibio una lista de representantes esperados:
+  - status="valid" o status="warning" requiere legalRepresentativeMatch=true.
+  - status="error" requiere legalRepresentativeMatch=false.
+  - Si reasons o matchedRepresentativeEvidence indican "no coincide", "no aparece" o "no hay coincidencia", legalRepresentativeMatch debe ser false y status debe ser "error".
 - warnings solo aplica cuando hay dudas, calidad baja, vencimiento, documento de prueba o revision recomendada.
 - reasons explica por que se rechaza, por que se acepta o por que hay observaciones.
 - keywords_found debe incluir palabras o conceptos visibles relevantes si existen.
@@ -2820,11 +2829,14 @@ def apply_expected_legal_representative_guard(
     if country != "ve" or slot != "documentoRepresentante" or expected_legal_representatives is None:
         return analysis
 
-    if not expected_legal_representatives:
+    expected_representatives = normalize_expected_legal_representatives(expected_legal_representatives)
+
+    if not expected_representatives:
         analysis["status"] = "error"
         analysis["document_type_match"] = False
+        analysis["legalRepresentativeMatch"] = False
         analysis["summary"] = (
-            "Primero cargue un Registro Mercantil / Acta Constitutiva donde se identifiquen representantes legales "
+            "Primero cargue un Registro Mercantil donde se identifiquen representantes legales "
             "o miembros de junta directiva."
         )
         analysis["warnings"] = []
@@ -2842,6 +2854,50 @@ def apply_expected_legal_representative_guard(
     if detected_document_type in incompatible_detected_types:
         return analysis
 
+    representatives_with_document_number = [
+        representative
+        for representative in expected_representatives
+        if identity_number_variants(representative.get("documentNumber"))
+    ]
+    identity_has_document_number = bool(identity_number_variants(identity.get("documentNumber")))
+
+    if representatives_with_document_number:
+        matched_representative = next(
+            (
+                representative
+                for representative in representatives_with_document_number
+                if document_numbers_match(identity.get("documentNumber"), representative.get("documentNumber"))
+            ),
+            None,
+        )
+
+        if matched_representative:
+            analysis["legalRepresentativeMatch"] = True
+            analysis["matchedRepresentativeRole"] = matched_representative.get("role", "")
+            analysis["matchedRepresentativeEvidence"] = build_positive_representative_match_evidence(
+                identity=identity,
+                representative=matched_representative,
+            )
+            if normalize_status(analysis.get("status")) == "error":
+                analysis["status"] = "valid"
+                analysis["document_type_match"] = True
+                analysis["summary"] = "Documento aceptado."
+                analysis["warnings"] = normalize_string_list(analysis.get("warnings"))
+            return analysis
+
+        force_representative_mismatch_error(
+            analysis=analysis,
+            reason=(
+                "La cedula extraida no coincide con ninguno de los numeros de cedula extraidos del Registro Mercantil "
+                "o del Acta de Asamblea."
+                if identity_has_document_number
+                else "No se pudo leer un numero de cedula suficiente para compararlo contra los representantes esperados."
+            ),
+            identity=identity,
+            expected_representatives=representatives_with_document_number,
+        )
+        return analysis
+
     identity_text = " ".join(
         item
         for item in [
@@ -2854,15 +2910,14 @@ def apply_expected_legal_representative_guard(
         if item
     )
 
-    for representative in expected_legal_representatives:
+    for representative in expected_representatives:
         if legal_representative_matches(identity=identity, identity_text=identity_text, representative=representative):
             analysis["legalRepresentativeMatch"] = True
-            if not str(analysis.get("matchedRepresentativeRole") or "").strip():
-                analysis["matchedRepresentativeRole"] = representative.get("role", "")
-            if not str(analysis.get("matchedRepresentativeEvidence") or "").strip():
-                analysis["matchedRepresentativeEvidence"] = (
-                    "La identidad extraida coincide con una persona esperada del acta."
-                )
+            analysis["matchedRepresentativeRole"] = representative.get("role", "")
+            analysis["matchedRepresentativeEvidence"] = build_positive_representative_match_evidence(
+                identity=identity,
+                representative=representative,
+            )
             if normalize_status(analysis.get("status")) == "error":
                 analysis["status"] = "valid"
                 analysis["document_type_match"] = True
@@ -2870,20 +2925,84 @@ def apply_expected_legal_representative_guard(
                 analysis["warnings"] = normalize_string_list(analysis.get("warnings"))
             return analysis
 
-    if normalize_status(analysis.get("status")) == "error":
-        return analysis
+    force_representative_mismatch_error(
+        analysis=analysis,
+        reason="La identidad extraida de la cedula no coincide con las personas extraidas del Registro Mercantil.",
+        identity=identity,
+        expected_representatives=expected_representatives,
+    )
+    return analysis
 
+
+def force_representative_mismatch_error(
+    *,
+    analysis: Dict[str, Any],
+    reason: str,
+    identity: Dict[str, str],
+    expected_representatives: List[Dict[str, str]],
+) -> None:
     analysis["legalRepresentativeMatch"] = False
     analysis["status"] = "error"
     analysis["document_type_match"] = False
     analysis["summary"] = (
-        "La persona de esta cedula no aparece como representante legal ni miembro de junta directiva en el Registro Mercantil / Acta Constitutiva cargado."
+        "La persona de esta cedula no aparece como representante legal ni miembro de junta directiva en el Registro Mercantil cargado."
     )
     analysis["warnings"] = []
-    analysis["reasons"] = normalize_string_list(analysis.get("reasons")) + [
-        "La identidad extraida de la cedula no coincide con las personas extraidas del acta.",
-    ]
-    return analysis
+    analysis["matchedRepresentativeRole"] = ""
+    analysis["matchedRepresentativeEvidence"] = build_negative_representative_match_evidence(
+        identity=identity,
+        expected_representatives=expected_representatives,
+    )
+    analysis["reasons"] = normalize_string_list(analysis.get("reasons")) + [reason]
+
+
+def build_positive_representative_match_evidence(
+    *, identity: Dict[str, str], representative: Dict[str, str]
+) -> str:
+    visible_identity = format_identity_for_evidence(identity)
+    expected_identity = format_representative_for_evidence(representative)
+    if document_numbers_match(identity.get("documentNumber"), representative.get("documentNumber")):
+        return f"La cedula visible ({visible_identity}) coincide con {expected_identity}."
+    return f"La identidad visible ({visible_identity}) coincide con {expected_identity}."
+
+
+def build_negative_representative_match_evidence(
+    *, identity: Dict[str, str], expected_representatives: List[Dict[str, str]]
+) -> str:
+    visible_identity = format_identity_for_evidence(identity) or "sin datos suficientes"
+    expected = ", ".join(
+        format_representative_for_evidence(representative)
+        for representative in expected_representatives
+    )
+    return f"No hay coincidencia. Cedula visible: {visible_identity}. Representantes esperados: {expected}."
+
+
+def format_identity_for_evidence(identity: Dict[str, str]) -> str:
+    name = " ".join(
+        item
+        for item in [identity.get("firstName", ""), identity.get("lastName", "")]
+        if item
+    ).strip()
+    document_number = identity.get("documentNumber", "").strip()
+    if document_number and name:
+        return f"{document_number} ({name})"
+    return document_number or name
+
+
+def format_representative_for_evidence(representative: Dict[str, str]) -> str:
+    name = " ".join(
+        item
+        for item in [representative.get("firstName", ""), representative.get("lastName", "")]
+        if item
+    ).strip()
+    document_number = representative.get("documentNumber", "").strip()
+    role = representative.get("role", "").strip()
+    label = name or "representante sin nombre"
+    if document_number:
+        label = f"{label} ({document_number})"
+    if role:
+        label = f"{label}, {role}"
+    return label
 
 
 def apply_expected_company_guard(
@@ -3182,7 +3301,7 @@ def build_extraction_debug_payload(
         analysis.get("extractedLegalRepresentatives")
     )
     expected_representatives = (
-        normalize_extracted_legal_representatives(expected_legal_representatives)
+        normalize_expected_legal_representatives(expected_legal_representatives)
         if expected_legal_representatives is not None
         else None
     )
@@ -3410,6 +3529,30 @@ def normalize_extracted_legal_representatives(value: Any) -> List[Dict[str, str]
             representatives.append(representative)
 
     return representatives
+
+
+def normalize_expected_legal_representatives(value: Any) -> List[Dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+
+    representatives: List[Dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+
+        representative = {
+            "firstName": str(item.get("firstName") or "").strip(),
+            "lastName": str(item.get("lastName") or "").strip(),
+            "documentNumber": str(item.get("documentNumber") or "").strip(),
+            "role": str(item.get("role") or "").strip(),
+            "rawText": str(item.get("rawText") or "").strip(),
+        }
+        if is_placeholder_legal_representative(representative):
+            continue
+        if any(representative.values()):
+            representatives.append(representative)
+
+    return dedupe_legal_representatives(representatives)
 
 
 def is_placeholder_legal_representative(representative: Dict[str, str]) -> bool:
