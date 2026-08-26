@@ -159,7 +159,7 @@ export function buildValidationErrorResult(
 
 function resolveLambdaSlot(type: DocumentType, country: CountryCode): string {
   if (type === 'actaDesignacionAutoridades') {
-    return 'registroMercantil';
+    return country === 've' || country === 'ar' ? 'facultadesRepresentante' : 'registroMercantil';
   }
 
   if (country !== 'mx') {

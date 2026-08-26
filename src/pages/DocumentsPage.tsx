@@ -7,8 +7,13 @@ import { Button } from '../components/ui/Button';
 import { Toast } from '../components/ui/Toast';
 import { buildValidationErrorResult, validateDocumentFile } from '../lib/validators/documentValidators';
 import { createEmptyDocument, createEmptyRepresentative } from '../app/state';
-import { DocumentRecord, DocumentType, RepresentativeRecord } from '../app/types';
-import { getDocumentLabel, getDocumentOrder, getFlowConfig, requiresRepresentatives } from '../config/onboardingCountries';
+import { DocumentRecord, DocumentType, DocumentValidationResult, RepresentativeRecord } from '../app/types';
+import {
+  getDocumentLabel,
+  getDocumentOrder,
+  getFlowConfig,
+  requiresRepresentatives
+} from '../config/onboardingCountries';
 import { Card } from '../components/ui/Card';
 
 type UploadKey = DocumentType | 'rep1' | 'rep2';
@@ -54,6 +59,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
   const [uploadProgressMap, setUploadProgressMap] = useState<Record<UploadKey, number>>(initialNumMap);
   const [validationProgressMap, setValidationProgressMap] = useState<Record<UploadKey, number>>(initialNumMap);
   const [runtimeFiles, setRuntimeFiles] = useState<Partial<Record<UploadKey, File>>>({});
+  const [assemblyEnabled, setAssemblyEnabled] = useState(Boolean(state.documents.actaDesignacionAutoridades.fileName));
 
   const representative1 = state.representatives.find((rep) => rep.id === 1)!;
   const representative2 = state.representatives.find((rep) => rep.id === 2)!;
@@ -70,12 +76,18 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
   const constitutionDisabledMessage =
     'Primero cargue y valide el RIF para comparar la razón social con el acta.';
   const constitutionValidation = state.documents.registroMercantil.validation;
-  const legalRepresentatives = constitutionValidation.extractedLegalRepresentatives ?? [];
+  const assemblyValidation = state.documents.actaDesignacionAutoridades.validation;
+  const legalRepresentatives = mergeLegalRepresentatives(
+    constitutionValidation.extractedLegalRepresentatives,
+    assemblyValidation.status === 'valid' ? assemblyValidation.extractedLegalRepresentatives : []
+  );
   const canUploadRepresentative =
     !isVenezuelaJuridica || (constitutionValidation.status === 'valid' && legalRepresentatives.length > 0);
+  const canUploadAssembly = !isVenezuelaJuridica || constitutionValidation.status === 'valid';
+  const assemblyDisabledMessage = 'Primero cargue y valide el Registro Mercantil / Acta Constitutiva.';
   const representativeDisabledMessage =
     constitutionValidation.status === 'valid'
-      ? 'Vuelva a cargar el Registro Mercantil / Acta Constitutiva para extraer representantes legales o junta directiva.'
+      ? 'Cargue un Registro Mercantil / Acta Constitutiva o una Asamblea donde se identifique la junta directiva.'
       : 'Primero cargue y valide el Registro Mercantil / Acta Constitutiva.';
 
   async function handleUploadBase(docType: DocumentType, file: File) {
@@ -109,7 +121,9 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         (progress) => {
           setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
         },
-        isVenezuelaJuridica && docType === 'registroMercantil' && hasRifCompanyData
+        isVenezuelaJuridica &&
+          (docType === 'registroMercantil' || docType === 'actaDesignacionAutoridades') &&
+          hasRifCompanyData
           ? {
               expectedCompany: rifCompany
             }
@@ -132,14 +146,11 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         clearVenezuelaJuridicaDependentDocuments();
       }
 
-      if (isVenezuelaJuridica && docType === 'registroMercantil') {
-        [representative1, representative2].forEach((representative) => {
-          if (!representative.enabled || representative.document.validation.status === 'pending') return;
-          setRepresentative(representative.id, {
-            ...representative,
-            document: createEmptyDocument('cedulaRepresentante')
-          });
-        });
+      if (isVenezuelaJuridica && (docType === 'registroMercantil' || docType === 'actaDesignacionAutoridades')) {
+        if (docType === 'registroMercantil') {
+          clearVenezuelaJuridicaAssembly();
+        }
+        clearVenezuelaJuridicaRepresentatives({ onlyValidated: true });
       }
 
       if (
@@ -258,6 +269,15 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     if (isVenezuelaJuridica && docType === 'rif') {
       clearVenezuelaJuridicaDependentDocuments();
     }
+
+    if (isVenezuelaJuridica && docType === 'registroMercantil') {
+      clearVenezuelaJuridicaAssembly();
+      clearVenezuelaJuridicaRepresentatives();
+    }
+
+    if (isVenezuelaJuridica && docType === 'actaDesignacionAutoridades') {
+      clearVenezuelaJuridicaRepresentatives();
+    }
   }
 
   function handleRemoveRepresentative(repId: 1 | 2) {
@@ -283,6 +303,15 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     setRepresentativeEnabled(2, false);
   }
 
+  function handleAddAssembly() {
+    setAssemblyEnabled(true);
+  }
+
+  function handleDeleteAssembly() {
+    handleRemoveBase('actaDesignacionAutoridades');
+    setAssemblyEnabled(false);
+  }
+
   function clearUploaderRuntime(key: UploadKey) {
     setRuntimeFiles((prev) => {
       const next = { ...prev };
@@ -301,7 +330,21 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     setDocument('registroMercantil', createEmptyDocument('registroMercantil'));
     clearUploaderRuntime('registroMercantil');
 
+    clearVenezuelaJuridicaAssembly();
+    clearVenezuelaJuridicaRepresentatives();
+  }
+
+  function clearVenezuelaJuridicaAssembly() {
+    const assembly = state.documents.actaDesignacionAutoridades;
+    if (assembly.previewUrl) URL.revokeObjectURL(assembly.previewUrl);
+    setDocument('actaDesignacionAutoridades', createEmptyDocument('actaDesignacionAutoridades'));
+    clearUploaderRuntime('actaDesignacionAutoridades');
+    setAssemblyEnabled(false);
+  }
+
+  function clearVenezuelaJuridicaRepresentatives(options: { onlyValidated?: boolean } = {}) {
     [representative1, representative2].forEach((representative) => {
+      if (options.onlyValidated && (!representative.enabled || representative.document.validation.status === 'pending')) return;
       if (representative.document.previewUrl) URL.revokeObjectURL(representative.document.previewUrl);
       setRepresentative(representative.id, {
         ...representative,
@@ -318,6 +361,70 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {documentOrder.map((docType) => {
           const constitutionUploadLocked = isVenezuelaJuridica && docType === 'registroMercantil' && !canUploadConstitution;
+
+          if (isVenezuelaJuridica && docType === 'registroMercantil') {
+            return (
+              <Card key={docType} className="relative space-y-4 animate-fadeUp">
+                <div className="space-y-2 border-b border-borderLight pb-3">
+                  <h3 className="pr-24 text-lg font-semibold text-dark">Registro Mercantil</h3>
+                  <p className="text-sm text-grayText">
+                    Cargue el acta constitutiva. Puede agregar una asamblea si renovó la junta directiva o designó autoridades vigentes.
+                  </p>
+                  {!assemblyEnabled ? (
+                    <div className="pt-1">
+                      <Button type="button" variant="secondary" onClick={handleAddAssembly} disabled={!canUploadAssembly}>
+                        <Plus className="h-4 w-4" />
+                        Agregar asamblea
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+
+                <FileUploadCard
+                  docRecord={state.documents.registroMercantil as DocumentRecord}
+                  title="Acta Constitutiva"
+                  label={getDocumentLabel(state.country, state.personType, 'registroMercantil')}
+                  loading={loadingMap.registroMercantil || uploadingMap.registroMercantil}
+                  isUploading={uploadingMap.registroMercantil}
+                  uploadProgress={uploadProgressMap.registroMercantil}
+                  validationProgress={validationProgressMap.registroMercantil}
+                  previewFile={runtimeFiles.registroMercantil}
+                  disabled={constitutionUploadLocked}
+                  disabledMessage={constitutionDisabledMessage}
+                  embedded
+                  onSelectFile={(file) => handleUploadBase('registroMercantil', file)}
+                  onRemoveFile={() => handleRemoveBase('registroMercantil')}
+                />
+
+                {assemblyEnabled ? (
+                  <div className="space-y-4 border-t border-borderLight pt-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h4 className="text-base font-semibold text-dark">Asamblea o Acta de Junta Directiva</h4>
+                      <Button type="button" variant="ghost" onClick={handleDeleteAssembly}>
+                        <Trash2 className="h-4 w-4" />
+                        Quitar
+                      </Button>
+                    </div>
+                    <FileUploadCard
+                      docRecord={state.documents.actaDesignacionAutoridades as DocumentRecord}
+                      title="Asamblea (Opcional)"
+                      label={getDocumentLabel(state.country, state.personType, 'actaDesignacionAutoridades')}
+                      loading={loadingMap.actaDesignacionAutoridades || uploadingMap.actaDesignacionAutoridades}
+                      isUploading={uploadingMap.actaDesignacionAutoridades}
+                      uploadProgress={uploadProgressMap.actaDesignacionAutoridades}
+                      validationProgress={validationProgressMap.actaDesignacionAutoridades}
+                      previewFile={runtimeFiles.actaDesignacionAutoridades}
+                      disabled={!canUploadAssembly}
+                      disabledMessage={assemblyDisabledMessage}
+                      embedded
+                      onSelectFile={(file) => handleUploadBase('actaDesignacionAutoridades', file)}
+                      onRemoveFile={() => handleRemoveBase('actaDesignacionAutoridades')}
+                    />
+                  </div>
+                ) : null}
+              </Card>
+            );
+          }
 
           return (
             <FileUploadCard
@@ -485,5 +592,20 @@ function fileToBase64(file: File): Promise<string> {
     };
     reader.onerror = () => reject(reader.error ?? new Error('No se pudo leer el archivo.'));
     reader.readAsDataURL(file);
+  });
+}
+
+function mergeLegalRepresentatives(
+  primary: DocumentValidationResult['extractedLegalRepresentatives'] = [],
+  secondary: DocumentValidationResult['extractedLegalRepresentatives'] = []
+) {
+  const seen = new Set<string>();
+  return [...primary, ...secondary].filter((representative) => {
+    const key =
+      representative.documentNumber?.replace(/\D/g, '') ||
+      `${representative.firstName ?? ''}-${representative.lastName ?? ''}-${representative.role ?? ''}`.toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
 }

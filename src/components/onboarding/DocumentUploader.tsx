@@ -22,6 +22,7 @@ export function DocumentUploader({
   previewFile,
   disabled,
   disabledMessage,
+  embedded = false,
   onSelectFile,
   onRemoveFile
 }: {
@@ -38,6 +39,7 @@ export function DocumentUploader({
   previewFile?: File;
   disabled?: boolean;
   disabledMessage?: string;
+  embedded?: boolean;
   onSelectFile: (file: File) => Promise<void>;
   onRemoveFile: () => void;
 }) {
@@ -86,8 +88,8 @@ export function DocumentUploader({
     inputRef.current?.click();
   }
 
-  return (
-    <Card className="relative space-y-4 animate-fadeUp">
+  const content = (
+    <>
       <div className="absolute right-5 top-5">
         <StatusBadge status={feedbackStatus} />
       </div>
@@ -252,6 +254,16 @@ export function DocumentUploader({
         ) : null}
         {feedbackStatus === 'pending' ? <p className="text-grayText">{pendingMessage}</p> : null}
       </div>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="relative space-y-4">{content}</div>;
+  }
+
+  return (
+    <Card className="relative space-y-4 animate-fadeUp">
+      {content}
     </Card>
   );
 }

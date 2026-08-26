@@ -1,5 +1,11 @@
 import { DocumentType, OnboardingState } from '../../app/types';
-import { getDocumentLabel, getDocumentOrder, getFlowConfig, requiresRepresentatives } from '../../config/onboardingCountries';
+import {
+  getDocumentLabel,
+  getDocumentOrder,
+  getFlowConfig,
+  getOptionalDocumentOrder,
+  requiresRepresentatives
+} from '../../config/onboardingCountries';
 
 export type DemoEmailPayload = {
   trackingId: string;
@@ -53,12 +59,18 @@ export function buildDemoEmail(
   const companyName = state.tenant.name;
   const flow = getFlowConfig(state.country, state.personType);
   const activeDocuments = getDocumentOrder(state.country, state.personType);
+  const optionalDocuments = getOptionalDocumentOrder(state.country, state.personType).filter(
+    (docType) => Boolean(state.documents[docType].fileName)
+  );
   const showRepresentatives = requiresRepresentatives(state.country, state.personType);
 
   const subject = `${companyName} | Onboarding recibido | ${trackingId}`;
   const summaryLines = activeDocuments.map(
     (docType) => `- ${getDocumentLabel(state.country, state.personType, docType)}: ${statusLabel(state.documents[docType].validation.status)}`
   );
+  optionalDocuments.forEach((docType) => {
+    summaryLines.push(`- ${getDocumentLabel(state.country, state.personType, docType)}: ${statusLabel(state.documents[docType].validation.status)}`);
+  });
   if (showRepresentatives) {
     summaryLines.push(`- ${flow.reviewRepresentativePrimaryLabel}: ${statusLabel(state.representatives[0].document.validation.status)}`);
     summaryLines.push(
@@ -110,6 +122,11 @@ export function buildFriendlySummaryLines(state: OnboardingState) {
   const lines = getDocumentOrder(state.country, state.personType).map(
     (docType) => `${getDocumentLabel(state.country, state.personType, docType)}: ${statusToFriendly(state.documents[docType].validation.status)}`
   );
+  getOptionalDocumentOrder(state.country, state.personType)
+    .filter((docType) => Boolean(state.documents[docType].fileName))
+    .forEach((docType) => {
+      lines.push(`${getDocumentLabel(state.country, state.personType, docType)}: ${statusToFriendly(state.documents[docType].validation.status)}`);
+    });
 
   if (requiresRepresentatives(state.country, state.personType)) {
     lines.push(`${flow.reviewRepresentativePrimaryLabel}: ${statusToFriendly(state.representatives[0].document.validation.status)}`);
@@ -225,6 +242,12 @@ function buildConversationFiles(state: OnboardingState): DemoEmailPayload['files
   };
 
   getDocumentOrder(state.country, state.personType).forEach((documentType) => {
+    const field = DANA_DOCUMENT_FIELD_BY_TYPE[documentType];
+    if (!field) return;
+    addDocument(field, documentType);
+  });
+
+  getOptionalDocumentOrder(state.country, state.personType).forEach((documentType) => {
     const field = DANA_DOCUMENT_FIELD_BY_TYPE[documentType];
     if (!field) return;
     addDocument(field, documentType);

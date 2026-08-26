@@ -13,6 +13,7 @@ export type PersonOnboardingCopy = {
   heroButton: string;
   documentsIntro: string;
   documentOrder: DocumentType[];
+  optionalDocumentOrder?: DocumentType[];
   documents: Partial<Record<DocumentRecordType, CountryDocumentSlot>>;
   representativePrimaryTitle?: string;
   representativeSecondaryTitle?: string;
@@ -48,9 +49,11 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         heroButton: 'Continuar con persona juridica',
         documentsIntro: 'Cargue los documentos requeridos para continuar con el onboarding de persona juridica.',
         documentOrder: ['rif', 'registroMercantil'],
+        optionalDocumentOrder: ['actaDesignacionAutoridades'],
         documents: {
           rif: { label: 'RIF' },
           registroMercantil: { label: 'Registro Mercantil' },
+          actaDesignacionAutoridades: { label: 'Asamblea o Acta de Junta Directiva (Opcional)' },
           cedulaRepresentante: { label: 'Cédula del Representante' }
         },
         representativePrimaryTitle: 'Cédula del Representante (Obligatorio)',
@@ -348,6 +351,10 @@ export function getDocumentLabel(country: CountryCode, personType: PersonType, t
 
 export function getDocumentOrder(country: CountryCode, personType: PersonType) {
   return getFlowConfig(country, personType).documentOrder;
+}
+
+export function getOptionalDocumentOrder(country: CountryCode, personType: PersonType) {
+  return getFlowConfig(country, personType).optionalDocumentOrder ?? [];
 }
 
 export function requiresRepresentatives(country: CountryCode, personType: PersonType) {

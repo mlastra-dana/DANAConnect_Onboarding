@@ -6,7 +6,13 @@ import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/ui/Badge';
 import { Toast } from '../components/ui/Toast';
 import { buildDemoEmail, sendEmailViaApi } from '../lib/email/demoMail';
-import { getDocumentLabel, getDocumentOrder, getFlowConfig, requiresRepresentatives } from '../config/onboardingCountries';
+import {
+  getDocumentLabel,
+  getDocumentOrder,
+  getFlowConfig,
+  getOptionalDocumentOrder,
+  requiresRepresentatives
+} from '../config/onboardingCountries';
 import { clearState } from '../app/state';
 
 export function ReviewPage({ companyId }: { companyId: string }) {
@@ -18,9 +24,13 @@ export function ReviewPage({ companyId }: { companyId: string }) {
   const representative2 = state.representatives.find((rep) => rep.id === 2)!;
   const flowConfig = getFlowConfig(state.country, state.personType);
   const activeDocuments = getDocumentOrder(state.country, state.personType);
+  const optionalDocuments = getOptionalDocumentOrder(state.country, state.personType).filter(
+    (docType) => Boolean(state.documents[docType].fileName)
+  );
   const showRepresentatives = requiresRepresentatives(state.country, state.personType);
   const requiredDocuments = [
     ...activeDocuments.map((docType) => state.documents[docType].fileName),
+    ...optionalDocuments.map((docType) => state.documents[docType].fileName),
     ...(showRepresentatives ? [representative1.document.fileName] : []),
     ...(showRepresentatives && representative2.enabled ? [representative2.document.fileName] : [])
   ];
@@ -116,7 +126,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
           </p>
         ) : null}
         <ul className="mt-3 space-y-2">
-          {activeDocuments.map((docType) => {
+          {[...activeDocuments, ...optionalDocuments].map((docType) => {
             const doc = state.documents[docType];
             return (
               <li key={docType} className="flex items-center justify-between rounded-lg border border-borderLight p-3">

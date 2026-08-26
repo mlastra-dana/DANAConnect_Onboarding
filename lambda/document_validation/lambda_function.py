@@ -222,7 +222,7 @@ DOC_SLOT_LABELS: Dict[Tuple[str, str], str] = {
     # Venezuela
     ("ve", "documentoFiscal"): "RIF",
     ("ve", "documentoConstitucion"): "Registro Mercantil / Acta Constitutiva",
-    ("ve", "facultadesRepresentante"): "Poder o facultades del representante legal",
+    ("ve", "facultadesRepresentante"): "Asamblea, acta o facultades del representante legal",
     ("ve", "documentoRepresentante"): "Cedula de identidad del representante o miembro de junta directiva",
     ("ve", "documentoIdentidad"): "Cedula de identidad",
     ("ve", "comprobanteDomicilio"): "Comprobante de domicilio",
@@ -282,8 +282,9 @@ DOC_VALIDATION_RULES: Dict[str, Dict[str, str]] = {
             "ni constancia fiscal como documento constitutivo."
         ),
         "facultadesRepresentante": (
-            "Debe parecer un poder, acta, documento mercantil o instrumento legal venezolano "
-            "que acredite las facultades del representante legal."
+            "Debe parecer una asamblea, acta de accionistas, acta de junta directiva, nombramiento, "
+            "renovacion de junta directiva, poder, documento mercantil o instrumento legal venezolano "
+            "que acredite autoridades societarias o facultades del representante legal."
         ),
         "documentoRepresentante": (
             "Debe parecer una cedula de identidad venezolana de una persona natural que el acta indique como "
@@ -524,10 +525,17 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         # 4) Validacion contextual solo si no hubo incompatibilidad clara.
         # Para actas venezolanas evitamos una segunda lectura completa del PDF con Bedrock:
         # Textract hara la lectura pesada y Bedrock solo estructurara el OCR.
-        if country == "ve" and slot == "documentoConstitucion" and normalize_detected_document_type(
-            classification.get("detected_document_type")
-        ) == "documentoConstitucion":
-            analysis = build_constitution_analysis_from_classification(classification)
+        detected_for_context = normalize_detected_document_type(classification.get("detected_document_type"))
+        if (
+            country == "ve"
+            and slot in {"documentoConstitucion", "facultadesRepresentante"}
+            and detected_for_context in {"documentoConstitucion", "facultadesRepresentante"}
+        ):
+            analysis = build_venezuelan_company_authority_analysis_from_classification(
+                classification=classification,
+                slot=slot,
+                detected_document_type=detected_for_context,
+            )
         else:
             analysis = run_bedrock_validation(
                 file_bytes=file_bytes,
@@ -550,7 +558,11 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         )
         analysis["_raw_classifier_text"] = classification.get("_raw_classifier_text", "")
         analysis["classifier_summary"] = classification.get("summary", "")
-        if country == "ve" and slot == "documentoConstitucion" and analysis["detected_document_type"] == "documentoConstitucion":
+        if (
+            country == "ve"
+            and slot in {"documentoConstitucion", "facultadesRepresentante"}
+            and analysis["detected_document_type"] in {"documentoConstitucion", "facultadesRepresentante"}
+        ):
             representative_extraction = run_legal_representative_extraction(
                 file_bytes=file_bytes,
                 file_name=file_name,
@@ -583,7 +595,7 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         )
         if country != "ve" or slot != "documentoRepresentante":
             analysis["legalRepresentativeMatch"] = None
-        if country != "ve" or slot != "documentoConstitucion":
+        if country != "ve" or slot not in {"documentoConstitucion", "facultadesRepresentante"}:
             analysis["companyDocumentMatch"] = None
         LOGGER.info(
             "document_validation_result country=%s slot=%s status=%s extracted_legal_representatives=%s expected_legal_representatives=%s legal_representative_match=%s extracted_company_rif=%s expected_company_rif=%s company_document_match=%s",
@@ -1167,7 +1179,7 @@ IMPORTANTE:
 Clasifica detected_document_type usando exactamente uno de estos valores:
 - "documentoFiscal": RIF, RUC, NIT, RFC, CUIT, Constancia de CUIT, Constancia de Inscripcion, Constancia de Situacion Fiscal, Cedula de Identificacion Fiscal, documento tributario, SENIAT, SUNAT, SAT, SIN, ARCA, AFIP, comprobante fiscal.
 - "documentoConstitucion": Registro Mercantil, Acta Constitutiva, Documento Constitutivo, Estatutos Sociales, Estatuto, Contrato Social, Partida Registral, Matricula de Comercio, Testimonio de Constitucion, escritura de constitucion, instrumento constitutivo, documento registral de sociedad.
-- "facultadesRepresentante": poder, vigencia de poder, facultades, autorizacion legal, nombramiento, acta de designacion de autoridades, acta de asamblea, acta de directorio o documento que acredite facultades del representante.
+- "facultadesRepresentante": poder, vigencia de poder, facultades, autorizacion legal, nombramiento, acta de designacion de autoridades, acta de asamblea, acta de accionistas, acta de junta directiva, renovacion de junta directiva, acta de directorio o documento que acredite autoridades/facultades del representante.
 - "documentoRepresentante": identificacion oficial del representante legal.
 - "documentoIdentidad": identificacion oficial de persona natural, persona fisica o persona humana. Ej: DNI argentino, INE/IFE, pasaporte, cedula de identidad.
 - "licenciaConducirFrente": frente de una driver license estadounidense, con foto, nombre, direccion, fecha de nacimiento, DL/ID number, fecha de expiracion, estado emisor o texto Driver License.
@@ -1185,7 +1197,7 @@ Reglas criticas:
 - Si ves "ARCA", "AFIP", "CUIT", "Clave Unica de Identificacion Tributaria", "Constancia de Inscripcion" o "Constancia de CUIT", clasifica como "documentoFiscal".
 - Una Constancia de CUIT de una empresa NO es Estatuto, Contrato Social ni Acta Constitutiva, aunque tenga razon social, domicilio fiscal o actividad.
 - Si ves "Estatuto", "Contrato Social", "Acta Constitutiva", "instrumento constitutivo", "Registro Publico", "IGJ", "Direccion Provincial de Personas Juridicas", "capital social", "socios", "accionistas", "administradores" u "objeto social", clasifica como "documentoConstitucion".
-- Si ves "Acta de designacion de autoridades", "Acta de asamblea", "Acta de directorio", "Poder", "Apoderado", "Presidente", "Gerente", "Representante legal" o "facultades", clasifica como "facultadesRepresentante".
+- Si ves "Acta de designacion de autoridades", "Acta de asamblea", "Acta de accionistas", "Acta de junta directiva", "renovacion de junta directiva", "Acta de directorio", "Poder", "Apoderado", "Presidente", "Gerente", "Representante legal" o "facultades", clasifica como "facultadesRepresentante".
 - Si ves "Documento Nacional de Identidad", "DNI", "RENAPER" o "Republica Argentina" en una identificacion personal, clasifica como "documentoIdentidad" o "documentoRepresentante" segun contexto visible.
 - Si ves "DRIVER LICENSE", "DL", "ID", una fotografia, nombre/direccion/DOB/EXP y el estado emisor de Estados Unidos, clasifica como "licenciaConducirFrente".
 - Si ves un barcode PDF417 grande, banda magnetica, restricciones, endorsements o texto administrativo sin fotografia principal, clasifica como "licenciaConducirReverso".
@@ -1250,17 +1262,26 @@ def run_bedrock_validation(
     return parsed
 
 
-def build_constitution_analysis_from_classification(classification: Dict[str, Any]) -> Dict[str, Any]:
+def build_venezuelan_company_authority_analysis_from_classification(
+    *,
+    classification: Dict[str, Any],
+    slot: str,
+    detected_document_type: str,
+) -> Dict[str, Any]:
     confidence = normalize_confidence(classification.get("confidence"))
     keywords = normalize_string_list(classification.get("keywords_found"))
     summary = str(classification.get("summary") or "").strip()
     if not summary:
-        summary = "El documento parece corresponder a un Registro Mercantil o Acta Constitutiva."
+        summary = (
+            "El documento parece corresponder a un Registro Mercantil o Acta Constitutiva."
+            if slot == "documentoConstitucion"
+            else "El documento parece corresponder a una asamblea, acta o instrumento de autoridades."
+        )
 
     status = "valid" if confidence >= 0.70 else "warning"
     return {
         "status": status,
-        "detected_document_type": "documentoConstitucion",
+        "detected_document_type": detected_document_type,
         "detected_country": normalize_detected_country(classification.get("detected_country")),
         "document_type_match": True,
         "confidence": max(confidence, 0.70),
@@ -1269,8 +1290,12 @@ def build_constitution_analysis_from_classification(classification: Dict[str, An
             "El documento parece corresponder al tipo solicitado, pero la clasificacion requiere revision por confianza media."
         ],
         "reasons": [
-            "El clasificador detecto un documento constitutivo o registral venezolano.",
-            "La extraccion de representantes se realiza sobre texto OCR de Textract.",
+            (
+                "El clasificador detecto un documento constitutivo o registral venezolano."
+                if slot == "documentoConstitucion"
+                else "El clasificador detecto un documento societario venezolano de autoridades o facultades."
+            ),
+            "La extraccion de representantes o junta directiva se realiza sobre texto OCR de Textract.",
         ],
         "keywords_found": keywords,
         "extractedIdentity": {
@@ -1525,6 +1550,13 @@ def page_has_representative_keywords(text: str) -> bool:
         "director",
         "directores",
         "gerente",
+        "asamblea",
+        "acta de asamblea",
+        "acta de accionistas",
+        "acta de junta directiva",
+        "designacion",
+        "nombramiento",
+        "renovacion",
         "representante legal",
         "representacion",
         "facultado",
@@ -2146,7 +2178,7 @@ def build_prompt(
     classifier_keywords = normalize_string_list(classification.get("keywords_found"))
 
     should_extract_identity = slot in IDENTITY_EXTRACTION_SLOTS
-    should_extract_legal_representatives = False
+    should_extract_legal_representatives = country == "ve" and slot in {"documentoConstitucion", "facultadesRepresentante"}
     should_match_expected_representative = (
         country == "ve"
         and slot == "documentoRepresentante"
@@ -2156,8 +2188,8 @@ def build_prompt(
         expected_legal_representatives or [],
         ensure_ascii=False,
     )
-    should_extract_company = country == "ve" and slot in {"documentoFiscal", "documentoConstitucion"}
-    should_match_expected_company = country == "ve" and slot == "documentoConstitucion" and expected_company is not None
+    should_extract_company = country == "ve" and slot in {"documentoFiscal", "documentoConstitucion", "facultadesRepresentante"}
+    should_match_expected_company = country == "ve" and slot in {"documentoConstitucion", "facultadesRepresentante"} and expected_company is not None
     expected_company_json = json.dumps(normalize_extracted_company(expected_company or {}), ensure_ascii=False)
 
     extraction_rules = """
@@ -2189,8 +2221,9 @@ No inventes datos.
 
     no_extraction_rules = "No extraigas campos de identidad para este slot; devuelve extractedIdentity con strings vacios."
     legal_representative_rules = """
-Para Venezuela y slot "documentoConstitucion", adicionalmente identifica representantes legales, administradores, directores,
-presidentes, gerentes, apoderados o personas con facultad visible para representar u obligar a la sociedad.
+Para Venezuela y slots "documentoConstitucion" o "facultadesRepresentante", adicionalmente identifica representantes legales,
+administradores, directores, presidentes, gerentes, apoderados, miembros de junta directiva, personas nombradas en asamblea,
+personas designadas por acta de accionistas o personas con facultad visible para representar u obligar a la sociedad.
 
 Devuelve extractedLegalRepresentatives como una lista de personas con:
 - firstName
@@ -2202,7 +2235,8 @@ Devuelve extractedLegalRepresentatives como una lista de personas con:
 Reglas para extractedLegalRepresentatives:
 - Incluye solo personas naturales mencionadas dentro del documento constitutivo/registral.
 - Prioriza personas mencionadas junto a cargos o frases como representante legal, presidente, director, gerente, administrador,
-  junta directiva, autorizado para representar, obligado por su firma o facultado para actuar por la sociedad.
+  junta directiva, asamblea, designacion, nombramiento, renovacion de junta directiva, autorizado para representar,
+  obligado por su firma o facultado para actuar por la sociedad.
 - documentNumber debe ser la cedula visible si aparece. Si no aparece, devuelve cadena vacia.
 - rawText debe contener la frase corta visible que justifica la extraccion.
 - No inventes nombres, cedulas ni cargos.
@@ -2234,7 +2268,7 @@ Reglas para legalRepresentativeMatch:
 Devuelve legalRepresentativeMatch como null, matchedRepresentativeRole como cadena vacia, matchedRepresentativeEvidence como cadena vacia y visibleIdentityEvidence como cadena vacia.
 """.strip()
     company_extraction_rules = """
-Para Venezuela y slots "documentoFiscal" o "documentoConstitucion", extrae tambien los datos de empresa visibles:
+Para Venezuela y slots "documentoFiscal", "documentoConstitucion" o "facultadesRepresentante", extrae tambien los datos de empresa visibles:
 - extractedCompany.name: razon social o denominacion comercial exacta de la empresa.
 - extractedCompany.rif: numero RIF visible con prefijo si aparece, por ejemplo J-12345678-9.
 - extractedCompany.rawText: frase corta visible que contiene la razon social y/o RIF.
@@ -2242,6 +2276,7 @@ Para Venezuela y slots "documentoFiscal" o "documentoConstitucion", extrae tambi
 Reglas para extractedCompany:
 - En RIF/SENIAT, usa la razon social y RIF impresos en el documento fiscal.
 - En Registro Mercantil / Acta Constitutiva, usa la denominacion de la sociedad o razon social registrada.
+- En asambleas, actas de accionistas, actas de junta directiva o poderes, usa la sociedad a la que pertenece el acta.
 - No uses nombres de personas naturales, representantes, notarios, registradores ni entes publicos como razon social.
 - No inventes datos. Si no puedes leer un campo con confianza razonable, devuelvelo como cadena vacia.
 """.strip()
@@ -2249,7 +2284,7 @@ Reglas para extractedCompany:
 Devuelve extractedCompany con name, rif y rawText como cadenas vacias.
 """.strip()
     company_match_rules = f"""
-Para Venezuela y slot "documentoConstitucion", valida tambien si el acta corresponde a la empresa esperada extraida previamente del RIF.
+Para Venezuela y slots "documentoConstitucion" o "facultadesRepresentante", valida tambien si el acta corresponde a la empresa esperada extraida previamente del RIF.
 
 Empresa esperada:
 {expected_company_json}
@@ -2299,6 +2334,11 @@ Reglas especiales Venezuela / documentoConstitucion:
 - Si el slot esperado es "documentoConstitucion", acepta Registro Mercantil, Acta Constitutiva, Documento Constitutivo, Estatutos Sociales, acta registrada o documento societario inscrito.
 - Para Venezuela, un RIF, SENIAT, Registro Unico de Informacion Fiscal, comprobante fiscal o constancia fiscal NO es Registro Mercantil ni Acta Constitutiva.
 - Si ves "SENIAT" o "Registro Unico de Informacion Fiscal (RIF)" y no ves contenido constitutivo/registral, responde status="error", document_type_match=false.
+
+Reglas especiales Venezuela / facultadesRepresentante:
+- Si el slot esperado es "facultadesRepresentante", acepta Asamblea, Acta de Asamblea, Acta de Accionistas, Acta de Junta Directiva, renovacion de junta directiva, nombramiento de autoridades, Poder o documento mercantil que actualice representantes o autoridades societarias.
+- Una asamblea posterior puede renovar la junta directiva y debe considerarse fuente valida para extraer representantes o miembros de junta directiva si pertenece a la sociedad esperada.
+- Para Venezuela, un RIF/SENIAT o una cedula de identidad NO es asamblea ni facultades del representante.
 
 Reglas especiales Argentina:
 - Para Argentina, una Constancia de CUIT, constancia de inscripcion, AFIP o ARCA es documentoFiscal, no documentoConstitucion.
@@ -2679,6 +2719,41 @@ def apply_post_validation_guards(
                 )
             )
 
+    if country == "ve" and slot == "facultadesRepresentante" and detected in {"facultadesRepresentante", "documentoConstitucion"}:
+        if normalize_status(analysis.get("status")) == "error":
+            analysis["status"] = "warning"
+            analysis["document_type_match"] = True
+            analysis["summary"] = (
+                "El archivo parece corresponder a una asamblea, acta o documento de autoridades, "
+                "pero requiere revision por calidad o legibilidad."
+            )
+            analysis["warnings"] = [
+                "El documento parece corresponder al tipo solicitado, pero la calidad o legibilidad requiere revision manual."
+            ]
+            analysis["reasons"] = [
+                "El clasificador detecto un documento societario de autoridades o facultades.",
+                "El documento puede ser antiguo, borroso o parcialmente legible.",
+            ]
+        else:
+            analysis["document_type_match"] = True
+
+        if not normalize_extracted_legal_representatives(analysis.get("extractedLegalRepresentatives")):
+            analysis["status"] = "warning"
+            analysis["document_type_match"] = True
+            analysis["summary"] = (
+                "El documento parece corresponder a una asamblea, acta o documento de autoridades, "
+                "pero no se pudieron extraer representantes legales o miembros de junta directiva con confianza."
+            )
+            warnings = normalize_string_list(analysis.get("warnings"))
+            analysis["warnings"] = sorted(
+                set(
+                    warnings
+                    + [
+                        "No se identificaron autoridades societarias legibles para validar la cedula.",
+                    ]
+                )
+            )
+
     # Guardrail Argentina: CUIT/ARCA/AFIP no puede aprobarse como Estatuto / Contrato social.
     if country == "ar" and slot == "documentoConstitucion" and detected == "documentoFiscal":
         analysis["status"] = "error"
@@ -2818,7 +2893,7 @@ def apply_expected_company_guard(
     analysis: Dict[str, Any],
     expected_company: Optional[Dict[str, str]],
 ) -> Dict[str, Any]:
-    if country != "ve" or slot != "documentoConstitucion" or expected_company is None:
+    if country != "ve" or slot not in {"documentoConstitucion", "facultadesRepresentante"} or expected_company is None:
         return analysis
 
     expected = normalize_extracted_company(expected_company)
@@ -2835,7 +2910,7 @@ def apply_expected_company_guard(
         return analysis
 
     detected_document_type = normalize_detected_document_type(analysis.get("detected_document_type"))
-    if detected_document_type != "documentoConstitucion":
+    if detected_document_type not in {"documentoConstitucion", "facultadesRepresentante"}:
         return analysis
 
     extracted = normalize_extracted_company(analysis.get("extractedCompany"))
@@ -2875,7 +2950,7 @@ def apply_expected_company_guard(
     analysis["companyDocumentMatch"] = False
     analysis["status"] = "error"
     analysis["document_type_match"] = False
-    analysis["summary"] = "El Registro Mercantil / Acta Constitutiva no corresponde al RIF cargado."
+    analysis["summary"] = "El documento societario cargado no corresponde al RIF."
     analysis["warnings"] = []
     analysis["reasons"] = normalize_string_list(analysis.get("reasons")) + [
         "No se encontro coincidencia suficiente entre la razón social o RIF del documento fiscal y el acta.",
