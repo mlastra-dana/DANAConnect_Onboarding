@@ -23,13 +23,13 @@ export function FileAttachmentChip({
 }) {
   return (
     <div className={`rounded-lg border px-3 py-2 shadow-sm ${statusStyles[status]}`}>
-      <div className="flex items-center justify-between gap-3">
-        <p className="truncate text-sm font-medium text-dark">Archivo: {fileName}</p>
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <p className="min-w-0 truncate text-sm font-medium text-dark">Archivo: {fileName}</p>
         <button
           type="button"
           aria-label="Quitar archivo"
           onClick={onRemove}
-          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-borderLight text-grayText transition hover:bg-surface hover:text-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="relative z-10 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-borderLight bg-white text-grayText transition hover:bg-surface hover:text-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <X className="h-4 w-4" />
         </button>

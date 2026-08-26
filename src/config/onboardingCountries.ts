@@ -53,7 +53,7 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         documents: {
           rif: { label: 'RIF' },
           registroMercantil: { label: 'Registro Mercantil' },
-          actaDesignacionAutoridades: { label: 'Asamblea o Acta de Junta Directiva (Opcional)' },
+          actaDesignacionAutoridades: { label: 'Acta de Asamblea (Opcional)' },
           cedulaRepresentante: { label: 'Cédula del Representante' }
         },
         representativePrimaryTitle: 'Cédula del Representante (Obligatorio)',

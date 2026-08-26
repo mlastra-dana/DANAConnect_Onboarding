@@ -99,9 +99,11 @@ export function DocumentUploader({
 
   const content = (
     <>
+      {!embedded ? (
       <div className="absolute right-5 top-5">
         <StatusBadge status={feedbackStatus} language={language} />
       </div>
+      ) : null}
       {sectionTitle ? (
         <div className="space-y-2 border-b border-borderLight pb-3">
           <h3 className="pr-24 text-lg font-semibold text-dark">{sectionTitle}</h3>
@@ -111,7 +113,14 @@ export function DocumentUploader({
       ) : null}
 
       {!hideTitle ? (
-        <h3 className={`${embedded ? 'text-base' : 'text-lg'} pr-24 font-semibold text-dark`}>{title ?? resolvedLabel}</h3>
+        embedded ? (
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="text-base font-semibold text-dark">{title ?? resolvedLabel}</h3>
+            <StatusBadge status={feedbackStatus} language={language} />
+          </div>
+        ) : (
+          <h3 className="pr-24 text-lg font-semibold text-dark">{title ?? resolvedLabel}</h3>
+        )
       ) : null}
 
       {loading ? (

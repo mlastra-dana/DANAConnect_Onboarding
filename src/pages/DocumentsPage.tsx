@@ -432,6 +432,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                       disabled={!canUploadAssembly}
                       disabledMessage={assemblyDisabledMessage}
                       embedded
+                      hideTitle
                       language={language}
                       onSelectFile={(file) => handleUploadBase('actaDesignacionAutoridades', file)}
                       onRemoveFile={() => handleRemoveBase('actaDesignacionAutoridades')}
