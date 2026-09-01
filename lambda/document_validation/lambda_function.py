@@ -22,6 +22,8 @@ AWS_REGION = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION"
 BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
 MAX_FILE_BYTES = int(os.environ.get("MAX_FILE_BYTES", str(10 * 1024 * 1024)))
 DOCUMENT_BUCKET = os.environ.get("DOCUMENT_BUCKET", "").strip()
+DOCUMENT_UPLOAD_PREFIX = os.environ.get("DOCUMENT_UPLOAD_PREFIX", "document-validation/uploads").strip().strip("/")
+DOCUMENT_UPLOAD_EXPIRES_SECONDS = int(os.environ.get("DOCUMENT_UPLOAD_EXPIRES_SECONDS", "900"))
 TEXTRACT_POLL_SECONDS = int(os.environ.get("TEXTRACT_POLL_SECONDS", "2"))
 TEXTRACT_MAX_WAIT_SECONDS = int(os.environ.get("TEXTRACT_MAX_WAIT_SECONDS", "90"))
 DEFAULT_SMTP_HOST = "cloudsmtp.danaconnect.com"
@@ -448,6 +450,8 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     try:
         payload = parse_json_body(event)
         action = str(payload.get("action") or "").strip()
+        if action in {"prepareDocumentValidationUpload", "prepare_document_validation_upload"}:
+            return response(200, prepare_document_validation_upload(payload))
         if action in {"sendEmail", "send_email"}:
             return response(200, send_cloud_smtp_email(payload))
         if action in {"previewEmail", "preview_email"}:
@@ -455,12 +459,11 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
         file_name = require_string(payload, "file_name")
         content_type = normalize_content_type(require_string(payload, "content_type"))
-        file_base64 = require_string(payload, "file_base64")
         country = normalize_country(payload.get("country"))
         raw_slot = require_string(payload, "slot")
         slot = normalize_slot(raw_slot)
         expected_legal_representatives = (
-            normalize_extracted_legal_representatives(payload.get("expected_legal_representatives"))
+            normalize_expected_legal_representatives(payload.get("expected_legal_representatives"))
             if "expected_legal_representatives" in payload
             else None
         )
@@ -473,10 +476,7 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         if content_type not in ALLOWED_MIME_TYPES:
             return response(400, {"ok": False, "error": f"Tipo de archivo no permitido: {content_type}"})
 
-        try:
-            file_bytes = base64.b64decode(file_base64, validate=True)
-        except Exception as exc:  # noqa: BLE001
-            raise ValueError("file_base64 no es un Base64 valido") from exc
+        file_bytes, uploaded_s3_key = load_validation_file_bytes(payload)
 
         if len(file_bytes) > MAX_FILE_BYTES:
             return response(400, {"ok": False, "error": f"Archivo excede el maximo permitido de {MAX_FILE_BYTES} bytes"})
@@ -520,6 +520,9 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
                 file_size=len(file_bytes),
                 analysis=classification_error,
             )
+            if uploaded_s3_key:
+                final["fileS3Uri"] = f"s3://{DOCUMENT_BUCKET}/{uploaded_s3_key}"
+                final["s3Key"] = uploaded_s3_key
             return response(200, final)
 
         # 4) Validacion contextual solo si no hubo incompatibilidad clara.
@@ -632,6 +635,9 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             file_size=len(file_bytes),
             analysis=analysis,
         )
+        if uploaded_s3_key:
+            final["fileS3Uri"] = f"s3://{DOCUMENT_BUCKET}/{uploaded_s3_key}"
+            final["s3Key"] = uploaded_s3_key
         return response(200, final)
 
     except ValueError as exc:
@@ -665,6 +671,89 @@ def require_string(payload: Dict[str, Any], key: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{key} es requerido")
     return value.strip()
+
+
+def optional_string(payload: Dict[str, Any], key: str) -> str:
+    value = payload.get(key)
+    return value.strip() if isinstance(value, str) else ""
+
+
+def prepare_document_validation_upload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not DOCUMENT_BUCKET:
+        raise ValueError("DOCUMENT_BUCKET es requerido para preparar cargas a S3")
+
+    file_name = require_string(payload, "file_name")
+    content_type = normalize_content_type(require_string(payload, "content_type"))
+    if content_type not in ALLOWED_MIME_TYPES:
+        raise ValueError(f"Tipo de archivo no permitido: {content_type}")
+
+    file_size = int(payload.get("file_size") or payload.get("fileSize") or 0)
+    if file_size <= 0:
+        raise ValueError("file_size es requerido")
+    if file_size > MAX_FILE_BYTES:
+        raise ValueError(f"Archivo excede el maximo permitido de {MAX_FILE_BYTES} bytes")
+
+    key = build_uploaded_document_key(file_name)
+    upload_url = S3_CLIENT.generate_presigned_url(
+        "put_object",
+        Params={
+            "Bucket": DOCUMENT_BUCKET,
+            "Key": key,
+            "ContentType": content_type,
+        },
+        ExpiresIn=DOCUMENT_UPLOAD_EXPIRES_SECONDS,
+    )
+
+    return {
+        "ok": True,
+        "uploadUrl": upload_url,
+        "fileS3Uri": f"s3://{DOCUMENT_BUCKET}/{key}",
+        "s3Bucket": DOCUMENT_BUCKET,
+        "s3Key": key,
+        "expiresIn": DOCUMENT_UPLOAD_EXPIRES_SECONDS,
+    }
+
+
+def load_validation_file_bytes(payload: Dict[str, Any]) -> Tuple[bytes, str]:
+    file_s3_uri = optional_string(payload, "file_s3_uri") or optional_string(payload, "fileS3Uri")
+    s3_key = optional_string(payload, "s3_key") or optional_string(payload, "s3Key")
+
+    if file_s3_uri or s3_key:
+        bucket, key = parse_document_s3_reference(file_s3_uri=file_s3_uri, s3_key=s3_key)
+        result = S3_CLIENT.get_object(Bucket=bucket, Key=key)
+        file_bytes = result["Body"].read()
+        return file_bytes, key if bucket == DOCUMENT_BUCKET else ""
+
+    file_base64 = require_string(payload, "file_base64")
+    try:
+        return base64.b64decode(file_base64, validate=True), ""
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError("file_base64 no es un Base64 valido") from exc
+
+
+def parse_document_s3_reference(*, file_s3_uri: str, s3_key: str) -> Tuple[str, str]:
+    if not DOCUMENT_BUCKET:
+        raise ValueError("DOCUMENT_BUCKET es requerido para leer archivos en S3")
+
+    bucket = DOCUMENT_BUCKET
+    key = s3_key
+    if file_s3_uri:
+        match = re.fullmatch(r"s3://([^/]+)/(.+)", file_s3_uri.strip())
+        if not match:
+            raise ValueError("file_s3_uri debe tener formato s3://bucket/key")
+        bucket = match.group(1)
+        key = match.group(2)
+
+    if bucket != DOCUMENT_BUCKET:
+        raise ValueError("El archivo S3 pertenece a un bucket no permitido")
+    if not key:
+        raise ValueError("s3_key es requerido")
+
+    allowed_prefixes = [prefix for prefix in [DOCUMENT_UPLOAD_PREFIX, "document-validation/"] if prefix]
+    if not any(key.startswith(f"{prefix.rstrip('/')}/") for prefix in allowed_prefixes):
+        raise ValueError("El archivo S3 no pertenece al prefijo permitido")
+
+    return bucket, key
 
 
 def optional_env(name: str) -> Optional[str]:
@@ -797,16 +886,24 @@ def upload_file_to_danaconnect(file_item: Dict[str, Any], *, id_company: str) ->
     file_name = str(file_item.get("fileName") or file_item.get("file_name") or "").strip()
     content_type = str(file_item.get("contentType") or file_item.get("content_type") or "application/octet-stream").strip()
     file_base64 = str(file_item.get("fileBase64") or file_item.get("file_base64") or "").strip()
+    file_s3_uri = str(file_item.get("fileS3Uri") or file_item.get("file_s3_uri") or "").strip()
+    s3_key = str(file_item.get("s3Key") or file_item.get("s3_key") or "").strip()
 
     if not file_name:
         raise ValueError("Cada archivo debe incluir fileName")
-    if not file_base64:
-        raise ValueError(f"El archivo {file_name} no incluye fileBase64")
 
-    try:
-        file_bytes = base64.b64decode(file_base64, validate=True)
-    except Exception as exc:  # noqa: BLE001
-        raise ValueError(f"fileBase64 invalido para {file_name}") from exc
+    if file_s3_uri or s3_key:
+        bucket, key = parse_document_s3_reference(file_s3_uri=file_s3_uri, s3_key=s3_key)
+        s3_object = S3_CLIENT.get_object(Bucket=bucket, Key=key)
+        file_bytes = s3_object["Body"].read()
+    else:
+        if not file_base64:
+            raise ValueError(f"El archivo {file_name} no incluye fileBase64 ni fileS3Uri")
+
+        try:
+            file_bytes = base64.b64decode(file_base64, validate=True)
+        except Exception as exc:  # noqa: BLE001
+            raise ValueError(f"fileBase64 invalido para {file_name}") from exc
 
     body, boundary = encode_multipart_file(
         field_name="file",
@@ -1477,6 +1574,14 @@ def build_document_bucket_key(file_name: str) -> str:
     if not safe_name:
         safe_name = "documento.pdf"
     return f"document-validation/{uuid.uuid4().hex}/{safe_name[:180]}"
+
+
+def build_uploaded_document_key(file_name: str) -> str:
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", file_name.strip() or "documento.pdf").strip("-")
+    if not safe_name:
+        safe_name = "documento.pdf"
+    prefix = DOCUMENT_UPLOAD_PREFIX or "document-validation/uploads"
+    return f"{prefix}/{uuid.uuid4().hex}/{safe_name[:180]}"
 
 
 def wait_for_textract_text_detection(job_id: str) -> List[Dict[str, Any]]:

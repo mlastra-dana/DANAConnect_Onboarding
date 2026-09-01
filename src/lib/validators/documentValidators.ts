@@ -5,6 +5,7 @@ const DOCUMENT_VALIDATION_URL =
   import.meta.env.VITE_DOCUMENT_VALIDATION_URL?.trim() ||
   'https://uou6hka7wmyfgtirokika5bkme0wfwzj.lambda-url.us-east-1.on.aws/';
 const DOCUMENT_VALIDATION_TIMEOUT_MS = Number(import.meta.env.VITE_DOCUMENT_VALIDATION_TIMEOUT_MS || 120000);
+const DIRECT_BASE64_LIMIT_BYTES = Number(import.meta.env.VITE_DIRECT_VALIDATION_FILE_LIMIT_BYTES || 5.5 * 1024 * 1024);
 
 export async function validateDocumentFile(
   type: DocumentType,
@@ -53,10 +54,21 @@ export async function validateDocumentFile(
   const payload: Record<string, unknown> = {
     file_name: file.name,
     content_type: file.type || inferContentType(file.name),
-    file_base64: await fileToBase64(file),
     country,
     slot: slotForValidation
   };
+
+  let uploadedFileReference: PreparedDocumentUpload | null = null;
+  if (shouldUseS3ValidationUpload(file)) {
+    uploadedFileReference = await prepareDocumentValidationUpload(file);
+    onProgress?.(45);
+    await uploadFileToPreparedUrl(file, uploadedFileReference.uploadUrl, file.type || inferContentType(file.name));
+    payload.file_s3_uri = uploadedFileReference.fileS3Uri;
+    payload.s3_key = uploadedFileReference.s3Key;
+  } else {
+    payload.file_base64 = await fileToBase64(file);
+  }
+
   if (options?.expectedLegalRepresentatives) {
     payload.expected_legal_representatives = options.expectedLegalRepresentatives;
   }
@@ -124,7 +136,9 @@ export async function validateDocumentFile(
     legalRepresentativeMatch: result.legalRepresentativeMatch,
     matchedRepresentativeRole: result.matchedRepresentativeRole,
     matchedRepresentativeEvidence: result.matchedRepresentativeEvidence,
-    visibleIdentityEvidence: result.visibleIdentityEvidence
+    visibleIdentityEvidence: result.visibleIdentityEvidence,
+    fileS3Uri: result.fileS3Uri || uploadedFileReference?.fileS3Uri,
+    s3Key: result.s3Key || uploadedFileReference?.s3Key
   };
 }
 
@@ -155,6 +169,68 @@ export function buildValidationErrorResult(
     },
     internalDiagnostics
   };
+}
+
+type PreparedDocumentUpload = {
+  uploadUrl: string;
+  fileS3Uri: string;
+  s3Key: string;
+};
+
+export function shouldUseS3ValidationUpload(file: File) {
+  const estimatedBase64Bytes = Math.ceil(file.size / 3) * 4;
+  return estimatedBase64Bytes > DIRECT_BASE64_LIMIT_BYTES;
+}
+
+async function prepareDocumentValidationUpload(file: File): Promise<PreparedDocumentUpload> {
+  const response = await fetch(DOCUMENT_VALIDATION_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      action: 'prepareDocumentValidationUpload',
+      file_name: file.name,
+      content_type: file.type || inferContentType(file.name),
+      file_size: file.size
+    })
+  });
+
+  let body: unknown = null;
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(extractLambdaError(body) ?? 'No se pudo preparar la carga segura del documento.');
+  }
+
+  const payload = isRecord(body) ? body : {};
+  const uploadUrl = typeof payload.uploadUrl === 'string' ? payload.uploadUrl : '';
+  const fileS3Uri = typeof payload.fileS3Uri === 'string' ? payload.fileS3Uri : '';
+  const s3Key = typeof payload.s3Key === 'string' ? payload.s3Key : '';
+
+  if (!uploadUrl || !fileS3Uri || !s3Key) {
+    throw new Error('El servicio de validación no devolvió una URL de carga válida.');
+  }
+
+  return { uploadUrl, fileS3Uri, s3Key };
+}
+
+async function uploadFileToPreparedUrl(file: File, uploadUrl: string, contentType: string) {
+  const response = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': contentType
+    },
+    body: file
+  });
+
+  if (!response.ok) {
+    throw new Error(`No se pudo cargar el documento a S3 (${response.status}).`);
+  }
 }
 
 function resolveLambdaSlot(type: DocumentType, country: CountryCode): string {
@@ -290,6 +366,8 @@ function mapLambdaResponseToValidationResult(body: unknown, fileSize: number) {
       typeof payload.matchedRepresentativeEvidence === 'string' ? payload.matchedRepresentativeEvidence.trim() : '',
     visibleIdentityEvidence:
       typeof payload.visibleIdentityEvidence === 'string' ? payload.visibleIdentityEvidence.trim() : '',
+    fileS3Uri: typeof payload.fileS3Uri === 'string' ? payload.fileS3Uri.trim() : '',
+    s3Key: typeof payload.s3Key === 'string' ? payload.s3Key.trim() : '',
     internalDiagnostics: [
       `lambda_status:${status}`,
       `lambda_file_size:${typeof analysis.fileSizeBytes === 'number' ? analysis.fileSizeBytes : fileSize}`,

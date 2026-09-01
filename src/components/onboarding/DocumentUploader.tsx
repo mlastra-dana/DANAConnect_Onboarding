@@ -7,6 +7,7 @@ import { Card } from '../ui/Card';
 import { PdfPreview } from './PdfPreview';
 import { FileAttachmentChip } from '../ui/FileAttachmentChip';
 import { Progress } from '../ui/Progress';
+import { MAX_FILE_SIZE_LABEL } from '../../lib/validators/fileValidators';
 
 export function DocumentUploader({
   docRecord,
@@ -204,8 +205,8 @@ export function DocumentUploader({
               {disabled && disabledMessage
                 ? disabledMessage
                 : language === 'en'
-                  ? 'PDF, JPG, PNG, or WEBP. Max. 10MB.'
-                  : 'PDF, JPG, PNG o WEBP. Máx. 10MB.'}
+                  ? `PDF, JPG, PNG, or WEBP. Temporary max. ${MAX_FILE_SIZE_LABEL}.`
+                  : `PDF, JPG, PNG o WEBP. Máx. temporal ${MAX_FILE_SIZE_LABEL}.`}
             </p>
           </div>
         </div>

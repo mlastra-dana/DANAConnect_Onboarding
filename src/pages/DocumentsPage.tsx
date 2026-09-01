@@ -5,7 +5,7 @@ import { useOnboarding } from '../app/OnboardingContext';
 import { FileUploadCard } from '../components/onboarding/FileUploadCard';
 import { Button } from '../components/ui/Button';
 import { Toast } from '../components/ui/Toast';
-import { buildValidationErrorResult, validateDocumentFile } from '../lib/validators/documentValidators';
+import { buildValidationErrorResult, shouldUseS3ValidationUpload, validateDocumentFile } from '../lib/validators/documentValidators';
 import { createEmptyDocument, createEmptyRepresentative } from '../app/state';
 import { DocumentRecord, DocumentType, DocumentValidationResult, RepresentativeRecord } from '../app/types';
 import {
@@ -119,7 +119,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       if (previousPreview) URL.revokeObjectURL(previousPreview);
 
       previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
-      fileBase64 = await fileToBase64(file);
+      fileBase64 = shouldUseS3ValidationUpload(file) ? '' : await fileToBase64(file);
       setRuntimeFiles((prev) => ({ ...prev, [key]: file }));
 
       const result = await validateDocumentFile(
@@ -144,6 +144,8 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         fileSize: file.size,
         fileType: file.type,
         fileBase64,
+        fileS3Uri: result.fileS3Uri,
+        s3Key: result.s3Key,
         previewUrl,
         validation: result
       };
@@ -214,7 +216,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       }
 
       previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
-      fileBase64 = await fileToBase64(file);
+      fileBase64 = shouldUseS3ValidationUpload(file) ? '' : await fileToBase64(file);
       setRuntimeFiles((prev) => ({ ...prev, [key]: file }));
 
       const result = await validateDocumentFile(
@@ -240,6 +242,8 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
           fileSize: file.size,
           fileType: file.type,
           fileBase64,
+          fileS3Uri: result.fileS3Uri,
+          s3Key: result.s3Key,
           previewUrl,
           validation: result
         }

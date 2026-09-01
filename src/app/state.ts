@@ -132,7 +132,7 @@ export function loadState(companyId: string): OnboardingState | null {
   }
   if (!raw) return null;
   try {
-    return stripTransientDocuments(JSON.parse(raw) as OnboardingState);
+    return stripUploadedFilesForReload(JSON.parse(raw) as OnboardingState);
   } catch (error) {
     console.warn('Estado local de onboarding inválido. Se iniciará uno nuevo.', error);
     clearState(companyId);
@@ -198,6 +198,8 @@ function stripFilePayloadsForStorage(state: OnboardingState): OnboardingState {
         {
           ...document,
           fileBase64: undefined,
+          fileS3Uri: undefined,
+          s3Key: undefined,
           previewUrl: undefined
         }
       ])
@@ -208,6 +210,8 @@ function stripFilePayloadsForStorage(state: OnboardingState): OnboardingState {
         document: {
           ...representative1.document,
           fileBase64: undefined,
+          fileS3Uri: undefined,
+          s3Key: undefined,
           previewUrl: undefined
         }
       },
@@ -216,9 +220,25 @@ function stripFilePayloadsForStorage(state: OnboardingState): OnboardingState {
         document: {
           ...representative2.document,
           fileBase64: undefined,
+          fileS3Uri: undefined,
+          s3Key: undefined,
           previewUrl: undefined
         }
       }
     ]
+  };
+}
+
+function stripUploadedFilesForReload(state: OnboardingState): OnboardingState {
+  const representative2Enabled = Boolean(state.representatives[1]?.enabled);
+
+  return {
+    ...stripTransientDocuments(state),
+    documents: createEmptyDocuments(),
+    representatives: [createEmptyRepresentative(1, true), createEmptyRepresentative(2, representative2Enabled)],
+    biometrics: createEmptyBiometric(),
+    submission: {
+      status: 'idle'
+    }
   };
 }

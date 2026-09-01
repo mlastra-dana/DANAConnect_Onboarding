@@ -18,7 +18,9 @@ export type DemoEmailPayload = {
     documentType: string;
     fileName: string;
     contentType: string;
-    fileBase64: string;
+    fileBase64?: string;
+    fileS3Uri?: string;
+    s3Key?: string;
   }>;
 };
 
@@ -231,13 +233,15 @@ export async function sendEmailViaApi(
 function buildConversationFiles(state: OnboardingState): DemoEmailPayload['files'] {
   const files: DemoEmailPayload['files'] = [];
   const addDocument = (field: string, documentType: string, record = state.documents[documentType as keyof typeof state.documents]) => {
-    if (!record?.fileBase64 || !record.fileName) return;
+    if (!record?.fileName || (!record.fileBase64 && !record.fileS3Uri)) return;
     files.push({
       field,
       documentType,
       fileName: record.fileName,
       contentType: record.fileType || inferContentType(record.fileName),
-      fileBase64: record.fileBase64
+      fileBase64: record.fileBase64,
+      fileS3Uri: record.fileS3Uri,
+      s3Key: record.s3Key
     });
   };
 

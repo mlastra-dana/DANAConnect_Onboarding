@@ -80,6 +80,8 @@ export type DocumentValidationResult = {
   matchedRepresentativeRole?: string;
   matchedRepresentativeEvidence?: string;
   visibleIdentityEvidence?: string;
+  fileS3Uri?: string;
+  s3Key?: string;
   error?: string;
 };
 
@@ -89,6 +91,8 @@ export type DocumentRecord = {
   fileType?: string;
   fileSize?: number;
   fileBase64?: string;
+  fileS3Uri?: string;
+  s3Key?: string;
   previewUrl?: string;
   validation: DocumentValidationResult;
 };

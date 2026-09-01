@@ -148,18 +148,18 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
     const activeDocumentStatuses = getDocumentOrder(state.country, state.personType).map(
       (docType) => state.documents[docType].validation.status
     );
-    const activeDocumentsHavePayload = getDocumentOrder(state.country, state.personType).every(
-      (docType) => Boolean(state.documents[docType].fileBase64)
+    const activeDocumentsHavePayload = getDocumentOrder(state.country, state.personType).every((docType) =>
+      documentHasPayload(state.documents[docType])
     );
     const requiredDocs = [...activeDocumentStatuses];
     let representativeDocumentsHavePayload = true;
 
     if (requiresRepresentatives(state.country, state.personType) && representative1) {
       requiredDocs.push(representative1.document.validation.status);
-      representativeDocumentsHavePayload = representativeDocumentsHavePayload && Boolean(representative1.document.fileBase64);
+      representativeDocumentsHavePayload = representativeDocumentsHavePayload && documentHasPayload(representative1.document);
       if (representative2?.enabled) {
         requiredDocs.push(representative2.document.validation.status);
-        representativeDocumentsHavePayload = representativeDocumentsHavePayload && Boolean(representative2.document.fileBase64);
+        representativeDocumentsHavePayload = representativeDocumentsHavePayload && documentHasPayload(representative2.document);
       }
     }
 
@@ -200,6 +200,10 @@ export function useOnboarding() {
     throw new Error('useOnboarding debe usarse dentro de OnboardingProvider');
   }
   return context;
+}
+
+function documentHasPayload(document: { fileBase64?: string; fileS3Uri?: string }) {
+  return Boolean(document.fileBase64 || document.fileS3Uri);
 }
 
 function normalizeBiometricFromStorage(value: unknown, fallback: BiometricValidationRecord): BiometricValidationRecord {
