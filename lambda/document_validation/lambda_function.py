@@ -460,6 +460,7 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         file_name = require_string(payload, "file_name")
         content_type = normalize_content_type(require_string(payload, "content_type"))
         country = normalize_country(payload.get("country"))
+        person_type = normalize_person_type(payload.get("person_type") or payload.get("personType"))
         raw_slot = require_string(payload, "slot")
         slot = normalize_slot(raw_slot)
         expected_legal_representatives = (
@@ -547,6 +548,7 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
                 country=country,
                 slot=slot,
                 raw_slot=raw_slot,
+                person_type=person_type,
                 classification=classification,
                 expected_legal_representatives=expected_legal_representatives,
                 expected_company=expected_company,
@@ -1083,6 +1085,15 @@ def normalize_country(value: Any) -> str:
     return normalized
 
 
+def normalize_person_type(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"juridica", "juridico", "empresa", "company", "business", "legal"}:
+        return "juridica"
+    if normalized in {"natural", "persona_natural", "individual", "person", "fisica", "humana"}:
+        return "natural"
+    return ""
+
+
 def normalize_slot(value: Any) -> str:
     raw = str(value or "").strip()
     if not raw:
@@ -1323,6 +1334,7 @@ def run_bedrock_validation(
     country: str,
     slot: str,
     raw_slot: str,
+    person_type: str,
     classification: Dict[str, Any],
     expected_legal_representatives: Optional[List[Dict[str, str]]] = None,
     expected_company: Optional[Dict[str, str]] = None,
@@ -1334,6 +1346,7 @@ def run_bedrock_validation(
         country=country,
         slot=slot,
         raw_slot=raw_slot,
+        person_type=person_type,
         slot_label=slot_label,
         classification=classification,
         expected_legal_representatives=expected_legal_representatives,
@@ -2271,6 +2284,7 @@ def build_prompt(
     country: str,
     slot: str,
     raw_slot: str,
+    person_type: str,
     slot_label: str,
     classification: Dict[str, Any],
     expected_legal_representatives: Optional[List[Dict[str, str]]] = None,
@@ -2410,6 +2424,15 @@ Reglas para companyDocumentMatch:
     no_company_match_rules = """
 Devuelve companyDocumentMatch como null y matchedCompanyEvidence como cadena vacia.
 """.strip()
+    venezuela_fiscal_person_type_rules = f"""
+Reglas especiales Venezuela / documentoFiscal segun tipo de persona:
+- Tipo de persona del expediente: "{person_type or "no especificado"}".
+- Si el slot esperado es "documentoFiscal" y el tipo de persona es "natural", acepta un RIF de persona natural emitido por SENIAT.
+- Para persona natural, el RIF puede mostrar nombres y apellidos en lugar de razon social; eso NO es motivo de rechazo.
+- Para persona natural, rechaza un RIF juridico o de empresa si el documento identifica una compania como contribuyente principal.
+- Si el slot esperado es "documentoFiscal" y el tipo de persona es "juridica", acepta un RIF juridico o empresarial emitido por SENIAT.
+- Para persona juridica, rechaza un RIF de persona natural si el contribuyente principal es una persona individual.
+""".strip()
 
     return f"""
 Eres un validador documental para un onboarding empresarial multi-pais.
@@ -2418,6 +2441,7 @@ Analiza un unico archivo y determina si corresponde al documento esperado.
 
 Documento esperado:
 - country: "{country}"
+- person_type: "{person_type or "no especificado"}"
 - slot canonico esperado: "{slot}"
 - slot recibido: "{raw_slot}"
 - label: "{slot_label}"
@@ -2430,6 +2454,7 @@ Clasificacion neutral previa:
 
 Regla principal del slot esperado:
 - {rule}
+{venezuela_fiscal_person_type_rules if country == "ve" and slot == "documentoFiscal" else ""}
 
 Criterios obligatorios:
 1. Tu decision debe validar si el tipo documental real coincide con el slot esperado.

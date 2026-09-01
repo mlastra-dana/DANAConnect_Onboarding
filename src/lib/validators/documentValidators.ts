@@ -1,4 +1,4 @@
-import { CountryCode, DocumentType, DocumentValidationResult } from '../../app/types';
+import { CountryCode, DocumentType, DocumentValidationResult, PersonType } from '../../app/types';
 import { validateBasicFile } from './fileValidators';
 
 const DOCUMENT_VALIDATION_URL =
@@ -11,6 +11,7 @@ export async function validateDocumentFile(
   type: DocumentType,
   file: File,
   country: CountryCode,
+  personType: PersonType,
   onProgress?: (progress: number) => void,
   options?: {
     expectedLegalRepresentatives?: DocumentValidationResult['extractedLegalRepresentatives'];
@@ -55,6 +56,7 @@ export async function validateDocumentFile(
     file_name: file.name,
     content_type: file.type || inferContentType(file.name),
     country,
+    person_type: personType,
     slot: slotForValidation
   };
 

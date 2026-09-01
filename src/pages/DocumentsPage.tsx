@@ -126,6 +126,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         docType,
         file,
         state.country,
+        state.personType,
         (progress) => {
           setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
         },
@@ -223,6 +224,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         'cedulaRepresentante',
         file,
         state.country,
+        state.personType,
         (progress) => {
           setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
         },
