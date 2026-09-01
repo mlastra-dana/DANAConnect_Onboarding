@@ -163,7 +163,7 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
       }
     }
 
-    const allDocumentsValid = requiredDocs.every((status) => status === 'valid');
+    const allDocumentsValid = requiredDocs.every(isDocumentStatusAccepted);
     const allRequiredFilesAvailable = activeDocumentsHavePayload && representativeDocumentsHavePayload;
     const allBiometricsPassed = state.biometrics.status === 'passed';
 
@@ -204,6 +204,10 @@ export function useOnboarding() {
 
 function documentHasPayload(document: { fileBase64?: string; fileS3Uri?: string }) {
   return Boolean(document.fileBase64 || document.fileS3Uri);
+}
+
+function isDocumentStatusAccepted(status: DocumentRecord['validation']['status']) {
+  return status === 'valid' || status === 'warning';
 }
 
 function normalizeBiometricFromStorage(value: unknown, fallback: BiometricValidationRecord): BiometricValidationRecord {
