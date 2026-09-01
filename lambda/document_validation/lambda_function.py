@@ -2441,8 +2441,10 @@ Reglas para comparar RIF natural contra cedula:
 - Compara primero el numero de cedula/documentNumber ignorando puntos, espacios, guiones y prefijos V/E.
 - Si el RIF esperado contiene un numero tipo V123456789, la cedula esperada es el cuerpo sin el ultimo digito verificador: V-12345678.
 - Si la cedula visible tiene un numero distinto al esperado desde el RIF, status debe ser "error" y document_type_match=false.
-- Usa nombres y apellidos solo como apoyo cuando el numero este incompleto o sea ilegible.
+- Si hay numero esperado desde el RIF, nombres y apellidos NO pueden rescatar una discrepancia de numero.
+- Usa nombres y apellidos solo como apoyo cuando no exista numero esperado desde el RIF o el numero de la cedula sea completamente ilegible.
 - Para este slot, status="valid" exige dos condiciones: que el archivo sea una cedula de identidad y que pertenezca a la persona del RIF.
+- No uses status="warning" si el numero visible de la cedula es distinto al numero esperado desde el RIF.
 - visibleIdentityEvidence debe incluir solo datos visibles en la cedula cargada.
 - matchedRepresentativeEvidence puede usarse para explicar brevemente si la cedula coincide o no con la identidad del RIF.
 """.strip()
@@ -3388,18 +3390,9 @@ def apply_expected_identity_guard(
         analysis["matchedRepresentativeEvidence"] = "La cedula visible coincide con el RIF de persona natural cargado."
         return analysis
 
-    expected_text = " ".join([expected.get("firstName", ""), expected.get("lastName", ""), expected.get("rawText", "")])
-    if names_match(identity_text, expected_text):
-        if normalize_status(analysis.get("status")) == "error":
-            analysis["status"] = "warning"
-            analysis["warnings"] = ["La identidad coincide por nombre, pero el numero no se pudo comparar con confianza."]
-        analysis["document_type_match"] = True
-        analysis["matchedRepresentativeEvidence"] = "La cedula visible coincide por nombre con el RIF, pero requiere revision del numero."
-        return analysis
-
     force_natural_identity_mismatch_error(
         analysis=analysis,
-        reason="La cedula de identidad cargada no coincide con la persona del RIF de persona natural.",
+        reason="El numero de cedula visible no coincide con el numero de cedula derivado del RIF de persona natural.",
         expected_identity=expected,
     )
     return analysis

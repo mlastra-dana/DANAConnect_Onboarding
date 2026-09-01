@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const MAX_FILE_SIZE_MB = 4.5;
+const MAX_FILE_SIZE_MB = 10;
 export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 export const MAX_FILE_SIZE_LABEL = `${MAX_FILE_SIZE_MB}MB`;
 
@@ -17,7 +17,7 @@ export const fileSchema = z
     message: 'Formato inválido. Solo se permiten PDF, JPG, PNG o WEBP.'
   })
   .refine((file) => file.size <= MAX_FILE_SIZE_BYTES, {
-    message: `El archivo supera el tamaño máximo temporal de ${MAX_FILE_SIZE_LABEL}. Comprímalo e intente nuevamente.`
+    message: `El archivo supera el máximo permitido de ${MAX_FILE_SIZE_LABEL}.`
   });
 
 export function validateBasicFile(file: File) {

@@ -205,8 +205,8 @@ export function DocumentUploader({
               {disabled && disabledMessage
                 ? disabledMessage
                 : language === 'en'
-                  ? `PDF, JPG, PNG, or WEBP. Temporary max. ${MAX_FILE_SIZE_LABEL}.`
-                  : `PDF, JPG, PNG o WEBP. Máx. temporal ${MAX_FILE_SIZE_LABEL}.`}
+                  ? `PDF, JPG, PNG, or WEBP. Max. ${MAX_FILE_SIZE_LABEL}.`
+                  : `PDF, JPG, PNG o WEBP. Máx. ${MAX_FILE_SIZE_LABEL}.`}
             </p>
           </div>
         </div>
