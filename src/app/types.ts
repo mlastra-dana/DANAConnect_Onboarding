@@ -108,6 +108,12 @@ export type BiometricValidationRecord = {
   completedAt?: string;
   score?: number;
   note?: string;
+  geolocationStatus?: 'idle' | 'requesting' | 'granted' | 'denied' | 'error' | 'resolving';
+  geolocationAddress?: string;
+  geolocationError?: string;
+  latitude?: number;
+  longitude?: number;
+  locationAccuracy?: number;
 };
 
 export type SubmissionState = {

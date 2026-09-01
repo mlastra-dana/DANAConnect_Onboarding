@@ -87,6 +87,7 @@ export function buildDemoEmail(
     summaryLines.push(`- Identificación: ${state.personalInfo.documentNumber || 'No extraída'}`);
   }
   summaryLines.push(`- Prueba de vida: ${biometricStatusLabel(state.biometrics.status)}`);
+  summaryLines.push(`- Geolocalización: ${formatBiometricLocation(state)}`);
   const body = [
     `Hola equipo ${companyName},`,
     '',
@@ -143,6 +144,7 @@ export function buildFriendlySummaryLines(state: OnboardingState) {
     lines.push(`Identificación: ${state.personalInfo.documentNumber || 'Pendiente'}`);
   }
   lines.push(`Prueba de vida: ${biometricStatusToFriendly(state.biometrics.status)}`);
+  lines.push(`Geolocalización: ${formatBiometricLocation(state)}`);
 
   return lines;
 }
@@ -356,7 +358,8 @@ function buildConversationData({
       documentStatusByType('licenciaConducirFrente') ||
       '',
     DOCUMENTO_REPRESENTANTE: documentStatusByType('cedulaRepresentante') || documentStatusByType('documentoRepresentante') || '',
-    REPRESENTANTE_LEGAL: representativeName || statusLabel(state.representatives[0].document.validation.status)
+    REPRESENTANTE_LEGAL: representativeName || statusLabel(state.representatives[0].document.validation.status),
+    GEOLOCALIZACION: formatBiometricLocation(state)
   };
 
   if (state.personType === 'natural') {
@@ -404,4 +407,15 @@ function biometricStatusToFriendly(status: 'pending' | 'processing' | 'passed' |
   if (status === 'passed') return 'Completada';
   if (status === 'failed') return 'Requiere reintento';
   return 'Pendiente';
+}
+
+function formatBiometricLocation(state: OnboardingState) {
+  const biometric = state.biometrics;
+  if (biometric.geolocationAddress) return biometric.geolocationAddress;
+  if (typeof biometric.latitude === 'number' && typeof biometric.longitude === 'number') {
+    return `${biometric.latitude.toFixed(6)}, ${biometric.longitude.toFixed(6)}`;
+  }
+  if (biometric.geolocationStatus === 'denied') return 'Permiso denegado';
+  if (biometric.geolocationStatus === 'error') return biometric.geolocationError || 'No se pudo obtener ubicación';
+  return 'Sin capturar';
 }

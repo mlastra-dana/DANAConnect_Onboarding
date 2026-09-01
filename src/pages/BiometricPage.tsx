@@ -35,6 +35,7 @@ export function BiometricPage({ companyId }: { companyId: string }) {
   const missedFaceDetectionsRef = useRef(0);
   const autoStartTriedRef = useRef(false);
   const geoAutoCaptureTriedRef = useRef(false);
+  const biometricRef = useRef(current);
 
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('idle');
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -44,10 +45,14 @@ export function BiometricPage({ companyId }: { companyId: string }) {
   const [lastMetrics, setLastMetrics] = useState<FaceMetrics | null>(null);
   const [detectionMode, setDetectionMode] = useState<DetectionMode>('auto');
   const [manualHint, setManualHint] = useState<string | null>(null);
-  const [geoStatus, setGeoStatus] = useState<GeoStatus>('idle');
-  const [geo, setGeo] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
-  const [geoAddress, setGeoAddress] = useState<string | null>(null);
-  const [geoError, setGeoError] = useState<string | null>(null);
+  const [geoStatus, setGeoStatus] = useState<GeoStatus>(current.geolocationStatus ?? 'idle');
+  const [geo, setGeo] = useState<{ lat: number; lng: number; accuracy: number } | null>(
+    typeof current.latitude === 'number' && typeof current.longitude === 'number'
+      ? { lat: current.latitude, lng: current.longitude, accuracy: current.locationAccuracy ?? 0 }
+      : null
+  );
+  const [geoAddress, setGeoAddress] = useState<string | null>(current.geolocationAddress ?? null);
+  const [geoError, setGeoError] = useState<string | null>(current.geolocationError ?? null);
   const isEnglish = state.country === 'usa';
   const isPassed = current.status === 'passed';
   const isFaceCentered = lastMetrics
@@ -79,6 +84,10 @@ export function BiometricPage({ companyId }: { companyId: string }) {
       setBiometric({ status: 'pending' });
     }
   }, []);
+
+  useEffect(() => {
+    biometricRef.current = current;
+  }, [current]);
 
   useEffect(() => {
     return () => {
@@ -237,10 +246,17 @@ export function BiometricPage({ companyId }: { companyId: string }) {
 
     const finalScore = Math.max(92, 96 + Math.round(Math.random() * 3));
     setBiometric({
+      ...biometricRef.current,
       status: 'passed',
       completedAt: new Date().toISOString(),
       score: finalScore,
-      note: isEnglish ? 'Liveness check completed: face centered inside the oval.' : 'Prueba de vida completada: rostro centrado dentro del óvalo.'
+      note: isEnglish ? 'Liveness check completed: face centered inside the oval.' : 'Prueba de vida completada: rostro centrado dentro del óvalo.',
+      geolocationStatus: geoStatus,
+      geolocationAddress: geoAddress ?? undefined,
+      geolocationError: geoError ?? undefined,
+      latitude: geo?.lat,
+      longitude: geo?.lng,
+      locationAccuracy: geo?.accuracy
     });
   }
 
@@ -267,32 +283,73 @@ export function BiometricPage({ companyId }: { companyId: string }) {
   async function captureGeolocation() {
     if (!navigator.geolocation) {
       setGeoStatus('error');
-      setGeoError(isEnglish ? 'Geolocation is not supported by this browser.' : 'Geolocalización no soportada por el navegador.');
+      const message = isEnglish ? 'Geolocation is not supported by this browser.' : 'Geolocalización no soportada por el navegador.';
+      setGeoError(message);
+      updateBiometricGeolocation({
+        geolocationStatus: 'error',
+        geolocationError: message,
+        geolocationAddress: undefined,
+        latitude: undefined,
+        longitude: undefined,
+        locationAccuracy: undefined
+      });
       return;
     }
 
     setGeoStatus('requesting');
     setGeoError(null);
+    updateBiometricGeolocation({
+      geolocationStatus: 'requesting',
+      geolocationError: undefined
+    });
     navigator.geolocation.getCurrentPosition(
       async (position) => {
-        setGeo({
+        const nextGeo = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
           accuracy: position.coords.accuracy
-        });
+        };
+        setGeo(nextGeo);
         setGeoStatus('resolving');
+        updateBiometricGeolocation({
+          geolocationStatus: 'resolving',
+          latitude: nextGeo.lat,
+          longitude: nextGeo.lng,
+          locationAccuracy: nextGeo.accuracy,
+          geolocationError: undefined
+        });
         const address = await reverseGeocode(position.coords.latitude, position.coords.longitude);
         setGeoAddress(address);
         setGeoStatus('granted');
+        updateBiometricGeolocation({
+          geolocationStatus: 'granted',
+          geolocationAddress: address || `${nextGeo.lat.toFixed(6)}, ${nextGeo.lng.toFixed(6)}`,
+          latitude: nextGeo.lat,
+          longitude: nextGeo.lng,
+          locationAccuracy: nextGeo.accuracy,
+          geolocationError: undefined
+        });
       },
       (error) => {
         if (error.code === error.PERMISSION_DENIED) {
+          const message = isEnglish ? 'Location permission denied.' : 'Permiso de ubicación denegado.';
           setGeoStatus('denied');
-          setGeoError(isEnglish ? 'Location permission denied.' : 'Permiso de ubicación denegado.');
+          setGeoError(message);
+          updateBiometricGeolocation({
+            geolocationStatus: 'denied',
+            geolocationError: message,
+            geolocationAddress: undefined
+          });
           return;
         }
+        const message = error.message || (isEnglish ? 'The location could not be obtained.' : 'No se pudo obtener la ubicación.');
         setGeoStatus('error');
-        setGeoError(error.message || (isEnglish ? 'The location could not be obtained.' : 'No se pudo obtener la ubicación.'));
+        setGeoError(message);
+        updateBiometricGeolocation({
+          geolocationStatus: 'error',
+          geolocationError: message,
+          geolocationAddress: undefined
+        });
       },
       {
         enableHighAccuracy: true,
@@ -300,6 +357,15 @@ export function BiometricPage({ companyId }: { companyId: string }) {
         maximumAge: 0
       }
     );
+  }
+
+  function updateBiometricGeolocation(patch: Partial<typeof current>) {
+    const next = {
+      ...biometricRef.current,
+      ...patch
+    };
+    biometricRef.current = next;
+    setBiometric(next);
   }
 
   async function runAutomaticFallbackStep() {
