@@ -68,6 +68,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
   const documentOrder = getDocumentOrder(state.country, state.personType);
   const showRepresentatives = requiresRepresentatives(state.country, state.personType);
   const isVenezuelaJuridica = state.country === 've' && state.personType === 'juridica';
+  const isVenezuelaNatural = state.country === 've' && state.personType === 'natural';
   const language = state.country === 'usa' ? 'en' : 'es';
   const isEnglish = language === 'en';
   const firstNameLabel = isEnglish ? 'First name' : isMexicoNatural ? 'Nombre(s)' : 'Nombres';
@@ -88,7 +89,9 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
   const canUploadRepresentative =
     !isVenezuelaJuridica || (constitutionValidation.status === 'valid' && legalRepresentatives.length > 0);
   const canUploadAssembly = !isVenezuelaJuridica || constitutionValidation.status === 'valid';
+  const canUploadNaturalIdentity = !isVenezuelaNatural || ['valid', 'warning'].includes(rifValidation.status);
   const assemblyDisabledMessage = isEnglish ? 'Upload and validate the company registration first.' : 'Primero cargue y valide el Registro Mercantil.';
+  const naturalIdentityDisabledMessage = isEnglish ? 'Upload and validate the tax document first.' : 'Primero cargue y valide el RIF de persona natural.';
   const representativeDisabledMessage =
     constitutionValidation.status === 'valid'
       ? isEnglish
@@ -130,13 +133,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         (progress) => {
           setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
         },
-        isVenezuelaJuridica &&
-          (docType === 'registroMercantil' || docType === 'actaDesignacionAutoridades') &&
-          hasRifCompanyData
-          ? {
-              expectedCompany: rifCompany
-            }
-          : undefined
+        getBaseValidationOptions(docType)
       );
 
       const nextDocument: DocumentRecord = {
@@ -157,6 +154,10 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         clearVenezuelaJuridicaDependentDocuments();
       }
 
+      if (isVenezuelaNatural && docType === 'rif') {
+        clearVenezuelaNaturalIdentityDocument();
+      }
+
       if (isVenezuelaJuridica && (docType === 'registroMercantil' || docType === 'actaDesignacionAutoridades')) {
         if (docType === 'registroMercantil') {
           clearVenezuelaJuridicaAssembly();
@@ -166,7 +167,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
       if (
         state.personType === 'natural' &&
-        (docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente') &&
+        (docType === 'rif' || docType === 'documentoFiscal' || docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente') &&
         result.extractedIdentity
       ) {
         setPersonalInfo({
@@ -368,6 +369,33 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     });
   }
 
+  function clearVenezuelaNaturalIdentityDocument() {
+    const identity = state.documents.documentoIdentidad;
+    if (identity.previewUrl) URL.revokeObjectURL(identity.previewUrl);
+    setDocument('documentoIdentidad', createEmptyDocument('documentoIdentidad'));
+    clearUploaderRuntime('documentoIdentidad');
+  }
+
+  function getBaseValidationOptions(docType: DocumentType) {
+    if (
+      isVenezuelaJuridica &&
+      (docType === 'registroMercantil' || docType === 'actaDesignacionAutoridades') &&
+      hasRifCompanyData
+    ) {
+      return {
+        expectedCompany: rifCompany
+      };
+    }
+
+    if (isVenezuelaNatural && docType === 'documentoIdentidad') {
+      return {
+        expectedIdentity: state.documents.rif.validation.extractedIdentity
+      };
+    }
+
+    return undefined;
+  }
+
   return (
     <div className="space-y-6">
       <Toast type="info" message={flowConfig.documentsIntro} />
@@ -375,6 +403,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {documentOrder.map((docType) => {
           const constitutionUploadLocked = isVenezuelaJuridica && docType === 'registroMercantil' && !canUploadConstitution;
+          const naturalIdentityUploadLocked = isVenezuelaNatural && docType === 'documentoIdentidad' && !canUploadNaturalIdentity;
 
           if (isVenezuelaJuridica && docType === 'registroMercantil') {
             return (
@@ -460,8 +489,8 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
               uploadProgress={uploadProgressMap[docType]}
               validationProgress={validationProgressMap[docType]}
               previewFile={runtimeFiles[docType]}
-              disabled={constitutionUploadLocked}
-              disabledMessage={constitutionDisabledMessage}
+              disabled={constitutionUploadLocked || naturalIdentityUploadLocked}
+              disabledMessage={naturalIdentityUploadLocked ? naturalIdentityDisabledMessage : constitutionDisabledMessage}
               language={language}
               onSelectFile={(file) => handleUploadBase(docType, file)}
               onRemoveFile={() => handleRemoveBase(docType)}

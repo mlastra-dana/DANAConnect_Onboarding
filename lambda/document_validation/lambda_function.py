@@ -474,6 +474,11 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             if "expected_company" in payload
             else None
         )
+        expected_identity = (
+            normalize_extracted_identity(payload.get("expected_identity"))
+            if "expected_identity" in payload
+            else None
+        )
 
         if content_type not in ALLOWED_MIME_TYPES:
             return response(400, {"ok": False, "error": f"Tipo de archivo no permitido: {content_type}"})
@@ -553,6 +558,7 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
                 classification=classification,
                 expected_legal_representatives=expected_legal_representatives,
                 expected_company=expected_company,
+                expected_identity=expected_identity,
             )
 
         # 5) Conservamos la clasificacion neutral como fuente de verdad para el tipo documental.
@@ -587,6 +593,12 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             file_name=file_name,
             analysis=analysis,
         )
+        analysis = apply_venezuela_fiscal_person_type_guard(
+            country=country,
+            slot=slot,
+            person_type=person_type,
+            analysis=analysis,
+        )
         analysis = apply_expected_legal_representative_guard(
             country=country,
             slot=slot,
@@ -599,13 +611,21 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             analysis=analysis,
             expected_company=expected_company,
         )
+        analysis = apply_expected_identity_guard(
+            country=country,
+            slot=slot,
+            person_type=person_type,
+            analysis=analysis,
+            expected_identity=expected_identity,
+        )
         if country != "ve" or slot != "documentoRepresentante":
             analysis["legalRepresentativeMatch"] = None
         if country != "ve" or slot not in {"documentoConstitucion", "facultadesRepresentante"}:
             analysis["companyDocumentMatch"] = None
         LOGGER.info(
-            "document_validation_result country=%s slot=%s status=%s extracted_legal_representatives=%s expected_legal_representatives=%s legal_representative_match=%s extracted_company_rif=%s expected_company_rif=%s company_document_match=%s",
+            "document_validation_result country=%s person_type=%s slot=%s status=%s extracted_legal_representatives=%s expected_legal_representatives=%s legal_representative_match=%s extracted_company_rif=%s expected_company_rif=%s company_document_match=%s expected_identity_document=%s",
             country,
+            person_type or "not_sent",
             slot,
             normalize_status(analysis.get("status")),
             len(normalize_extracted_legal_representatives(analysis.get("extractedLegalRepresentatives"))),
@@ -614,16 +634,19 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             normalize_extracted_company(analysis.get("extractedCompany")).get("rif"),
             "not_sent" if expected_company is None else expected_company.get("rif", ""),
             analysis.get("companyDocumentMatch"),
+            "not_sent" if expected_identity is None else expected_identity.get("documentNumber", ""),
         )
         LOGGER.info(
             "document_validation_extraction_debug %s",
             json.dumps(
                 build_extraction_debug_payload(
                     country=country,
+                    person_type=person_type,
                     slot=slot,
                     analysis=analysis,
                     expected_legal_representatives=expected_legal_representatives,
                     expected_company=expected_company,
+                    expected_identity=expected_identity,
                 ),
                 ensure_ascii=False,
             ),
@@ -1339,6 +1362,7 @@ def run_bedrock_validation(
     classification: Dict[str, Any],
     expected_legal_representatives: Optional[List[Dict[str, str]]] = None,
     expected_company: Optional[Dict[str, str]] = None,
+    expected_identity: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     slot_label = DOC_SLOT_LABELS[(country, slot)]
     prompt = build_prompt(
@@ -1352,6 +1376,7 @@ def run_bedrock_validation(
         classification=classification,
         expected_legal_representatives=expected_legal_representatives,
         expected_company=expected_company,
+        expected_identity=expected_identity,
     )
 
     user_content = build_bedrock_user_content(
@@ -2290,6 +2315,7 @@ def build_prompt(
     classification: Dict[str, Any],
     expected_legal_representatives: Optional[List[Dict[str, str]]] = None,
     expected_company: Optional[Dict[str, str]] = None,
+    expected_identity: Optional[Dict[str, str]] = None,
 ) -> str:
     rule = DOC_VALIDATION_RULES[country][slot]
     detected_document_type = normalize_detected_document_type(classification.get("detected_document_type"))
@@ -2297,7 +2323,13 @@ def build_prompt(
     classifier_summary = str(classification.get("summary") or "").strip()
     classifier_keywords = normalize_string_list(classification.get("keywords_found"))
 
-    should_extract_identity = slot in IDENTITY_EXTRACTION_SLOTS
+    should_extract_identity = slot in IDENTITY_EXTRACTION_SLOTS or (country == "ve" and person_type == "natural" and slot == "documentoFiscal")
+    should_match_expected_identity = (
+        country == "ve"
+        and person_type == "natural"
+        and slot == "documentoIdentidad"
+        and expected_identity is not None
+    )
     should_extract_legal_representatives = country == "ve" and slot in {"documentoConstitucion", "facultadesRepresentante"}
     should_match_expected_representative = (
         country == "ve"
@@ -2311,6 +2343,7 @@ def build_prompt(
     should_extract_company = country == "ve" and slot in {"documentoFiscal", "documentoConstitucion", "facultadesRepresentante"}
     should_match_expected_company = country == "ve" and slot in {"documentoConstitucion", "facultadesRepresentante"} and expected_company is not None
     expected_company_json = json.dumps(normalize_extracted_company(expected_company or {}), ensure_ascii=False)
+    expected_identity_json = json.dumps(normalize_extracted_identity(expected_identity or {}), ensure_ascii=False)
 
     extraction_rules = """
 Si el slot es "documentoIdentidad" o "documentoRepresentante", adicionalmente intenta extraer esta salida minima:
@@ -2318,6 +2351,12 @@ Si el slot es "documentoIdentidad" o "documentoRepresentante", adicionalmente in
 - lastName
 - documentNumber
 - rawText
+
+Para Venezuela:
+- Si el slot es "documentoFiscal" y el tipo de persona es "natural", extrae la identidad de la persona del RIF natural:
+  firstName, lastName, documentNumber y rawText.
+- En RIF natural venezolano, documentNumber debe ser la cedula base del RIF, por ejemplo V-12345678, sin el ultimo digito verificador del RIF.
+- Si el slot es "documentoIdentidad", documentNumber debe ser el numero de cedula visible.
 
 Para Mexico:
 - Si el documento es INE/IFE, documentNumber puede ser la clave de elector, OCR, CIC o numero visible mas confiable.
@@ -2392,6 +2431,22 @@ Reglas para legalRepresentativeMatch:
     no_legal_representative_match_rules = """
 Devuelve legalRepresentativeMatch como null, matchedRepresentativeRole como cadena vacia, matchedRepresentativeEvidence como cadena vacia y visibleIdentityEvidence como cadena vacia.
 """.strip()
+    identity_match_rules = f"""
+Para Venezuela, persona natural y slot "documentoIdentidad", valida tambien si la cedula visible pertenece a la persona del RIF cargado previamente.
+
+Identidad esperada desde el RIF:
+{expected_identity_json}
+
+Reglas para comparar RIF natural contra cedula:
+- Compara primero el numero de cedula/documentNumber ignorando puntos, espacios, guiones y prefijos V/E.
+- Si el RIF esperado contiene un numero tipo V123456789, la cedula esperada es el cuerpo sin el ultimo digito verificador: V-12345678.
+- Si la cedula visible tiene un numero distinto al esperado desde el RIF, status debe ser "error" y document_type_match=false.
+- Usa nombres y apellidos solo como apoyo cuando el numero este incompleto o sea ilegible.
+- Para este slot, status="valid" exige dos condiciones: que el archivo sea una cedula de identidad y que pertenezca a la persona del RIF.
+- visibleIdentityEvidence debe incluir solo datos visibles en la cedula cargada.
+- matchedRepresentativeEvidence puede usarse para explicar brevemente si la cedula coincide o no con la identidad del RIF.
+""".strip()
+    no_identity_match_rules = ""
     company_extraction_rules = """
 Para Venezuela y slots "documentoFiscal", "documentoConstitucion" o "facultadesRepresentante", extrae tambien los datos de empresa visibles:
 - extractedCompany.name: razon social o denominacion comercial exacta de la empresa.
@@ -2498,6 +2553,7 @@ Instrucciones:
 - {legal_representative_rules if should_extract_legal_representatives else no_legal_representative_rules}
 - {legal_representative_match_rules if should_match_expected_representative else no_legal_representative_match_rules}
 - {company_match_rules if should_match_expected_company else no_company_match_rules}
+- {identity_match_rules if should_match_expected_identity else no_identity_match_rules}
 
 Tu respuesta DEBE ser JSON puro, sin markdown, con esta forma exacta:
 {{
@@ -2544,6 +2600,9 @@ Reglas adicionales:
   - status="valid" o status="warning" requiere legalRepresentativeMatch=true.
   - status="error" requiere legalRepresentativeMatch=false.
   - Si reasons o matchedRepresentativeEvidence indican "no coincide", "no aparece" o "no hay coincidencia", legalRepresentativeMatch debe ser false y status debe ser "error".
+- Para Venezuela, persona natural y slot "documentoIdentidad", si se recibio identidad esperada desde el RIF:
+  - status="valid" o status="warning" requiere que la cedula visible coincida con la identidad del RIF.
+  - status="error" si el numero de cedula visible es distinto al numero base del RIF.
 - warnings solo aplica cuando hay dudas, calidad baja, vencimiento, documento de prueba o revision recomendada.
 - reasons explica por que se rechaza, por que se acepta o por que hay observaciones.
 - keywords_found debe incluir palabras o conceptos visibles relevantes si existen.
@@ -2950,6 +3009,79 @@ def apply_post_validation_guards(
     return analysis
 
 
+def apply_venezuela_fiscal_person_type_guard(
+    *,
+    country: str,
+    slot: str,
+    person_type: str,
+    analysis: Dict[str, Any],
+) -> Dict[str, Any]:
+    if country != "ve" or slot != "documentoFiscal" or person_type not in {"natural", "juridica"}:
+        return analysis
+
+    detected_document_type = normalize_detected_document_type(analysis.get("detected_document_type"))
+    if detected_document_type != "documentoFiscal":
+        return analysis
+
+    extracted_company = normalize_extracted_company(analysis.get("extractedCompany"))
+    evidence_text = " ".join(
+        item
+        for item in [
+            extracted_company.get("rif", ""),
+            extracted_company.get("rawText", ""),
+            extracted_company.get("name", ""),
+            str(analysis.get("summary") or ""),
+            " ".join(normalize_string_list(analysis.get("reasons"))),
+            " ".join(normalize_string_list(analysis.get("keywords_found"))),
+        ]
+        if item
+    )
+    normalized_rif = normalize_rif(evidence_text)
+    if not normalized_rif:
+        return analysis
+
+    prefix = normalized_rif[0]
+    if person_type == "natural" and prefix in {"J", "G"}:
+        force_venezuela_fiscal_person_type_error(
+            analysis=analysis,
+            summary="El archivo corresponde a un RIF jurídico, no a un RIF de persona natural.",
+            reason="El flujo seleccionado es persona natural, pero el RIF visible tiene prefijo jurídico.",
+        )
+        return analysis
+
+    if person_type == "natural" and prefix in {"V", "E"}:
+        identity = normalize_extracted_identity(analysis.get("extractedIdentity"))
+        body = normalized_rif[1:-1] if len(normalized_rif) >= 10 else ""
+        if body and not identity.get("documentNumber"):
+            identity["documentNumber"] = f"{prefix}-{body}"
+            identity["rawText"] = identity.get("rawText") or evidence_text
+            analysis["extractedIdentity"] = identity
+
+    if person_type == "juridica" and prefix in {"V", "E"}:
+        force_venezuela_fiscal_person_type_error(
+            analysis=analysis,
+            summary="El archivo corresponde a un RIF de persona natural, no a un RIF jurídico.",
+            reason="El flujo seleccionado es persona jurídica, pero el RIF visible tiene prefijo de persona natural.",
+        )
+        return analysis
+
+    return analysis
+
+
+def force_venezuela_fiscal_person_type_error(
+    *,
+    analysis: Dict[str, Any],
+    summary: str,
+    reason: str,
+) -> None:
+    analysis["status"] = "error"
+    analysis["document_type_match"] = False
+    analysis["confidence"] = max(normalize_confidence(analysis.get("confidence")), 0.95)
+    analysis["summary"] = summary
+    analysis["warnings"] = []
+    analysis["reasons"] = normalize_string_list(analysis.get("reasons")) + [reason]
+
+
 def apply_expected_legal_representative_guard(
     *,
     country: str,
@@ -3223,6 +3355,83 @@ def build_representative_match_evidence_text(*, identity: Dict[str, str], analys
     )
 
 
+def apply_expected_identity_guard(
+    *,
+    country: str,
+    slot: str,
+    person_type: str,
+    analysis: Dict[str, Any],
+    expected_identity: Optional[Dict[str, str]],
+) -> Dict[str, Any]:
+    if country != "ve" or person_type != "natural" or slot != "documentoIdentidad" or expected_identity is None:
+        return analysis
+
+    expected = normalize_extracted_identity(expected_identity)
+    expected_variants = natural_rif_identity_number_variants(expected.get("documentNumber"), expected.get("rawText"))
+    if not expected_variants:
+        force_natural_identity_mismatch_error(
+            analysis=analysis,
+            reason="No se recibieron datos suficientes del RIF de persona natural para comparar contra la cedula.",
+            expected_identity=expected,
+        )
+        return analysis
+
+    identity = normalize_extracted_identity(analysis.get("extractedIdentity"))
+    identity_text = build_representative_match_evidence_text(identity=identity, analysis=analysis)
+    identity_variants = set(identity_number_variants(identity.get("documentNumber")) + identity_number_variants(identity_text))
+    if expected_variants.intersection(identity_variants):
+        if normalize_status(analysis.get("status")) == "error":
+            analysis["status"] = "valid"
+            analysis["summary"] = "Documento aceptado."
+            analysis["warnings"] = normalize_string_list(analysis.get("warnings"))
+        analysis["document_type_match"] = True
+        analysis["matchedRepresentativeEvidence"] = "La cedula visible coincide con el RIF de persona natural cargado."
+        return analysis
+
+    expected_text = " ".join([expected.get("firstName", ""), expected.get("lastName", ""), expected.get("rawText", "")])
+    if names_match(identity_text, expected_text):
+        if normalize_status(analysis.get("status")) == "error":
+            analysis["status"] = "warning"
+            analysis["warnings"] = ["La identidad coincide por nombre, pero el numero no se pudo comparar con confianza."]
+        analysis["document_type_match"] = True
+        analysis["matchedRepresentativeEvidence"] = "La cedula visible coincide por nombre con el RIF, pero requiere revision del numero."
+        return analysis
+
+    force_natural_identity_mismatch_error(
+        analysis=analysis,
+        reason="La cedula de identidad cargada no coincide con la persona del RIF de persona natural.",
+        expected_identity=expected,
+    )
+    return analysis
+
+
+def force_natural_identity_mismatch_error(
+    *,
+    analysis: Dict[str, Any],
+    reason: str,
+    expected_identity: Dict[str, str],
+) -> None:
+    analysis["status"] = "error"
+    analysis["document_type_match"] = False
+    analysis["summary"] = "La cedula de identidad no coincide con el RIF de persona natural cargado."
+    analysis["warnings"] = []
+    analysis["matchedRepresentativeEvidence"] = (
+        f"Identidad esperada desde el RIF: {format_identity_for_evidence(expected_identity) or 'sin datos suficientes'}."
+    )
+    analysis["reasons"] = normalize_string_list(analysis.get("reasons")) + [reason]
+
+
+def natural_rif_identity_number_variants(document_number: Optional[str], raw_text: Optional[str] = None) -> set[str]:
+    variants = set(identity_number_variants(document_number))
+    rif = normalize_rif(" ".join(item for item in [document_number or "", raw_text or ""] if item))
+    if rif and rif[0] in {"V", "E"} and len(rif) >= 10:
+        body = rif[1:-1]
+        if len(body) >= 6:
+            variants.update(identity_number_variants(f"{rif[0]}{body}"))
+            variants.update(identity_number_variants(body))
+    return variants
+
+
 def legal_representative_matches(
     *,
     identity: Dict[str, str],
@@ -3421,10 +3630,12 @@ def parse_json_from_text(text: str) -> Dict[str, Any]:
 def build_extraction_debug_payload(
     *,
     country: str,
+    person_type: str,
     slot: str,
     analysis: Dict[str, Any],
     expected_legal_representatives: Optional[List[Dict[str, str]]],
     expected_company: Optional[Dict[str, str]],
+    expected_identity: Optional[Dict[str, str]],
 ) -> Dict[str, Any]:
     identity = normalize_extracted_identity(analysis.get("extractedIdentity"))
     extracted_company = normalize_extracted_company(analysis.get("extractedCompany"))
@@ -3437,9 +3648,11 @@ def build_extraction_debug_payload(
         else None
     )
     normalized_expected_company = normalize_extracted_company(expected_company) if expected_company is not None else None
+    normalized_expected_identity = normalize_extracted_identity(expected_identity) if expected_identity is not None else None
 
     return {
         "country": country,
+        "personType": person_type or "not_sent",
         "slot": slot,
         "status": normalize_status(analysis.get("status")),
         "detectedDocumentType": normalize_detected_document_type(analysis.get("detected_document_type")),
@@ -3462,6 +3675,11 @@ def build_extraction_debug_payload(
         ),
         "matchedCompanyEvidence": truncate_debug_text(analysis.get("matchedCompanyEvidence")),
         "extractedIdentity": truncate_debug_identity(identity),
+        "expectedIdentity": (
+            truncate_debug_identity(normalized_expected_identity)
+            if normalized_expected_identity is not None
+            else "not_sent"
+        ),
         "visibleIdentityEvidence": truncate_debug_text(analysis.get("visibleIdentityEvidence")),
         "matchedRepresentativeRole": truncate_debug_text(analysis.get("matchedRepresentativeRole")),
         "matchedRepresentativeEvidence": truncate_debug_text(analysis.get("matchedRepresentativeEvidence")),

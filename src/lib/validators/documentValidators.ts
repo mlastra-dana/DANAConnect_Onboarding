@@ -16,6 +16,7 @@ export async function validateDocumentFile(
   options?: {
     expectedLegalRepresentatives?: DocumentValidationResult['extractedLegalRepresentatives'];
     expectedCompany?: DocumentValidationResult['extractedCompany'];
+    expectedIdentity?: DocumentValidationResult['extractedIdentity'];
   }
 ): Promise<DocumentValidationResult> {
   const checks: DocumentValidationResult['checks'] = [];
@@ -76,6 +77,9 @@ export async function validateDocumentFile(
   }
   if (options?.expectedCompany) {
     payload.expected_company = options.expectedCompany;
+  }
+  if (options?.expectedIdentity) {
+    payload.expected_identity = options.expectedIdentity;
   }
 
   onProgress?.(65);
