@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useOnboarding } from '../app/OnboardingContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -40,6 +40,12 @@ export function ReviewPage({ companyId }: { companyId: string }) {
   const normalizedRecipientEmail = recipientEmail.trim();
   const recipientEmailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedRecipientEmail);
   const showSubmissionError = canSubmit && state.submission.status === 'error';
+
+  useEffect(() => {
+    if (!canSubmit && state.submission.status !== 'loading') {
+      navigate(`/onboarding/${companyId}/documents`, { replace: true });
+    }
+  }, [canSubmit, companyId, navigate, state.submission.status]);
 
   async function submit() {
     setErrorToast(null);
