@@ -302,32 +302,6 @@ function buildConversationData({
   recipientEmail: string;
 }) {
   const flow = getFlowConfig(state.country, state.personType);
-  const documentStatusByType = (type: string) => {
-    if (type === 'rif') return statusLabel(state.documents.rif.validation.status);
-    if (type === 'documentoFiscal') return statusLabel(state.documents.documentoFiscal.validation.status);
-    if (type === 'registroMercantil') return statusLabel(state.documents.registroMercantil.validation.status);
-    if (type === 'documentoConstitucion') return statusLabel(state.documents.documentoConstitucion.validation.status);
-    if (type === 'actaDesignacionAutoridades') return statusLabel(state.documents.actaDesignacionAutoridades.validation.status);
-    if (type === 'facultadesRepresentante') return statusLabel(state.documents.facultadesRepresentante.validation.status);
-    if (type === 'cedulaRepresentante') return statusLabel(state.representatives[0].document.validation.status);
-    if (type === 'documentoRepresentante') return statusLabel(state.documents.documentoRepresentante.validation.status);
-    if (type === 'documentoIdentidad') return statusLabel(state.documents.documentoIdentidad.validation.status);
-    if (type === 'licenciaConducirFrente') return statusLabel(state.documents.licenciaConducirFrente.validation.status);
-    return '';
-  };
-  const documentLabelByType = (type: string) => {
-    if (type === 'rif') return state.documents.rif.fileName || '';
-    if (type === 'documentoFiscal') return state.documents.documentoFiscal.fileName || '';
-    if (type === 'registroMercantil') return state.documents.registroMercantil.fileName || '';
-    if (type === 'documentoConstitucion') return state.documents.documentoConstitucion.fileName || '';
-    if (type === 'actaDesignacionAutoridades') return state.documents.actaDesignacionAutoridades.fileName || '';
-    if (type === 'facultadesRepresentante') return state.documents.facultadesRepresentante.fileName || '';
-    if (type === 'cedulaRepresentante') return state.representatives[0].document.fileName || '';
-    if (type === 'documentoRepresentante') return state.documents.documentoRepresentante.fileName || '';
-    if (type === 'documentoIdentidad') return state.documents.documentoIdentidad.fileName || '';
-    if (type === 'licenciaConducirFrente') return state.documents.licenciaConducirFrente.fileName || '';
-    return '';
-  };
   const fullName = [state.personalInfo.firstName, state.personalInfo.lastName].filter(Boolean).join(' ').trim();
   const representativeName = state.representatives[0].document.validation.extractedIdentity
     ? [
@@ -345,31 +319,22 @@ function buildConversationData({
     NOMBRE_EMPRESA: state.tenant.name,
     PAIS: state.country.toUpperCase(),
     TIPO_PERSONA: flow.personTypeLabel,
-    DOCUMENTO_FISCAL: state.personalInfo.documentNumber || documentStatusByType('rif') || documentStatusByType('documentoFiscal') || '',
-    DOCUMENTO_CONSTITUCION:
-      documentStatusByType('registroMercantil') ||
-      documentStatusByType('documentoConstitucion') ||
-      documentLabelByType('registroMercantil') ||
-      documentLabelByType('documentoConstitucion'),
-    FACULTADES_REPRESENTANTE:
-      documentStatusByType('actaDesignacionAutoridades') ||
-      documentStatusByType('facultadesRepresentante') ||
-      documentLabelByType('actaDesignacionAutoridades') ||
-      documentLabelByType('facultadesRepresentante'),
-    DOCUMENTO_IDENTIDAD:
-      state.personalInfo.documentNumber ||
-      documentStatusByType('documentoIdentidad') ||
-      documentStatusByType('licenciaConducirFrente') ||
-      '',
-    DOCUMENTO_REPRESENTANTE: documentStatusByType('cedulaRepresentante') || documentStatusByType('documentoRepresentante') || '',
-    REPRESENTANTE_LEGAL: representativeName || statusLabel(state.representatives[0].document.validation.status),
     GEOLOCALIZACION: formatBiometricLocation(state)
   };
+
+  const fiscalDocument = state.documents.rif.fileName ? state.documents.rif : state.documents.documentoFiscal;
+  addConversationField(data, 'DOCUMENTO_FISCAL', fiscalDocument.fileName);
 
   if (state.personType === 'natural') {
     addConversationField(data, 'NOMBRES', state.personalInfo.firstName);
     addConversationField(data, 'APELLIDOS', state.personalInfo.lastName);
     addConversationField(data, 'NUMERO_IDENTIFICACION', state.personalInfo.documentNumber);
+    addConversationField(data, 'DOCUMENTO_IDENTIDAD', state.documents.documentoIdentidad.fileName || state.documents.licenciaConducirFrente.fileName);
+  } else {
+    addConversationField(data, 'DOCUMENTO_CONSTITUCION', state.documents.registroMercantil.fileName || state.documents.documentoConstitucion.fileName);
+    addConversationField(data, 'FACULTADES_REPRESENTANTE', state.documents.actaDesignacionAutoridades.fileName || state.documents.facultadesRepresentante.fileName);
+    addConversationField(data, 'DOCUMENTO_REPRESENTANTE', state.representatives[0].document.fileName || state.documents.documentoRepresentante.fileName);
+    addConversationField(data, 'REPRESENTANTE_LEGAL', representativeName);
   }
 
   return data;
