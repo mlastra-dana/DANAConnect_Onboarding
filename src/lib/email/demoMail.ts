@@ -307,6 +307,12 @@ function buildConversationData({
 }) {
   const flow = getFlowConfig(state.country, state.personType);
   const fullName = [state.personalInfo.firstName, state.personalInfo.lastName].filter(Boolean).join(' ').trim();
+  const companyName =
+    state.documents.rif.validation.extractedCompany?.name ||
+    state.documents.documentoFiscal.validation.extractedCompany?.name ||
+    state.documents.registroMercantil.validation.extractedCompany?.name ||
+    state.documents.documentoConstitucion.validation.extractedCompany?.name ||
+    state.tenant.name;
   const representativeName = state.representatives[0].document.validation.extractedIdentity
     ? [
         state.representatives[0].document.validation.extractedIdentity.firstName,
@@ -320,7 +326,6 @@ function buildConversationData({
   const data: Record<string, string> = {
     EMAIL: recipientEmail,
     NOMBRE_CLIENTE: fullName || state.tenant.name,
-    NOMBRE_EMPRESA: state.tenant.name,
     PAIS: state.country.toUpperCase(),
     TIPO_PERSONA: flow.personTypeLabel
   };
@@ -334,6 +339,7 @@ function buildConversationData({
     addConversationField(data, 'NUMERO_IDENTIFICACION', state.personalInfo.documentNumber);
     addConversationField(data, 'DOCUMENTO_IDENTIDAD', state.documents.documentoIdentidad.fileName || state.documents.licenciaConducirFrente.fileName);
   } else {
+    addConversationField(data, 'NOMBRE_EMPRESA', companyName);
     addConversationField(data, 'DOCUMENTO_CONSTITUCION', state.documents.registroMercantil.fileName || state.documents.documentoConstitucion.fileName);
     addConversationField(data, 'FACULTADES_REPRESENTANTE', state.documents.actaDesignacionAutoridades.fileName || state.documents.facultadesRepresentante.fileName);
     addConversationField(data, 'DOCUMENTO_REPRESENTANTE', state.representatives[0].document.fileName || state.documents.documentoRepresentante.fileName);
