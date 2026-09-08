@@ -106,7 +106,9 @@ export function ReviewPage({ companyId }: { companyId: string }) {
       {showSubmissionError ? (
         <Card className="border border-[#F9C9C3] bg-errorSoft">
           <h3 className="text-base font-semibold text-red-800">{isEnglish ? 'The submission could not be completed' : 'No se pudo completar el envío'}</h3>
-          <p className="mt-1 text-sm text-red-700">{isEnglish ? 'Check your connection and try again.' : 'Revise su conexión y vuelva a intentar.'}</p>
+          <p className="mt-1 text-sm text-red-700">
+            {state.submission.error ?? (isEnglish ? 'Check your connection and try again.' : 'Revise su conexión y vuelva a intentar.')}
+          </p>
           <div className="mt-3">
             <Button onClick={() => void submit()} variant="danger">
               {isEnglish ? 'Retry submission' : 'Reintentar envío'}

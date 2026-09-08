@@ -30,6 +30,9 @@ export type SendEmailResult = {
   messageId?: string;
   mode?: string;
   error?: string;
+  smtpCode?: number;
+  smtpError?: string;
+  stage?: string;
 };
 
 const DANA_DOCUMENT_FIELD_BY_TYPE: Partial<Record<DocumentType, string>> = {
@@ -217,9 +220,10 @@ export async function sendEmailViaApi(
       };
     }
     if (!response.ok || !result.ok) {
+      const serviceError = result.error || result.smtpError;
       return {
         ok: false,
-        error: result.error ?? 'No se pudo enviar el correo'
+        error: serviceError ?? 'No se pudo enviar el correo'
       };
     }
 

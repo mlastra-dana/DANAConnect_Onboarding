@@ -1079,19 +1079,31 @@ def send_cloud_smtp_email(payload: Dict[str, Any]) -> Dict[str, Any]:
             smtp.login(config["user"], config["password"])
             smtp.send_message(message, to_addrs=recipients)
     except smtplib.SMTPDataError as exc:
+        smtp_error = exc.smtp_error.decode("utf-8", errors="replace") if isinstance(exc.smtp_error, bytes) else str(exc.smtp_error)
+        LOGGER.warning(
+            "cloud_smtp_send_rejected code=%s error=%s uploaded_files=%s",
+            exc.smtp_code,
+            smtp_error,
+            json.dumps(uploaded_files, ensure_ascii=False),
+        )
         return {
             "ok": False,
             "handlerVersion": HANDLER_VERSION,
             "stage": "smtp_send",
             "to": config["to"],
             "mode": config["mode"],
+            "error": smtp_error or f"El servidor SMTP rechazo el envio ({exc.smtp_code}).",
             "smtpCode": exc.smtp_code,
-            "smtpError": exc.smtp_error.decode("utf-8", errors="replace")
-            if isinstance(exc.smtp_error, bytes)
-            else str(exc.smtp_error),
+            "smtpError": smtp_error,
             "uploadedFiles": uploaded_files,
             "body": body,
         }
+
+    LOGGER.info(
+        "cloud_smtp_send_success to=%s uploaded_files=%s",
+        config["to"],
+        json.dumps(uploaded_files, ensure_ascii=False),
+    )
 
     return {
         "ok": True,
