@@ -49,10 +49,7 @@ const DANA_DOCUMENT_FIELD_BY_TYPE: Partial<Record<DocumentType, string>> = {
   licenciaConducirReverso: 'LICENCIA_BACK'
 };
 
-function resolveDanaDocumentField(state: OnboardingState, documentType: DocumentType) {
-  if (state.personType === 'natural' && documentType === 'documentoIdentidad') {
-    return 'DOCUMENTO_REPRESENTANTE';
-  }
+function resolveDanaDocumentField(_state: OnboardingState, documentType: DocumentType) {
   return DANA_DOCUMENT_FIELD_BY_TYPE[documentType];
 }
 
@@ -330,10 +327,12 @@ function buildConversationData({
 
   const fiscalDocument = state.documents.rif.fileName ? state.documents.rif : state.documents.documentoFiscal;
   addConversationField(data, 'DOCUMENTO_FISCAL', fiscalDocument.fileName);
-  addConversationField(data, 'GEOLOCALIZACION', formatCapturedBiometricLocation(state));
 
   if (state.personType === 'natural') {
-    addConversationField(data, 'DOCUMENTO_REPRESENTANTE', state.documents.documentoIdentidad.fileName || state.documents.licenciaConducirFrente.fileName);
+    addConversationField(data, 'NOMBRES', state.personalInfo.firstName);
+    addConversationField(data, 'APELLIDOS', state.personalInfo.lastName);
+    addConversationField(data, 'NUMERO_IDENTIFICACION', state.personalInfo.documentNumber);
+    addConversationField(data, 'DOCUMENTO_IDENTIDAD', state.documents.documentoIdentidad.fileName || state.documents.licenciaConducirFrente.fileName);
   } else {
     addConversationField(data, 'DOCUMENTO_CONSTITUCION', state.documents.registroMercantil.fileName || state.documents.documentoConstitucion.fileName);
     addConversationField(data, 'FACULTADES_REPRESENTANTE', state.documents.actaDesignacionAutoridades.fileName || state.documents.facultadesRepresentante.fileName);
@@ -391,13 +390,4 @@ function formatBiometricLocation(state: OnboardingState) {
   if (biometric.geolocationStatus === 'denied') return 'Permiso denegado';
   if (biometric.geolocationStatus === 'error') return biometric.geolocationError || 'No se pudo obtener ubicación';
   return 'Sin capturar';
-}
-
-function formatCapturedBiometricLocation(state: OnboardingState) {
-  const biometric = state.biometrics;
-  if (biometric.geolocationAddress) return biometric.geolocationAddress;
-  if (typeof biometric.latitude === 'number' && typeof biometric.longitude === 'number') {
-    return `${biometric.latitude.toFixed(6)}, ${biometric.longitude.toFixed(6)}`;
-  }
-  return '';
 }
