@@ -62,14 +62,24 @@ export async function validateDocumentFile(
   };
 
   let uploadedFileReference: PreparedDocumentUpload | null = null;
-  if (shouldUseS3ValidationUpload(file)) {
-    uploadedFileReference = await prepareDocumentValidationUpload(file);
-    onProgress?.(45);
-    await uploadFileToPreparedUrl(file, uploadedFileReference.uploadUrl, file.type || inferContentType(file.name));
-    payload.file_s3_uri = uploadedFileReference.fileS3Uri;
-    payload.s3_key = uploadedFileReference.s3Key;
-  } else {
-    payload.file_base64 = await fileToBase64(file);
+  try {
+    if (shouldUseS3ValidationUpload(file)) {
+      uploadedFileReference = await prepareDocumentValidationUpload(file);
+      onProgress?.(45);
+      await uploadFileToPreparedUrl(file, uploadedFileReference.uploadUrl, file.type || inferContentType(file.name));
+      payload.file_s3_uri = uploadedFileReference.fileS3Uri;
+      payload.s3_key = uploadedFileReference.s3Key;
+    } else {
+      payload.file_base64 = await fileToBase64(file);
+    }
+  } catch (error) {
+    onProgress?.(100);
+    return buildValidationErrorResult(
+      error instanceof Error
+        ? error.message
+        : 'No se pudo preparar el documento para validación. Intente nuevamente.',
+      ['document_upload_preparation_error']
+    );
   }
 
   if (options?.expectedLegalRepresentatives) {
@@ -85,6 +95,7 @@ export async function validateDocumentFile(
   onProgress?.(65);
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), DOCUMENT_VALIDATION_TIMEOUT_MS);
+  const validationStartedAt = Date.now();
   let lambdaResponse: Response;
   try {
     lambdaResponse = await fetch(DOCUMENT_VALIDATION_URL, {
@@ -97,11 +108,14 @@ export async function validateDocumentFile(
     });
   } catch (error) {
     onProgress?.(100);
+    const elapsedMs = Date.now() - validationStartedAt;
+    const wasClientTimeout = error instanceof DOMException && error.name === 'AbortError';
+    const looksLikeServiceTimeout = elapsedMs >= 25000;
     return buildValidationErrorResult(
-      error instanceof DOMException && error.name === 'AbortError'
-        ? 'La validación tardó demasiado. Intente nuevamente en unos segundos.'
+      wasClientTimeout || looksLikeServiceTimeout
+        ? 'El servicio de validación tardó demasiado en responder. Intente nuevamente; si persiste, revise el timeout de la Lambda.'
         : 'No se pudo conectar con el servicio de validación. Revise su conexión e intente nuevamente.',
-      ['lambda_network_error']
+      [wasClientTimeout ? 'lambda_client_timeout' : looksLikeServiceTimeout ? 'lambda_service_timeout' : 'lambda_network_error']
     );
   } finally {
     window.clearTimeout(timeoutId);
