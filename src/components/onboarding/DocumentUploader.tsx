@@ -53,6 +53,7 @@ export function DocumentUploader({
   const inputId = useId();
   const fileAccept = useMemo(() => '.pdf,.png,.jpg,.jpeg,.webp', []);
   const resolvedLabel = label ?? title ?? docRecord.type;
+  const isReference = docRecord.type === 'referenciaPersonal' || docRecord.type === 'referenciaComercial' || docRecord.type === 'referenciaBancaria';
   const feedbackStatus = loading
     ? 'pending'
     : docRecord.validation.status === 'valid'
@@ -253,7 +254,7 @@ export function DocumentUploader({
         {feedbackStatus === 'valid' ? (
           <p className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700">
             <CheckCircle className="h-4 w-4" />
-            <span>{language === 'en' ? 'Document accepted.' : 'Documento aceptado.'}</span>
+            <span>{isReference && docRecord.validation.uiStatus?.message ? docRecord.validation.uiStatus.message : language === 'en' ? 'Document accepted.' : 'Documento aceptado.'}</span>
           </p>
         ) : null}
         {feedbackStatus === 'warning' ? (

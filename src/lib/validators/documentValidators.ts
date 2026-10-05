@@ -22,7 +22,7 @@ export async function validateDocumentFile(
 ): Promise<DocumentValidationResult> {
   if (type === 'referenciaPersonal' || type === 'referenciaComercial' || type === 'referenciaBancaria') {
     onProgress?.(10);
-    const result = await validateReferenceFile(file);
+    const result = await validateReferenceFile(file, type);
     onProgress?.(100);
     return result;
   }
