@@ -148,6 +148,7 @@ const FILE_HINTS: Record<DocumentType, RegExp[]> = {
   licenciaConducirFrente: [/driver/i, /license/i, /licencia/i, /front/i, /frente/i],
   licenciaConducirReverso: [/driver/i, /license/i, /licencia/i, /back/i, /reverse/i, /reverso/i, /barcode/i],
   referenciaPersonal: [/referencia/i, /personal/i],
+  referenciaComercial: [/referencia/i, /comercial/i],
   referenciaBancaria: [/referencia/i, /bancaria/i]
 };
 

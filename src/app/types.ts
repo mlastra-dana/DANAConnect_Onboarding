@@ -16,6 +16,7 @@ export type DocumentType =
   | 'licenciaConducirFrente'
   | 'licenciaConducirReverso'
   | 'referenciaPersonal'
+  | 'referenciaComercial'
   | 'referenciaBancaria';
 export type DocumentRecordType = DocumentType;
 export type ValidationStatus = 'pending' | 'validating' | 'valid' | 'error' | 'warning' | 'review';

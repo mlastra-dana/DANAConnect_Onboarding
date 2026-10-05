@@ -32,6 +32,7 @@ const initialBoolMap: Record<UploadKey, boolean> = {
   licenciaConducirFrente: false,
   licenciaConducirReverso: false,
   referenciaPersonal: false,
+  referenciaComercial: false,
   referenciaBancaria: false,
   rep1: false,
   rep2: false
@@ -51,6 +52,7 @@ const initialNumMap: Record<UploadKey, number> = {
   licenciaConducirFrente: 0,
   licenciaConducirReverso: 0,
   referenciaPersonal: 0,
+  referenciaComercial: 0,
   referenciaBancaria: 0,
   rep1: 0,
   rep2: 0
@@ -126,7 +128,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       if (previousPreview) URL.revokeObjectURL(previousPreview);
 
       previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
-      const isReference = docType === 'referenciaPersonal' || docType === 'referenciaBancaria';
+      const isReference = docType === 'referenciaPersonal' || docType === 'referenciaComercial' || docType === 'referenciaBancaria';
       fileBase64 = isReference || shouldUseS3ValidationUpload(file) ? '' : await fileToBase64(file);
       setRuntimeFiles((prev) => ({ ...prev, [key]: file }));
 

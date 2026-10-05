@@ -47,12 +47,13 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         heroHeadline: 'Portal de onboarding para empresas en Venezuela.',
         heroSubheadline: 'Centralice los adjuntos requeridos en un flujo simple, seguro y validado para su empresa en Venezuela.',
         heroButton: 'Continuar con persona jurídica',
-        documentsIntro: 'Cargue los documentos requeridos para continuar.',
-        documentOrder: ['rif', 'registroMercantil', 'referenciaBancaria'],
+        documentsIntro: 'Cargue los documentos de la empresa y las referencias comercial y bancaria requeridos para continuar.',
+        documentOrder: ['rif', 'registroMercantil', 'referenciaComercial', 'referenciaBancaria'],
         optionalDocumentOrder: ['actaDesignacionAutoridades'],
         documents: {
           rif: { label: 'RIF' },
           registroMercantil: { label: 'Registro Mercantil' },
+          referenciaComercial: { label: 'Referencia comercial' },
           referenciaBancaria: { label: 'Referencia bancaria' },
           actaDesignacionAutoridades: { label: 'Acta de Asamblea (Opcional)' },
           cedulaRepresentante: { label: 'Cédula del Representante' }
@@ -73,12 +74,13 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         heroHeadline: 'Portal de onboarding para personas naturales en Venezuela.',
         heroSubheadline: 'Cargue su documentación personal en un flujo guiado, simple y validado para Venezuela.',
         heroButton: 'Continuar con persona natural',
-        documentsIntro: 'Cargue el RIF, la cédula y la referencia personal requeridos para completar el onboarding de persona natural.',
-        documentOrder: ['rif', 'documentoIdentidad', 'referenciaPersonal'],
+        documentsIntro: 'Cargue el RIF, la cédula y las referencias personal y bancaria requeridos para completar el onboarding de persona natural.',
+        documentOrder: ['rif', 'documentoIdentidad', 'referenciaPersonal', 'referenciaBancaria'],
         documents: {
           rif: { label: 'RIF' },
           documentoIdentidad: { label: 'Cédula de Identidad' },
-          referenciaPersonal: { label: 'Referencia personal' }
+          referenciaPersonal: { label: 'Referencia personal' },
+          referenciaBancaria: { label: 'Referencia bancaria' }
         }
       }
     }

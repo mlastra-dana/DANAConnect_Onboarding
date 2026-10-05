@@ -15,6 +15,7 @@ export const DOCUMENT_LABELS: Record<DocumentRecordType, string> = {
   licenciaConducirFrente: 'Licencia de conducir - frente',
   licenciaConducirReverso: 'Licencia de conducir - reverso',
   referenciaPersonal: 'Referencia personal',
+  referenciaComercial: 'Referencia comercial',
   referenciaBancaria: 'Referencia bancaria'
 };
 
@@ -32,6 +33,7 @@ const ALL_DOCUMENT_TYPES: DocumentType[] = [
   'licenciaConducirFrente',
   'licenciaConducirReverso',
   'referenciaPersonal',
+  'referenciaComercial',
   'referenciaBancaria'
 ];
 

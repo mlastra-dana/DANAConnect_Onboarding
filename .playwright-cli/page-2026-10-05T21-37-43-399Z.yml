@@ -1,0 +1,34 @@
+- generic [ref=f2e3]:
+  - banner [ref=f2e4]:
+    - generic [ref=f2e6]:
+      - link "Ir a inicio Mercantil Banco" [ref=f2e7] [cursor=pointer]:
+        - /url: /onboarding/demo-001
+        - img "Logo Mercantil Banco" [ref=f2e8]
+      - generic [ref=f2e9]: Demo
+  - main [ref=f2e11]:
+    - generic [ref=f2e12]:
+      - generic [ref=f2e14]:
+        - generic [ref=f2e15]: Venezuela
+        - heading "Mercantil" [level=1] [ref=f2e19]
+        - heading "Onboarding digital" [level=2] [ref=f2e20]
+        - paragraph [ref=f2e21]: Complete su solicitud con la documentación de su empresa o sus recaudos personales.
+        - generic [ref=f2e22]:
+          - button "Comenzar solicitud" [ref=f2e23] [cursor=pointer]
+          - generic [ref=f2e26]: Personas y empresas
+      - generic [ref=f2e29]:
+        - generic [ref=f2e30]:
+          - generic [ref=f2e31]: "01"
+          - heading "Documentación" [level=2] [ref=f2e36]
+          - paragraph [ref=f2e37]: Recaudos personales y empresariales.
+        - generic [ref=f2e38]:
+          - generic [ref=f2e39]: "02"
+          - heading "Verificación de identidad" [level=2] [ref=f2e47]
+          - paragraph [ref=f2e48]: Identificación y prueba de vida.
+        - generic [ref=f2e49]:
+          - generic [ref=f2e50]: "03"
+          - heading "Solicitud" [level=2] [ref=f2e56]
+          - paragraph [ref=f2e57]: Revisión y envío de su expediente.
+  - contentinfo [ref=f2e58]:
+    - generic [ref=f2e59]:
+      - paragraph [ref=f2e60]: Mercantil C.A., Banco Universal
+      - paragraph [ref=f2e61]: Venezuela · Demo de onboarding

@@ -20,7 +20,7 @@ export async function validateDocumentFile(
     expectedIdentity?: DocumentValidationResult['extractedIdentity'];
   }
 ): Promise<DocumentValidationResult> {
-  if (type === 'referenciaPersonal' || type === 'referenciaBancaria') {
+  if (type === 'referenciaPersonal' || type === 'referenciaComercial' || type === 'referenciaBancaria') {
     onProgress?.(10);
     const result = await validateReferenceFile(file);
     onProgress?.(100);
