@@ -32,10 +32,10 @@ export function AppLayout({
   }
 
   return (
-    <div className="min-h-screen bg-surface text-dark" style={{ ['--tenant-brand' as string]: tenant.brandColor ?? '#4B16B6' }}>
+    <div className="flex min-h-screen flex-col bg-surface text-dark" style={{ ['--tenant-brand' as string]: '#004E9B' }}>
       <DanaConnectHeader
-        tenantName={tenant.name}
-        logoUrl={tenant.logoUrl}
+        tenantName="Mercantil Banco"
+        logoUrl="/Mercantilbanco.svg"
         companyId={tenant.companyId}
         onHomeClick={handleHomeClick}
         onExit={handleExit}
@@ -43,10 +43,17 @@ export function AppLayout({
         language={language}
       />
 
-      <main className={`${currentStep === 1 ? '' : 'mx-auto w-full max-w-7xl px-4 py-8 md:px-6'}`}>
+      <main className={`flex-1 ${currentStep === 1 ? '' : 'mx-auto w-full max-w-7xl px-4 py-8 md:px-6'}`}>
         {currentStep > 1 ? <Stepper currentStep={currentStep} language={language} /> : null}
         {children}
       </main>
+
+      <footer className="border-t border-borderLight bg-white">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-5 py-5 text-xs text-grayText md:px-8">
+          <p>Mercantil C.A., Banco Universal</p>
+          <p>Venezuela <span aria-hidden="true"> · </span> Demo de onboarding</p>
+        </div>
+      </footer>
 
       {SHOW_WHATSAPP_WIDGET ? <WhatsAppWidget whatsAppNumber={tenant.whatsAppNumber} /> : null}
     </div>

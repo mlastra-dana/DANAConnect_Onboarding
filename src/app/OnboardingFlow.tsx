@@ -95,7 +95,7 @@ function OnboardingContent({
 }) {
   const { state, resetOnboardingState } = useOnboarding();
   const previousPathRef = useRef<string | null>(null);
-  const pageTitle = 'Onboarding | Example Company';
+  const pageTitle = 'Onboarding | Mercantil Banco';
   const isEnglish = state.country === 'usa';
 
   useEffect(() => {

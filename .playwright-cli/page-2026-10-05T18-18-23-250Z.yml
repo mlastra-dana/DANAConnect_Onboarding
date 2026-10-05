@@ -1,0 +1,76 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e6]:
+      - link "Ir a inicio Mercantil Banco" [ref=e7] [cursor=pointer]:
+        - /url: /onboarding/demo-001
+        - img "Logo Mercantil Banco" [ref=e8]
+      - generic [ref=e9]:
+        - generic [ref=e10]: Onboarding digital
+        - button "Salir del onboarding" [ref=e67] [cursor=pointer]:
+          - generic [ref=e71]: Salir
+  - main [ref=e16]:
+    - navigation "Pasos de onboarding" [ref=e72]:
+      - list [ref=e75]:
+        - listitem [ref=e76]:
+          - generic [ref=e81]: Bienvenida
+        - listitem [ref=e82]:
+          - generic [ref=e84]: Tipo de persona
+        - listitem [ref=e85]:
+          - generic [ref=e86]: "3"
+          - generic [ref=e87]: Documentos
+        - listitem [ref=e88]:
+          - generic [ref=e89]: "4"
+          - generic [ref=e90]: Prueba de vida
+        - listitem [ref=e91]:
+          - generic [ref=e92]: "5"
+          - generic [ref=e93]: Revisión y envío
+    - generic [ref=e125]:
+      - status [ref=e126]:
+        - generic [ref=e130]: Cargue los documentos requeridos para continuar.
+      - generic [ref=e131]:
+        - generic [ref=e132]:
+          - generic [ref=e133]: Pendiente
+          - heading "RIF" [level=3] [ref=e139]
+          - button "Subir RIF" [ref=e140] [cursor=pointer]:
+            - generic [ref=e141]:
+              - paragraph [ref=e145]: Arrastre su archivo o selecciónelo.
+              - generic [ref=e146]: Seleccionar archivo
+              - button "Seleccionar archivo" [ref=e147]
+              - paragraph [ref=e148]: PDF, JPG, PNG o WEBP. Máx. 10MB.
+        - generic [ref=e149]:
+          - generic [ref=e150]:
+            - heading "Registro Mercantil" [level=3] [ref=e151]
+            - paragraph [ref=e152]: Cargue el Registro Mercantil. Puede agregar una asamblea si complementa o actualiza la información de la empresa.
+          - button "Subir Registro Mercantil" [ref=e154]:
+            - generic [ref=e155]:
+              - paragraph [ref=e159]: Arrastre su archivo o selecciónelo.
+              - generic [ref=e160]: Seleccionar archivo
+              - button "Seleccionar archivo" [disabled] [ref=e161]
+              - paragraph [ref=e162]: Primero cargue y valide el RIF para comparar la razón social con el Registro Mercantil.
+          - button "Agregar acta de asamblea" [disabled] [ref=e164]
+        - generic [ref=e166]:
+          - generic [ref=e167]:
+            - heading "Representantes legales" [level=3] [ref=e168]
+            - paragraph [ref=e169]: Cargue la cédula del representante principal. Puede agregar un segundo representante si aplica.
+          - generic [ref=e170]:
+            - generic [ref=e171]:
+              - heading "Cédula del Representante (Obligatorio)" [level=3] [ref=e172]
+              - generic [ref=e173]: Pendiente
+            - button "Subir Cédula del Representante" [ref=e178]:
+              - generic [ref=e179]:
+                - paragraph [ref=e183]: Arrastre su archivo o selecciónelo.
+                - generic [ref=e184]: Seleccionar archivo
+                - button "Seleccionar archivo" [disabled] [ref=e185]
+                - paragraph [ref=e186]: Primero cargue y valide el Registro Mercantil.
+          - button "Agregar segundo representante" [ref=e188] [cursor=pointer]
+      - generic [ref=e190]:
+        - link [ref=e191] [cursor=pointer]:
+          - /url: /onboarding/demo-001/tipo-persona
+          - button "Volver" [ref=e192]
+        - link [ref=e193] [cursor=pointer]:
+          - /url: /onboarding/demo-001/biometria
+          - button "Continuar" [disabled] [ref=e194]
+  - contentinfo [ref=e63]:
+    - generic [ref=e64]:
+      - paragraph [ref=e65]: Mercantil C.A., Banco Universal
+      - paragraph [ref=e66]: Venezuela · Demo de onboarding

@@ -1,39 +1,38 @@
-import { ClipboardList, ShieldCheck, Sparkles } from 'lucide-react';
-import { Card } from '../ui/Card';
+import { ClipboardList, ScanFace, FileCheck2 } from 'lucide-react';
 
 const features = [
   {
-    title: 'CONTROL ESTRICTO',
-    description: 'No deja pasar documentos de baja calidad ni formatos incorrectos.',
-    icon: ShieldCheck
-  },
-  {
-    title: 'FLUJO GUIADO',
-    description: 'Cada paso muestra exactamente que corregir para completar el alta sin fricciones.',
+    title: 'Documentación',
+    description: 'Recaudos personales y empresariales.',
     icon: ClipboardList
   },
   {
-    title: 'PORTAL AUTOGESTIONADO',
-    description: 'Tu equipo valida todo desde navegador con persistencia por empresa.',
-    icon: Sparkles
+    title: 'Verificación de identidad',
+    description: 'Identificación y prueba de vida.',
+    icon: ScanFace
+  },
+  {
+    title: 'Solicitud',
+    description: 'Revisión y envío de su expediente.',
+    icon: FileCheck2
   }
 ];
 
 export function FeatureCards() {
   return (
-    <section className="bg-surface pb-12 pt-6 md:pb-16 md:pt-8">
+    <section className="bg-surface py-8 md:py-10">
       <div className="mx-auto w-full max-w-6xl px-5 md:px-8">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {features.map((feature) => {
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 md:gap-8">
+          {features.map((feature, index) => {
             const Icon = feature.icon;
             return (
-              <Card key={feature.title} className="min-h-[190px] rounded-3xl border-borderLight p-6 shadow-soft md:p-7">
-                <Icon className="h-6 w-6 text-primary md:h-7 md:w-7" />
-                <h2 className="mt-4 text-[1rem] font-semibold uppercase leading-tight tracking-[0.01em] text-dark md:text-[1.04rem]">
+              <div key={feature.title} className="border-t border-borderLight pt-5">
+                <div className="flex items-center justify-between"><Icon className="h-6 w-6 text-primary" /><span className="text-xs font-medium text-grayText">0{index + 1}</span></div>
+                <h2 className="mt-4 text-base font-semibold leading-tight text-dark">
                   {feature.title}
                 </h2>
                 <p className="mt-2 text-[0.92rem] leading-relaxed text-grayText md:text-[0.96rem]">{feature.description}</p>
-              </Card>
+              </div>
             );
           })}
         </div>

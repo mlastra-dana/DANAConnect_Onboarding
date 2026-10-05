@@ -4,32 +4,32 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: '#4B16B6',
-        primaryHover: '#3A118E',
-        dark: '#0F0F1F',
-        grayText: '#3B4255',
-        surface: '#F7F6FB',
-        borderLight: '#E5E0F7',
-        successSoft: '#F5F0FF',
+        primary: '#004E9B',
+        primaryHover: '#003D7A',
+        dark: '#1A3A53',
+        grayText: '#526572',
+        surface: '#F5F7F9',
+        borderLight: '#DCE4EA',
+        successSoft: '#EDF8F1',
         errorSoft: '#FEF3F2',
         pendingSoft: '#F4F6FA',
         brand: {
-          50: '#F5F0FF',
-          100: '#E7DCFF',
-          300: '#BEA6FF',
-          500: '#4B16B6',
-          600: '#3A118E',
-          700: '#2B0D6B',
-          900: '#0F0F1F'
+          50: '#EDF5FC',
+          100: '#DCECF8',
+          300: '#96B5D1',
+          500: '#004E9B',
+          600: '#003D7A',
+          700: '#00346B',
+          900: '#1A3A53'
         }
       },
       boxShadow: {
         soft: '0 1px 2px rgba(16, 24, 40, 0.04)',
         'soft-dark': '0 6px 16px rgba(16, 24, 40, 0.08)',
-        'soft-orange': '0 8px 20px rgba(75, 22, 182, 0.22)'
+        'soft-orange': '0 8px 20px rgba(0, 78, 155, 0.16)'
       },
       fontFamily: {
-        sans: ['Inter', 'Segoe UI', 'sans-serif']
+        sans: ['Roboto', 'Arial', 'sans-serif']
       },
       keyframes: {
         marquee: {

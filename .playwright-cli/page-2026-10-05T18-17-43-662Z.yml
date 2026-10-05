@@ -1,0 +1,46 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e6]:
+      - link "Ir a inicio Mercantil Banco" [ref=e7] [cursor=pointer]:
+        - /url: /onboarding/demo-001
+        - img "Logo Mercantil Banco" [ref=e8]
+      - generic [ref=e9]:
+        - generic [ref=e10]: Onboarding digital
+        - button "Salir del onboarding" [ref=e67] [cursor=pointer]:
+          - generic [ref=e71]: Salir
+  - main [ref=e16]:
+    - navigation "Pasos de onboarding" [ref=e72]:
+      - list [ref=e75]:
+        - listitem [ref=e76]:
+          - generic [ref=e81]: Bienvenida
+        - listitem [ref=e82]:
+          - generic [ref=e83]: "2"
+          - generic [ref=e84]: Tipo de persona
+        - listitem [ref=e85]:
+          - generic [ref=e86]: "3"
+          - generic [ref=e87]: Documentos
+        - listitem [ref=e88]:
+          - generic [ref=e89]: "4"
+          - generic [ref=e90]: Prueba de vida
+        - listitem [ref=e91]:
+          - generic [ref=e92]: "5"
+          - generic [ref=e93]: Revisión y envío
+    - generic [ref=e94]:
+      - generic [ref=e95]:
+        - generic [ref=e96]:
+          - paragraph [ref=e97]: Mercantil · Venezuela
+          - heading "Seleccione tipo de persona" [level=1] [ref=e98]
+        - generic [ref=e99]:
+          - button [ref=e100] [cursor=pointer]:
+            - paragraph [ref=e108]: Persona jurídica
+            - paragraph [ref=e109]: Onboarding para empresas o sociedades con representantes legales.
+          - button [ref=e110] [cursor=pointer]:
+            - paragraph [ref=e117]: Persona natural
+            - paragraph [ref=e118]: Onboarding individual para personas naturales.
+      - link [ref=e120] [cursor=pointer]:
+        - /url: /onboarding/demo-001
+        - button "Volver" [ref=e121]
+  - contentinfo [ref=e63]:
+    - generic [ref=e64]:
+      - paragraph [ref=e65]: Mercantil C.A., Banco Universal
+      - paragraph [ref=e66]: Venezuela · Demo de onboarding

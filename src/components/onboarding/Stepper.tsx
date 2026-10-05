@@ -33,7 +33,12 @@ export function Stepper({ currentStep, language = 'es' }: { currentStep: number;
         </ol>
       </div>
 
-      <ol className="grid grid-cols-1 gap-3 md:hidden">
+      <div className="md:hidden">
+        <div className="mb-3 flex items-center justify-between gap-3 text-sm">
+          <span className="font-semibold text-dark">{stepLabels[currentStep - 1]}</span>
+          <span className="shrink-0 text-grayText">{currentStep} / {stepLabels.length}</span>
+        </div>
+      <ol className="grid grid-cols-5 gap-2">
         {stepLabels.map((step, index) => {
           const stepNumber = index + 1;
           const active = currentStep === stepNumber;
@@ -42,24 +47,16 @@ export function Stepper({ currentStep, language = 'es' }: { currentStep: number;
           return (
             <li
               key={step}
-              className={`rounded-lg border p-3 text-sm ${
-                active ? 'border-primary bg-brand-50 text-dark' : 'border-borderLight bg-white text-grayText'
-              }`}
+              aria-current={active ? 'step' : undefined}
+              aria-label={`${stepNumber}. ${step}`}
+              className={`h-1 rounded-full ${active ? 'bg-[#F58220]' : done ? 'bg-primary' : 'bg-borderLight'}`}
             >
-              <div className="flex items-center gap-2">
-                <span
-                  className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                    done ? 'bg-primary text-white' : active ? 'bg-primary text-white' : 'bg-pendingSoft text-grayText'
-                  }`}
-                >
-                  {done ? <CheckCircle2 className="h-4 w-4" /> : stepNumber}
-                </span>
-                <span className="font-medium">{step}</span>
-              </div>
+              <span className="sr-only">{step}</span>
             </li>
           );
         })}
       </ol>
+      </div>
     </nav>
   );
 }

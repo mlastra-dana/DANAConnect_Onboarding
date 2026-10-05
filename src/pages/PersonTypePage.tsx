@@ -1,14 +1,14 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useOnboarding } from '../app/OnboardingContext';
-import { getCountryConfig, getFlowConfig } from '../config/onboardingCountries';
+import { getCountryConfig } from '../config/onboardingCountries';
 import { PersonType } from '../app/types';
 import { Button } from '../components/ui/Button';
+import { ArrowRight, Building2, UserRound } from 'lucide-react';
 
 export function PersonTypePage({ companyId }: { companyId: string }) {
   const navigate = useNavigate();
   const { state, setPersonType } = useOnboarding();
   const selectedCountry = getCountryConfig(state.country);
-  const selectedFlow = getFlowConfig(state.country, state.personType);
   const isEnglish = state.country === 'usa';
 
   function handlePersonTypeSelect(personType: PersonType) {
@@ -17,17 +17,11 @@ export function PersonTypePage({ companyId }: { companyId: string }) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 px-5 py-8 md:px-8 md:py-12">
-      <section className="hero-shell relative overflow-hidden rounded-3xl p-6 shadow-soft md:p-8">
-        <img
-          src="/brand/example_brand_kit_2/logos/svg/example_icon_white.svg"
-          alt=""
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-8 -top-10 h-40 w-auto opacity-20 md:h-52"
-        />
+    <div className="mx-auto w-full max-w-5xl space-y-6 py-6 md:py-8">
+      <section className="border-t border-borderLight bg-white p-5 md:p-8">
         <div className="mb-5">
-          <p className="text-sm font-medium text-white/75">{selectedCountry.name}</p>
-          <h1 className="mt-1 text-2xl font-bold text-white md:text-3xl">
+          <p className="text-sm font-medium text-grayText">Mercantil · {selectedCountry.name}</p>
+          <h1 className="mt-2 text-2xl font-bold text-dark md:text-3xl">
             {isEnglish ? 'Select person type' : 'Seleccione tipo de persona'}
           </h1>
         </div>
@@ -42,12 +36,13 @@ export function PersonTypePage({ companyId }: { companyId: string }) {
                   key={personType}
                   type="button"
                   onClick={() => handlePersonTypeSelect(personType)}
-                  className="group min-h-24 rounded-2xl border border-white/30 bg-white/10 p-5 text-left text-white transition-all duration-200 hover:border-white hover:bg-white hover:text-dark hover:shadow-soft focus-visible:border-white focus-visible:bg-white focus-visible:text-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
+                  className="group min-h-44 rounded-lg border border-borderLight bg-white p-5 text-left text-dark transition-colors duration-200 hover:border-primary hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 >
-                  <p className="text-base font-semibold uppercase tracking-[0.08em] transition-colors duration-200 group-hover:text-primary group-focus-visible:text-primary">
+                  <div className="mb-5 flex items-center justify-between text-primary">{personType === 'juridica' ? <Building2 className="h-7 w-7" /> : <UserRound className="h-7 w-7" />}<ArrowRight className="h-5 w-5" /></div>
+                  <p className="text-lg font-semibold text-primary">
                     {flow.personTypeLabel}
                   </p>
-                  <p className="mt-2 text-sm leading-relaxed text-white/75 transition-colors duration-200 group-hover:text-grayText group-focus-visible:text-grayText">
+                  <p className="mt-2 text-sm leading-relaxed text-grayText">
                     {flow.personTypeDescription}
                   </p>
                 </button>
