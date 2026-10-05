@@ -146,7 +146,9 @@ const FILE_HINTS: Record<DocumentType, RegExp[]> = {
   comprobanteDomicilio: [/domicilio/i, /comprobante/i, /servicio/i, /recibo/i],
   actaDesignacionAutoridades: [/designacion/i, /autoridades/i, /acta/i, /asamblea/i, /directorio/i],
   licenciaConducirFrente: [/driver/i, /license/i, /licencia/i, /front/i, /frente/i],
-  licenciaConducirReverso: [/driver/i, /license/i, /licencia/i, /back/i, /reverse/i, /reverso/i, /barcode/i]
+  licenciaConducirReverso: [/driver/i, /license/i, /licencia/i, /back/i, /reverse/i, /reverso/i, /barcode/i],
+  referenciaPersonal: [/referencia/i, /personal/i],
+  referenciaBancaria: [/referencia/i, /bancaria/i]
 };
 
 export async function validateDocumentForSlot(

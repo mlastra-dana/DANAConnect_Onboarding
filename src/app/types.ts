@@ -14,7 +14,9 @@ export type DocumentType =
   | 'comprobanteDomicilio'
   | 'actaDesignacionAutoridades'
   | 'licenciaConducirFrente'
-  | 'licenciaConducirReverso';
+  | 'licenciaConducirReverso'
+  | 'referenciaPersonal'
+  | 'referenciaBancaria';
 export type DocumentRecordType = DocumentType;
 export type ValidationStatus = 'pending' | 'validating' | 'valid' | 'error' | 'warning' | 'review';
 export type ValidityStatus = 'ok' | 'warning' | 'unknown';

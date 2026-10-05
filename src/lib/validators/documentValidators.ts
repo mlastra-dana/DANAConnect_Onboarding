@@ -1,5 +1,6 @@
 import { CountryCode, DocumentType, DocumentValidationResult, PersonType } from '../../app/types';
 import { validateBasicFile } from './fileValidators';
+import { validateReferenceFile } from './referenceValidators';
 
 const DOCUMENT_VALIDATION_URL =
   import.meta.env.VITE_DOCUMENT_VALIDATION_URL?.trim() ||
@@ -19,6 +20,12 @@ export async function validateDocumentFile(
     expectedIdentity?: DocumentValidationResult['extractedIdentity'];
   }
 ): Promise<DocumentValidationResult> {
+  if (type === 'referenciaPersonal' || type === 'referenciaBancaria') {
+    onProgress?.(10);
+    const result = await validateReferenceFile(file);
+    onProgress?.(100);
+    return result;
+  }
   const checks: DocumentValidationResult['checks'] = [];
 
   onProgress?.(10);

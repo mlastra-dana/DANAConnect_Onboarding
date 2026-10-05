@@ -31,6 +31,8 @@ const initialBoolMap: Record<UploadKey, boolean> = {
   actaDesignacionAutoridades: false,
   licenciaConducirFrente: false,
   licenciaConducirReverso: false,
+  referenciaPersonal: false,
+  referenciaBancaria: false,
   rep1: false,
   rep2: false
 };
@@ -48,6 +50,8 @@ const initialNumMap: Record<UploadKey, number> = {
   actaDesignacionAutoridades: 0,
   licenciaConducirFrente: 0,
   licenciaConducirReverso: 0,
+  referenciaPersonal: 0,
+  referenciaBancaria: 0,
   rep1: 0,
   rep2: 0
 };
@@ -122,10 +126,11 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       if (previousPreview) URL.revokeObjectURL(previousPreview);
 
       previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
-      fileBase64 = shouldUseS3ValidationUpload(file) ? '' : await fileToBase64(file);
+      const isReference = docType === 'referenciaPersonal' || docType === 'referenciaBancaria';
+      fileBase64 = isReference || shouldUseS3ValidationUpload(file) ? '' : await fileToBase64(file);
       setRuntimeFiles((prev) => ({ ...prev, [key]: file }));
 
-      const result = await validateDocumentFile(
+      let result = await validateDocumentFile(
         docType,
         file,
         state.country,
@@ -135,6 +140,17 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         },
         getBaseValidationOptions(docType)
       );
+
+      if (isReference && result.status !== 'error') {
+        fileBase64 = await fileToBase64(file);
+        const otherDocuments = [
+          ...Object.entries(state.documents).filter(([type]) => type !== docType).map(([, record]) => record),
+          ...state.representatives.filter((representative) => representative.enabled).map((representative) => representative.document)
+        ];
+        if (otherDocuments.some((record) => record.fileBase64 && record.fileBase64 === fileBase64)) {
+          result = buildValidationErrorResult('Este archivo ya se cargó en otro recaudo. Seleccione el documento de referencia correspondiente.');
+        }
+      }
 
       const nextDocument: DocumentRecord = {
         type: docType,
@@ -400,7 +416,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     <div className="space-y-6">
       <Toast type="info" message={flowConfig.documentsIntro} />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className={`grid grid-cols-1 gap-4 ${isVenezuelaJuridica ? 'lg:grid-cols-2 xl:grid-cols-4' : 'lg:grid-cols-3'}`}>
         {documentOrder.map((docType) => {
           const constitutionUploadLocked = isVenezuelaJuridica && docType === 'registroMercantil' && !canUploadConstitution;
           const naturalIdentityUploadLocked = isVenezuelaNatural && docType === 'documentoIdentidad' && !canUploadNaturalIdentity;
@@ -435,7 +451,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
                 {!assemblyEnabled ? (
                   <div className="border-t border-borderLight pt-4">
-                    <Button type="button" variant="secondary" fullWidth onClick={handleAddAssembly} disabled={!canUploadAssembly}>
+                    <Button type="button" variant="secondary" fullWidth className="gap-2" onClick={handleAddAssembly} disabled={!canUploadAssembly}>
                       <Plus className="h-4 w-4" />
                       Agregar acta de asamblea
                     </Button>
@@ -526,7 +542,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
             {!representative2.enabled ? (
               <div className="border-t border-borderLight pt-4">
-                <Button type="button" variant="secondary" fullWidth onClick={handleAddRepresentative2}>
+                <Button type="button" variant="secondary" fullWidth className="gap-2" onClick={handleAddRepresentative2}>
                   <Plus className="h-4 w-4" />
                   {flowConfig.addSecondRepresentativeLabel}
                 </Button>

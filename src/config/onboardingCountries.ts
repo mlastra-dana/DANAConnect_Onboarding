@@ -48,11 +48,12 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         heroSubheadline: 'Centralice los adjuntos requeridos en un flujo simple, seguro y validado para su empresa en Venezuela.',
         heroButton: 'Continuar con persona jurídica',
         documentsIntro: 'Cargue los documentos requeridos para continuar.',
-        documentOrder: ['rif', 'registroMercantil'],
+        documentOrder: ['rif', 'registroMercantil', 'referenciaBancaria'],
         optionalDocumentOrder: ['actaDesignacionAutoridades'],
         documents: {
           rif: { label: 'RIF' },
           registroMercantil: { label: 'Registro Mercantil' },
+          referenciaBancaria: { label: 'Referencia bancaria' },
           actaDesignacionAutoridades: { label: 'Acta de Asamblea (Opcional)' },
           cedulaRepresentante: { label: 'Cédula del Representante' }
         },
@@ -72,11 +73,12 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         heroHeadline: 'Portal de onboarding para personas naturales en Venezuela.',
         heroSubheadline: 'Cargue su documentación personal en un flujo guiado, simple y validado para Venezuela.',
         heroButton: 'Continuar con persona natural',
-        documentsIntro: 'Cargue el RIF y la cédula requeridos para completar el onboarding de persona natural.',
-        documentOrder: ['rif', 'documentoIdentidad'],
+        documentsIntro: 'Cargue el RIF, la cédula y la referencia personal requeridos para completar el onboarding de persona natural.',
+        documentOrder: ['rif', 'documentoIdentidad', 'referenciaPersonal'],
         documents: {
           rif: { label: 'RIF' },
-          documentoIdentidad: { label: 'Cédula de Identidad' }
+          documentoIdentidad: { label: 'Cédula de Identidad' },
+          referenciaPersonal: { label: 'Referencia personal' }
         }
       }
     }

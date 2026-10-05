@@ -1,0 +1,43 @@
+- generic [ref=f3e3]:
+  - banner [ref=f3e4]:
+    - generic [ref=f3e6]:
+      - link "Ir a inicio Mercantil Banco" [ref=f3e7] [cursor=pointer]:
+        - /url: /onboarding/demo-001
+        - img "Logo Mercantil Banco" [ref=f3e8]
+      - button "Salir del onboarding" [ref=f3e10] [cursor=pointer]
+  - main [ref=f3e14]:
+    - navigation "Pasos de onboarding" [ref=f3e15]:
+      - generic [ref=f3e16]:
+        - generic [ref=f3e17]:
+          - generic [ref=f3e18]: Tipo de persona
+          - generic [ref=f3e19]: 2 / 5
+        - list [ref=f3e20]:
+          - listitem "1. Bienvenida" [ref=f3e21]:
+            - generic [ref=f3e22]: Bienvenida
+          - listitem "2. Tipo de persona" [ref=f3e23]:
+            - generic [ref=f3e24]: Tipo de persona
+          - listitem "3. Documentos" [ref=f3e25]:
+            - generic [ref=f3e26]: Documentos
+          - listitem "4. Prueba de vida" [ref=f3e27]:
+            - generic [ref=f3e28]: Prueba de vida
+          - listitem "5. Revisión y envío" [ref=f3e29]:
+            - generic [ref=f3e30]: Revisión y envío
+    - generic [ref=f3e31]:
+      - generic [ref=f3e32]:
+        - generic [ref=f3e33]:
+          - paragraph [ref=f3e34]: Mercantil · Venezuela
+          - heading "Seleccione tipo de persona" [level=1] [ref=f3e35]
+        - generic [ref=f3e36]:
+          - button [ref=f3e37] [cursor=pointer]:
+            - paragraph [ref=f3e45]: Persona jurídica
+            - paragraph [ref=f3e46]: Onboarding para empresas o sociedades con representantes legales.
+          - button [ref=f3e47] [cursor=pointer]:
+            - paragraph [ref=f3e54]: Persona natural
+            - paragraph [ref=f3e55]: Onboarding individual para personas naturales.
+      - link [ref=f3e57] [cursor=pointer]:
+        - /url: /onboarding/demo-001
+        - button "Volver" [ref=f3e58]
+  - contentinfo [ref=f3e59]:
+    - generic [ref=f3e60]:
+      - paragraph [ref=f3e61]: Mercantil C.A., Banco Universal
+      - paragraph [ref=f3e62]: Venezuela · Demo de onboarding

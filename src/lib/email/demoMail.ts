@@ -46,7 +46,9 @@ const DANA_DOCUMENT_FIELD_BY_TYPE: Partial<Record<DocumentType, string>> = {
   documentoRepresentante: 'DOCUMENTO_REPRESENTANTE',
   documentoIdentidad: 'DOCUMENTO_IDENTIDAD',
   licenciaConducirFrente: 'LICENCIA_FRONT',
-  licenciaConducirReverso: 'LICENCIA_BACK'
+  licenciaConducirReverso: 'LICENCIA_BACK',
+  referenciaPersonal: 'REFERENCIA_PERSONAL',
+  referenciaBancaria: 'REFERENCIA_BANCARIA'
 };
 
 function resolveDanaDocumentField(_state: OnboardingState, documentType: DocumentType) {
@@ -332,6 +334,11 @@ function buildConversationData({
 
   const fiscalDocument = state.documents.rif.fileName ? state.documents.rif : state.documents.documentoFiscal;
   addConversationField(data, 'DOCUMENTO_FISCAL', fiscalDocument.fileName);
+
+  if (state.country === 've') {
+    const referenceType = state.personType === 'natural' ? 'referenciaPersonal' : 'referenciaBancaria';
+    addConversationField(data, DANA_DOCUMENT_FIELD_BY_TYPE[referenceType]!, state.documents[referenceType].fileName);
+  }
 
   if (state.personType === 'natural') {
     addConversationField(data, 'NOMBRES', state.personalInfo.firstName);

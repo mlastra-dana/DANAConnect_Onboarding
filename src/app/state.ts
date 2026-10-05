@@ -13,7 +13,9 @@ export const DOCUMENT_LABELS: Record<DocumentRecordType, string> = {
   comprobanteDomicilio: 'Comprobante de Domicilio',
   actaDesignacionAutoridades: 'Acta de designación de autoridades',
   licenciaConducirFrente: 'Licencia de conducir - frente',
-  licenciaConducirReverso: 'Licencia de conducir - reverso'
+  licenciaConducirReverso: 'Licencia de conducir - reverso',
+  referenciaPersonal: 'Referencia personal',
+  referenciaBancaria: 'Referencia bancaria'
 };
 
 const ALL_DOCUMENT_TYPES: DocumentType[] = [
@@ -28,7 +30,9 @@ const ALL_DOCUMENT_TYPES: DocumentType[] = [
   'comprobanteDomicilio',
   'actaDesignacionAutoridades',
   'licenciaConducirFrente',
-  'licenciaConducirReverso'
+  'licenciaConducirReverso',
+  'referenciaPersonal',
+  'referenciaBancaria'
 ];
 
 export function createEmptyDocument(type: DocumentRecordType) {
