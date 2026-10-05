@@ -416,7 +416,8 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     <div className="space-y-6">
       <Toast type="info" message={flowConfig.documentsIntro} />
 
-      <div className={`grid grid-cols-1 gap-4 ${isVenezuelaJuridica ? 'lg:grid-cols-2 xl:grid-cols-4' : 'lg:grid-cols-3'}`}>
+      <div className={state.personType === 'natural' ? 'grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_350px]' : ''}>
+      <div className={`grid min-w-0 grid-cols-1 gap-4 ${state.personType === 'natural' ? 'md:grid-cols-2' : isVenezuelaJuridica ? 'lg:grid-cols-2 xl:grid-cols-4' : 'lg:grid-cols-3'}`}>
         {documentOrder.map((docType) => {
           const constitutionUploadLocked = isVenezuelaJuridica && docType === 'registroMercantil' && !canUploadConstitution;
           const naturalIdentityUploadLocked = isVenezuelaNatural && docType === 'documentoIdentidad' && !canUploadNaturalIdentity;
@@ -585,9 +586,10 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       </div>
 
       {state.personType === 'natural' ? (
+        <aside className="min-w-0 lg:sticky lg:top-28" aria-label={isEnglish ? 'Identity details' : 'Datos de identidad'}>
         <Card>
           <h3 className="text-lg font-semibold text-dark">Datos de identidad</h3>
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <div className="mt-4 grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
             <label className="space-y-2">
               <span className="text-sm font-medium text-dark">{firstNameLabel}</span>
               <input
@@ -635,7 +637,9 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
             </label>
           </div>
         </Card>
+        </aside>
       ) : null}
+      </div>
 
       <div className="flex flex-wrap justify-between gap-3">
         <Link to={`/onboarding/${companyId}/tipo-persona`}>

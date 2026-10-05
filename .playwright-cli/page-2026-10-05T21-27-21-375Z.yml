@@ -1,0 +1,82 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e6]:
+      - link "Ir a inicio Mercantil Banco" [ref=e7] [cursor=pointer]:
+        - /url: /onboarding/demo-001
+        - img "Logo Mercantil Banco" [ref=e8]
+      - generic [ref=e9]:
+        - generic [ref=e10]: Onboarding digital
+        - button "Salir del onboarding" [ref=e15] [cursor=pointer]:
+          - generic [ref=e19]: Salir
+  - main [ref=e20]:
+    - navigation "Pasos de onboarding" [ref=e21]:
+      - list [ref=e24]:
+        - listitem [ref=e25]:
+          - generic [ref=e30]: Bienvenida
+        - listitem [ref=e31]:
+          - generic [ref=e33]: Tipo de persona
+        - listitem [ref=e34]:
+          - generic [ref=e35]: "3"
+          - generic [ref=e36]: Documentos
+        - listitem [ref=e37]:
+          - generic [ref=e38]: "4"
+          - generic [ref=e39]: Prueba de vida
+        - listitem [ref=e40]:
+          - generic [ref=e41]: "5"
+          - generic [ref=e42]: Revisión y envío
+    - generic [ref=e78]:
+      - status [ref=e79]:
+        - generic [ref=e83]: Cargue el RIF, la cédula y la referencia personal requeridos para completar el onboarding de persona natural.
+      - generic [ref=e84]:
+        - generic [ref=e85]:
+          - generic [ref=e86]:
+            - generic [ref=e87]: Pendiente
+            - heading "RIF" [level=3] [ref=e93]
+            - button "Subir RIF" [ref=e94] [cursor=pointer]:
+              - generic [ref=e95]:
+                - paragraph [ref=e99]: Arrastre su archivo o selecciónelo.
+                - generic [ref=e100]: Seleccionar archivo
+                - button "Seleccionar archivo" [ref=e101]
+                - paragraph [ref=e102]: PDF, JPG, PNG o WEBP. Máx. 10MB.
+          - generic [ref=e103]:
+            - generic [ref=e104]: Pendiente
+            - heading "Cédula de Identidad" [level=3] [ref=e110]
+            - button "Subir Cédula de Identidad" [ref=e111]:
+              - generic [ref=e112]:
+                - paragraph [ref=e116]: Arrastre su archivo o selecciónelo.
+                - generic [ref=e117]: Seleccionar archivo
+                - button "Seleccionar archivo" [disabled] [ref=e118]
+                - paragraph [ref=e119]: Primero cargue y valide el RIF de persona natural.
+          - generic [ref=e120]:
+            - generic [ref=e121]: Pendiente
+            - heading "Referencia personal" [level=3] [ref=e127]
+            - button "Subir Referencia personal" [ref=e128] [cursor=pointer]:
+              - generic [ref=e129]:
+                - paragraph [ref=e133]: Arrastre su archivo o selecciónelo.
+                - generic [ref=e134]: Seleccionar archivo
+                - button "Seleccionar archivo" [ref=e135]
+                - paragraph [ref=e136]: PDF, JPG, PNG o WEBP. Máx. 10MB.
+        - complementary "Datos de identidad" [ref=e137]:
+          - generic [ref=e138]:
+            - heading "Datos de identidad" [level=3] [ref=e139]
+            - generic [ref=e140]:
+              - generic [ref=e141]:
+                - text: Nombres
+                - textbox "Nombres" [ref=e142]
+              - generic [ref=e143]:
+                - text: Apellidos
+                - textbox "Apellidos" [ref=e144]
+              - generic [ref=e145]:
+                - text: Número de identificación
+                - textbox "Número de identificación" [ref=e146]
+      - generic [ref=e147]:
+        - link [ref=e148] [cursor=pointer]:
+          - /url: /onboarding/demo-001/tipo-persona
+          - button "Volver" [ref=e149]
+        - link [ref=e150] [cursor=pointer]:
+          - /url: /onboarding/demo-001/biometria
+          - button "Continuar" [disabled] [ref=e151]
+  - contentinfo [ref=e71]:
+    - generic [ref=e72]:
+      - paragraph [ref=e73]: Mercantil C.A., Banco Universal
+      - paragraph [ref=e74]: Venezuela · Demo de onboarding
