@@ -77,7 +77,12 @@ export function createEmptyPersonalInfo() {
   return {
     firstName: '',
     lastName: '',
-    documentNumber: ''
+    documentNumber: '',
+    birthDate: '',
+    nationality: '',
+    bankInstitution: '',
+    bankProduct: '',
+    bankBalanceFigures: ''
   };
 }
 

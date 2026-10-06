@@ -1,6 +1,5 @@
 import { CountryCode, DocumentType, DocumentValidationResult, PersonType } from '../../app/types';
 import { validateBasicFile } from './fileValidators';
-import { validateReferenceFile } from './referenceValidators';
 
 const DOCUMENT_VALIDATION_URL =
   import.meta.env.VITE_DOCUMENT_VALIDATION_URL?.trim() ||
@@ -20,12 +19,6 @@ export async function validateDocumentFile(
     expectedIdentity?: DocumentValidationResult['extractedIdentity'];
   }
 ): Promise<DocumentValidationResult> {
-  if (type === 'referenciaPersonal' || type === 'referenciaComercial' || type === 'referenciaBancaria') {
-    onProgress?.(10);
-    const result = await validateReferenceFile(file, type);
-    onProgress?.(100);
-    return result;
-  }
   const checks: DocumentValidationResult['checks'] = [];
 
   onProgress?.(10);
@@ -122,7 +115,8 @@ export async function validateDocumentFile(
       wasClientTimeout || looksLikeServiceTimeout
         ? 'El servicio de validación tardó demasiado en responder. Intente nuevamente; si persiste, revise el timeout de la Lambda.'
         : 'No se pudo conectar con el servicio de validación. Revise su conexión e intente nuevamente.',
-      [wasClientTimeout ? 'lambda_client_timeout' : looksLikeServiceTimeout ? 'lambda_service_timeout' : 'lambda_network_error']
+      [wasClientTimeout ? 'lambda_client_timeout' : looksLikeServiceTimeout ? 'lambda_service_timeout' : 'lambda_network_error'],
+      'service'
     );
   } finally {
     window.clearTimeout(timeoutId);
@@ -138,7 +132,12 @@ export async function validateDocumentFile(
   if (!lambdaResponse.ok) {
     onProgress?.(100);
     const errorMessage = extractLambdaError(responseBody) ?? 'No se pudo validar el documento.';
-    return buildValidationErrorResult(errorMessage, ['lambda_http_error']);
+    return buildValidationErrorResult(errorMessage, ['lambda_http_error'], lambdaResponse.status >= 500 ? 'service' : 'document');
+  }
+
+  if (!isRecord(responseBody) || !['valid', 'warning', 'error'].includes(responseBody.status)) {
+    onProgress?.(100);
+    return buildValidationErrorResult('El servicio de validación devolvió una respuesta inesperada. Intente nuevamente.', ['lambda_invalid_response'], 'service');
   }
 
   const result = mapLambdaResponseToValidationResult(responseBody, file.size);
@@ -148,6 +147,7 @@ export async function validateDocumentFile(
     status: result.status,
     typeStatus: result.typeStatus,
     validityStatus: result.validityStatus,
+    validationScope: result.validationScope,
     checks,
     reasons: result.reasons,
     warnings: result.warnings,
@@ -158,6 +158,7 @@ export async function validateDocumentFile(
     extractedIdentity: result.extractedIdentity,
     extractedLegalRepresentatives: result.extractedLegalRepresentatives,
     extractedCompany: result.extractedCompany,
+    extractedBankReference: result.extractedBankReference,
     companyDocumentMatch: result.companyDocumentMatch,
     matchedCompanyEvidence: result.matchedCompanyEvidence,
     legalRepresentativeMatch: result.legalRepresentativeMatch,
@@ -171,10 +172,12 @@ export async function validateDocumentFile(
 
 export function buildValidationErrorResult(
   message: string,
-  internalDiagnostics: string[] = []
+  internalDiagnostics: string[] = [],
+  failureKind: 'document' | 'service' = 'document'
 ): DocumentValidationResult {
   return {
     status: 'error',
+    failureKind,
     typeStatus: 'error',
     validityStatus: 'unknown',
     checks: [],
@@ -182,7 +185,7 @@ export function buildValidationErrorResult(
     warnings: [],
     uiStatus: {
       state: 'error',
-      title: 'Con errores',
+      title: failureKind === 'service' ? 'Validación no disponible' : 'Con errores',
       message
     },
     extracted: {
@@ -326,16 +329,18 @@ function mapLambdaResponseToValidationResult(body: unknown, fileSize: number) {
   const diagnostics = isRecord(payload.providerDiagnostics) ? payload.providerDiagnostics : {};
   const extractedIdentityPayload = isRecord(payload.extractedIdentity) ? payload.extractedIdentity : {};
   const extractedCompanyPayload = isRecord(payload.extractedCompany) ? payload.extractedCompany : {};
+  const bankReferencePayload = isRecord(payload.extractedBankReference) ? payload.extractedBankReference : {};
   const extractedLegalRepresentativesPayload = Array.isArray(payload.extractedLegalRepresentatives)
     ? payload.extractedLegalRepresentatives
     : [];
-  const typeStatus: 'valid' | 'error' | 'review' = status === 'error' ? 'error' : status === 'warning' ? 'review' : 'valid';
+  const typeStatus: 'valid' | 'error' | 'review' = status === 'error' ? 'error' : status === 'warning' || payload.validationScope === 'file_format' ? 'review' : 'valid';
   const uiState: 'ok' | 'error' = uiStatus.state === 'error' ? 'error' : 'ok';
 
   return {
     status,
     typeStatus,
     validityStatus: normalizeValidityStatus(payload.validityStatus),
+    validationScope: payload.validationScope === 'file_format' ? 'file_format' as const : 'document' as const,
     reasons: reasons.length > 0 ? reasons : status === 'error' ? [summary] : [],
     warnings,
     uiStatus: {
@@ -352,7 +357,7 @@ function mapLambdaResponseToValidationResult(body: unknown, fileSize: number) {
         typeof uiStatus.message === 'string' && uiStatus.message.trim() ? uiStatus.message.trim() : summary
     },
     extracted: {
-      hasText: true,
+      hasText: payload.validationScope !== 'file_format',
       usedOcr: false,
       confidence: typeof payload.confidence === 'number' ? payload.confidence : undefined,
       keywordsFound: toStringList(analysis.keywordsFound),
@@ -366,6 +371,8 @@ function mapLambdaResponseToValidationResult(body: unknown, fileSize: number) {
       lastName: typeof extractedIdentityPayload.lastName === 'string' ? extractedIdentityPayload.lastName.trim() : '',
       documentNumber:
         typeof extractedIdentityPayload.documentNumber === 'string' ? extractedIdentityPayload.documentNumber.trim() : '',
+      birthDate: typeof extractedIdentityPayload.birthDate === 'string' ? extractedIdentityPayload.birthDate.trim() : '',
+      nationality: typeof extractedIdentityPayload.nationality === 'string' ? extractedIdentityPayload.nationality.trim() : '',
       rawText: typeof extractedIdentityPayload.rawText === 'string' ? extractedIdentityPayload.rawText : ''
     },
     extractedLegalRepresentatives: extractedLegalRepresentativesPayload
@@ -381,6 +388,11 @@ function mapLambdaResponseToValidationResult(body: unknown, fileSize: number) {
       name: typeof extractedCompanyPayload.name === 'string' ? extractedCompanyPayload.name.trim() : '',
       rif: typeof extractedCompanyPayload.rif === 'string' ? extractedCompanyPayload.rif.trim() : '',
       rawText: typeof extractedCompanyPayload.rawText === 'string' ? extractedCompanyPayload.rawText.trim() : ''
+    },
+    extractedBankReference: {
+      institution: typeof bankReferencePayload.institution === 'string' ? bankReferencePayload.institution.trim() : '',
+      product: typeof bankReferencePayload.product === 'string' ? bankReferencePayload.product.trim() : '',
+      balanceFigures: typeof bankReferencePayload.balanceFigures === 'string' ? bankReferencePayload.balanceFigures.trim() : ''
     },
     companyDocumentMatch: typeof payload.companyDocumentMatch === 'boolean' ? payload.companyDocumentMatch : null,
     matchedCompanyEvidence:

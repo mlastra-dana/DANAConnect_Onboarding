@@ -129,7 +129,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
       previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
       const isReference = docType === 'referenciaPersonal' || docType === 'referenciaComercial' || docType === 'referenciaBancaria';
-      fileBase64 = isReference || shouldUseS3ValidationUpload(file) ? '' : await fileToBase64(file);
+      fileBase64 = shouldUseS3ValidationUpload(file) ? '' : await fileToBase64(file);
       setRuntimeFiles((prev) => ({ ...prev, [key]: file }));
 
       let result = await validateDocumentFile(
@@ -144,7 +144,6 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       );
 
       if (isReference && result.status !== 'error') {
-        fileBase64 = await fileToBase64(file);
         const otherDocuments = [
           ...Object.entries(state.documents).filter(([type]) => type !== docType).map(([, record]) => record),
           ...state.representatives.filter((representative) => representative.enabled).map((representative) => representative.document)
@@ -191,11 +190,27 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         setPersonalInfo({
           firstName: result.extractedIdentity.firstName ?? '',
           lastName: result.extractedIdentity.lastName ?? '',
-          documentNumber: result.extractedIdentity.documentNumber ?? ''
+          documentNumber: result.extractedIdentity.documentNumber ?? '',
+          birthDate: isVenezuelaNatural ? docType === 'documentoIdentidad' && result.status !== 'error' ? result.extractedIdentity.birthDate ?? '' : '' : state.personalInfo.birthDate,
+          nationality: isVenezuelaNatural ? docType === 'documentoIdentidad' && result.status !== 'error' ? result.extractedIdentity.nationality ?? '' : '' : state.personalInfo.nationality
+        });
+      }
+      if (isVenezuelaNatural && docType === 'referenciaBancaria') {
+        const bank = result.status !== 'error' ? result.extractedBankReference : undefined;
+        setPersonalInfo({
+          bankInstitution: bank?.institution ?? '',
+          bankProduct: bank?.product ?? '',
+          bankBalanceFigures: bank?.balanceFigures ?? ''
         });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No se pudo validar el documento. Intente nuevamente.';
+      if (isVenezuelaNatural && docType === 'referenciaBancaria') {
+        setPersonalInfo({ bankInstitution: '', bankProduct: '', bankBalanceFigures: '' });
+      }
+      if (isVenezuelaNatural && docType === 'documentoIdentidad') {
+        setPersonalInfo({ birthDate: '', nationality: '' });
+      }
       setDocument(docType, {
         type: docType,
         fileName: file.name,
@@ -298,6 +313,16 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
     setDocument(docType, createEmptyDocument(docType));
     clearUploaderRuntime(key);
+
+    if (isVenezuelaNatural && (docType === 'rif' || docType === 'documentoIdentidad')) {
+      setPersonalInfo({ birthDate: '', nationality: '' });
+    }
+    if (isVenezuelaNatural && docType === 'rif') {
+      clearVenezuelaNaturalIdentityDocument();
+    }
+    if (isVenezuelaNatural && docType === 'referenciaBancaria') {
+      setPersonalInfo({ bankInstitution: '', bankProduct: '', bankBalanceFigures: '' });
+    }
 
     if (isVenezuelaJuridica && docType === 'rif') {
       clearVenezuelaJuridicaDependentDocuments();
@@ -588,7 +613,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       </div>
 
       {state.personType === 'natural' ? (
-        <aside className="min-w-0 lg:sticky lg:top-28" aria-label={isEnglish ? 'Identity details' : 'Datos de identidad'}>
+        <aside className="min-w-0 space-y-4 lg:sticky lg:top-28 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto" aria-label={isEnglish ? 'Identity details' : 'Datos de identidad'}>
         <Card>
           <h3 className="text-lg font-semibold text-dark">Datos de identidad</h3>
           <div className="mt-4 grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
@@ -599,7 +624,6 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                 value={state.personalInfo.firstName}
                 onChange={(event) =>
                   setPersonalInfo({
-                    ...state.personalInfo,
                     firstName: event.target.value
                   })
                 }
@@ -614,7 +638,6 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                 value={state.personalInfo.lastName}
                 onChange={(event) =>
                   setPersonalInfo({
-                    ...state.personalInfo,
                     lastName: event.target.value
                   })
                 }
@@ -629,7 +652,6 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                 value={state.personalInfo.documentNumber}
                 onChange={(event) =>
                   setPersonalInfo({
-                    ...state.personalInfo,
                     documentNumber: event.target.value
                   })
                 }
@@ -638,7 +660,36 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
               />
             </label>
           </div>
+          {isVenezuelaNatural ? (
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-dark">Fecha de nacimiento</span>
+                <input type="date" value={state.personalInfo.birthDate} onChange={event => setPersonalInfo({ birthDate: event.target.value })} className="w-full min-w-0 rounded-lg border border-borderLight px-3 py-2.5 text-sm text-dark outline-none focus:border-primary" />
+              </label>
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-dark">Nacionalidad</span>
+                <input type="text" maxLength={100} value={state.personalInfo.nationality} onChange={event => setPersonalInfo({ nationality: event.target.value })} className="w-full rounded-lg border border-borderLight px-3 py-2.5 text-sm text-dark outline-none focus:border-primary" />
+              </label>
+            </div>
+          ) : null}
         </Card>
+        {isVenezuelaNatural ? (
+          <Card>
+            <h3 className="text-lg font-semibold text-dark">Datos bancarios</h3>
+            <div className="mt-4 grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
+              {([
+                ['bankInstitution', 'Institución bancaria'],
+                ['bankProduct', 'Producto bancario'],
+                ['bankBalanceFigures', 'Cifras del saldo']
+              ] as const).map(([field, label]) => (
+                <label key={field} className="space-y-2">
+                  <span className="text-sm font-medium text-dark">{label}</span>
+                  <input type="text" maxLength={200} value={state.personalInfo[field]} onChange={event => setPersonalInfo({ [field]: event.target.value })} className="w-full rounded-lg border border-borderLight px-3 py-2.5 text-sm text-dark outline-none focus:border-primary" />
+                </label>
+              ))}
+            </div>
+          </Card>
+        ) : null}
         </aside>
       ) : null}
       </div>

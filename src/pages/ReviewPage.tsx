@@ -190,6 +190,26 @@ export function ReviewPage({ companyId }: { companyId: string }) {
         </ul>
       </Card>
 
+      {state.country === 've' && state.personType === 'natural' ? (
+        <Card>
+          <h2 className="text-lg font-semibold text-dark">Datos del solicitante</h2>
+          <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              ['Fecha de nacimiento', state.personalInfo.birthDate],
+              ['Nacionalidad', state.personalInfo.nationality],
+              ['Institución bancaria', state.personalInfo.bankInstitution],
+              ['Producto bancario', state.personalInfo.bankProduct],
+              ['Cifras del saldo', state.personalInfo.bankBalanceFigures]
+            ].map(([label, value]) => (
+              <div key={label} className="min-w-0">
+                <dt className="text-sm text-grayText">{label}</dt>
+                <dd className="mt-1 break-words text-sm font-medium text-dark">{value || 'Sin dato'}</dd>
+              </div>
+            ))}
+          </dl>
+        </Card>
+      ) : null}
+
       <Card>
         <label className="block space-y-2">
           <span className="text-sm font-medium text-dark">{isEnglish ? 'Email address' : 'Correo electrónico'}</span>

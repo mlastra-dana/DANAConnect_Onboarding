@@ -7,6 +7,34 @@ Lambda desplegada: `Onboarding_validate_DanaConnect`.
 Archivo fuente principal: `lambda_function.py`.
 Handler configurado en AWS: `lambda_function.lambda_handler`.
 
+## Referencias y persona natural (Mercantil)
+
+- Slots nuevos para Venezuela: `referenciaPersonal`, `referenciaComercial`, `referenciaBancaria`.
+- Las referencias se comprueban solo por formato: MIME permitido, limite de tamano y firma binaria
+  PDF/JPEG/PNG/WEBP. No se certifican contenido, autenticidad, titularidad ni vigencia.
+- La respuesta identifica este alcance con `validationScope: "file_format"`,
+  `validityStatus: "unknown"` y `document_type_match: false`, aunque `status` sea `valid`.
+- Solo `person_type: "natural"` con `slot: "referenciaBancaria"` solicita a Bedrock
+  `extractedBankReference: {institution, product, balanceFigures}`. `institution` es el banco emisor,
+  no el destinatario. `balanceFigures` conserva expresiones como "cuatro cifras bajas";
+  no es el numero de cuenta ni un monto calculado. Datos ausentes o ilegibles quedan vacios.
+- Solo persona natural de Venezuela con `slot: "documentoIdentidad"` devuelve ademas
+  `extractedIdentity.birthDate` (YYYY-MM-DD) y `extractedIdentity.nationality`.
+  No se inventa nacionalidad: "E" solo permite "Extranjera", no un pais concreto.
+- Si falla la extraccion bancaria, el formato sigue aceptado con `status: "warning"` y los campos
+  quedan disponibles para completarse manualmente en el frontend.
+- El frontend ya envia las referencias a esta Lambda. Desplegar primero este `lambda_function.py`
+  en la funcion existente. No se agregaron dependencias ni se realizo despliegue desde el repositorio.
+- Configurar/verificar en DANAConnect los campos `REFERENCIA_PERSONAL`, `REFERENCIA_COMERCIAL`,
+  `REFERENCIA_BANCARIA`, `FECHA_NACIMIENTO`, `NACIONALIDAD`, `INSTITUCION_BANCARIA`,
+  `PRODUCTO_BANCARIO` y `CIFRAS_SALDO`, o sus equivalentes en `DANA_FIELD_MAP`/`DANA_FILE_FIELD_MAP`.
+
+Pruebas sin llamadas a AWS:
+
+```bash
+python3 -m unittest discover -s lambda/document_validation -p 'test_*.py'
+```
+
 ## Flujo
 
 1. Recibe un archivo en base64 por `POST`.

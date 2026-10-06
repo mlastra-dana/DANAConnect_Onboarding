@@ -95,6 +95,13 @@ export function buildDemoEmail(
     summaryLines.push(`- Nombres: ${state.personalInfo.firstName || 'No extraídos'}`);
     summaryLines.push(`- Apellidos: ${state.personalInfo.lastName || 'No extraídos'}`);
     summaryLines.push(`- Identificación: ${state.personalInfo.documentNumber || 'No extraída'}`);
+    if (state.country === 've') {
+      summaryLines.push(`- Fecha de nacimiento: ${state.personalInfo.birthDate || 'No extraída'}`);
+      summaryLines.push(`- Nacionalidad: ${state.personalInfo.nationality || 'No extraída'}`);
+      summaryLines.push(`- Institución bancaria: ${state.personalInfo.bankInstitution || 'No extraída'}`);
+      summaryLines.push(`- Producto bancario: ${state.personalInfo.bankProduct || 'No extraído'}`);
+      summaryLines.push(`- Cifras del saldo: ${state.personalInfo.bankBalanceFigures || 'No extraídas'}`);
+    }
   }
   summaryLines.push(`- Prueba de vida: ${biometricStatusLabel(state.biometrics.status)}`);
   summaryLines.push(`- Geolocalización: ${formatBiometricLocation(state)}`);
@@ -348,6 +355,13 @@ function buildConversationData({
     addConversationField(data, 'NOMBRES', state.personalInfo.firstName);
     addConversationField(data, 'APELLIDOS', state.personalInfo.lastName);
     addConversationField(data, 'NUMERO_IDENTIFICACION', state.personalInfo.documentNumber);
+    if (state.country === 've') {
+      addConversationField(data, 'FECHA_NACIMIENTO', state.personalInfo.birthDate);
+      addConversationField(data, 'NACIONALIDAD', state.personalInfo.nationality);
+      addConversationField(data, 'INSTITUCION_BANCARIA', state.personalInfo.bankInstitution);
+      addConversationField(data, 'PRODUCTO_BANCARIO', state.personalInfo.bankProduct);
+      addConversationField(data, 'CIFRAS_SALDO', state.personalInfo.bankBalanceFigures);
+    }
     addConversationField(data, 'DOCUMENTO_IDENTIDAD', state.documents.documentoIdentidad.fileName || state.documents.licenciaConducirFrente.fileName);
   } else {
     addConversationField(data, 'NOMBRE_EMPRESA', companyName);

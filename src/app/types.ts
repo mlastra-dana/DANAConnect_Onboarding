@@ -36,11 +36,19 @@ export type ExtractedCompany = {
   rawText?: string;
 };
 
+export type BankReferenceInfo = {
+  institution: string;
+  product: string;
+  balanceFigures: string;
+};
+
 export type DocumentValidationResult = {
   status: ValidationStatus;
+  failureKind?: 'document' | 'service';
   checks: DocumentCheck[];
   typeStatus?: 'valid' | 'error' | 'review';
   validityStatus?: ValidityStatus;
+  validationScope?: 'document' | 'file_format';
   reasons?: string[];
   warnings?: string[];
   uiStatus?: {
@@ -67,6 +75,8 @@ export type DocumentValidationResult = {
     firstName?: string;
     lastName?: string;
     documentNumber?: string;
+    birthDate?: string;
+    nationality?: string;
     rawText?: string;
   };
   extractedLegalRepresentatives?: Array<{
@@ -77,6 +87,7 @@ export type DocumentValidationResult = {
     rawText?: string;
   }>;
   extractedCompany?: ExtractedCompany;
+  extractedBankReference?: BankReferenceInfo;
   companyDocumentMatch?: boolean | null;
   matchedCompanyEvidence?: string;
   legalRepresentativeMatch?: boolean | null;
@@ -133,6 +144,11 @@ export type PersonalInfo = {
   firstName: string;
   lastName: string;
   documentNumber: string;
+  birthDate: string;
+  nationality: string;
+  bankInstitution: string;
+  bankProduct: string;
+  bankBalanceFigures: string;
 };
 
 export type OnboardingState = {

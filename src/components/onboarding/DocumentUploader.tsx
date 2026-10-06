@@ -1,5 +1,5 @@
 import { useId, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle, Loader2, UploadCloud, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Loader2, RotateCw, UploadCloud, XCircle } from 'lucide-react';
 import { DocumentRecord } from '../../app/types';
 import { StatusBadge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -54,8 +54,14 @@ export function DocumentUploader({
   const fileAccept = useMemo(() => '.pdf,.png,.jpg,.jpeg,.webp', []);
   const resolvedLabel = label ?? title ?? docRecord.type;
   const isReference = docRecord.type === 'referenciaPersonal' || docRecord.type === 'referenciaComercial' || docRecord.type === 'referenciaBancaria';
+  const isServiceFailure = docRecord.validation.status === 'error' && (
+    docRecord.validation.failureKind === 'service' ||
+    docRecord.validation.internalDiagnostics?.some(code => ['lambda_network_error', 'lambda_client_timeout', 'lambda_service_timeout', 'lambda_invalid_response'].includes(code))
+  );
   const feedbackStatus = loading
     ? 'pending'
+    : isServiceFailure
+      ? 'unavailable'
     : docRecord.validation.status === 'valid'
       ? 'valid'
       : docRecord.validation.status === 'warning'
@@ -227,7 +233,7 @@ export function DocumentUploader({
 
       {docRecord.fileName ? (
         <div className={`${embedded ? 'rounded-lg' : 'rounded-xl'} border p-3 ${fileContainerClass}`}>
-          <FileAttachmentChip fileName={docRecord.fileName} status={docRecord.validation.status} onRemove={handleRemoveClick} />
+          <FileAttachmentChip fileName={docRecord.fileName} status={isServiceFailure ? 'pending' : docRecord.validation.status} onRemove={handleRemoveClick} />
           {docRecord.fileType?.includes('pdf') ? (
             previewFile ? (
               <div className="mt-3">
@@ -251,6 +257,21 @@ export function DocumentUploader({
       ) : null}
 
       <div className="space-y-1 text-sm">
+        {feedbackStatus === 'unavailable' ? (
+          <div className="space-y-3">
+            <p className="flex items-center gap-2 font-medium text-amber-700">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {language === 'en' ? 'Validation unavailable' : 'Validación no disponible'}
+            </p>
+            <p className="text-grayText">{friendlyErrorMessage}</p>
+            {previewFile ? (
+              <Button type="button" variant="secondary" className="gap-2" disabled={loading || disabled} onClick={() => void onSelectFile(previewFile)}>
+                <RotateCw className="h-4 w-4" />
+                {language === 'en' ? 'Retry validation' : 'Reintentar validación'}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
         {feedbackStatus === 'valid' ? (
           <p className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700">
             <CheckCircle className="h-4 w-4" />

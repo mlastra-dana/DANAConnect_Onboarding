@@ -20,7 +20,7 @@ type Action =
   | { type: 'set_document'; payload: { docType: DocumentType; record: DocumentRecord } }
   | { type: 'set_representative'; payload: { id: 1 | 2; representative: RepresentativeRecord } }
   | { type: 'set_representative_enabled'; payload: { id: 2; enabled: boolean } }
-  | { type: 'set_personal_info'; payload: PersonalInfo }
+  | { type: 'set_personal_info'; payload: Partial<PersonalInfo> }
   | { type: 'set_biometric'; payload: BiometricValidationRecord }
   | { type: 'set_submission'; payload: SubmissionState }
   | { type: 'reset'; payload: OnboardingState };
@@ -32,7 +32,7 @@ type ContextValue = {
   setDocument: (docType: DocumentType, record: DocumentRecord) => void;
   setRepresentative: (id: 1 | 2, representative: RepresentativeRecord) => void;
   setRepresentativeEnabled: (id: 2, enabled: boolean) => void;
-  setPersonalInfo: (record: PersonalInfo) => void;
+  setPersonalInfo: (record: Partial<PersonalInfo>) => void;
   setBiometric: (record: BiometricValidationRecord) => void;
   setSubmission: (submission: SubmissionState) => void;
   resetOnboarding: () => void;
@@ -97,7 +97,7 @@ function reducer(state: OnboardingState, action: Action): OnboardingState {
     case 'set_personal_info':
       return {
         ...state,
-        personalInfo: action.payload
+        personalInfo: { ...state.personalInfo, ...action.payload }
       };
     case 'set_submission':
       return {
@@ -126,6 +126,7 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
       : {
           ...initial,
           ...restored,
+          personalInfo: { ...initial.personalInfo, ...restored.personalInfo },
           documents: {
             ...initial.documents,
             ...restored.documents
