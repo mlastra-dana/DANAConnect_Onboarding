@@ -112,7 +112,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     const key: UploadKey = docType;
     if (state.personType === 'natural' && state.documents[docType].fileName && runtimeFiles[key] !== file) {
       if (docType === 'rif' || docType === 'documentoFiscal' || docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente') {
-        setPersonalInfo({ firstName: '', lastName: '', documentNumber: '' });
+        restoreRemainingIdentity(docType);
       }
       if (isVenezuelaNatural && docType === 'documentoIdentidad') {
         setPersonalInfo({ birthDate: '', nationality: '' });
@@ -323,6 +323,20 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     }
   }
 
+  function restoreRemainingIdentity(excludedDocType: DocumentType) {
+    const source = isVenezuelaNatural && (excludedDocType === 'rif' || excludedDocType === 'documentoIdentidad')
+      ? state.documents[excludedDocType === 'documentoIdentidad' ? 'rif' : 'documentoIdentidad']
+      : undefined;
+    const identity = source?.fileName && (source.validation.status === 'valid' || source.validation.status === 'warning')
+      ? source.validation.extractedIdentity
+      : undefined;
+    setPersonalInfo({
+      firstName: identity?.firstName ?? '',
+      lastName: identity?.lastName ?? '',
+      documentNumber: identity?.documentNumber ?? ''
+    });
+  }
+
   function handleRemoveBase(docType: DocumentType) {
     const key: UploadKey = docType;
     const previous = state.documents[docType];
@@ -332,7 +346,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     clearUploaderRuntime(key);
 
     if (state.personType === 'natural' && (docType === 'rif' || docType === 'documentoFiscal' || docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente')) {
-      setPersonalInfo({ firstName: '', lastName: '', documentNumber: '' });
+      restoreRemainingIdentity(docType);
     }
 
     if (isVenezuelaNatural && docType === 'documentoIdentidad') {

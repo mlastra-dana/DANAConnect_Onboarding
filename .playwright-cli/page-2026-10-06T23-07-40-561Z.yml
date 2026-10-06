@@ -1,0 +1,46 @@
+- generic [ref=f4e3]:
+  - banner [ref=f4e4]:
+    - generic [ref=f4e6]:
+      - link "Ir a inicio Mercantil Banco" [ref=f4e7] [cursor=pointer]:
+        - /url: /onboarding/demo-001
+        - img "Logo Mercantil Banco" [ref=f4e8]
+      - generic [ref=f4e9]:
+        - generic [ref=f4e10]: Onboarding digital
+        - button "Salir del onboarding" [ref=f4e15] [cursor=pointer]:
+          - generic [ref=f4e19]: Salir
+  - main [ref=f4e20]:
+    - navigation "Pasos de onboarding" [ref=f4e21]:
+      - list [ref=f4e24]:
+        - listitem [ref=f4e25]:
+          - generic [ref=f4e30]: Bienvenida
+        - listitem [ref=f4e31]:
+          - generic [ref=f4e32]: "2"
+          - generic [ref=f4e33]: Tipo de persona
+        - listitem [ref=f4e34]:
+          - generic [ref=f4e35]: "3"
+          - generic [ref=f4e36]: Documentos
+        - listitem [ref=f4e37]:
+          - generic [ref=f4e38]: "4"
+          - generic [ref=f4e39]: Prueba de vida
+        - listitem [ref=f4e40]:
+          - generic [ref=f4e41]: "5"
+          - generic [ref=f4e42]: Revisión y envío
+    - generic [ref=f4e43]:
+      - generic [ref=f4e44]:
+        - generic [ref=f4e45]:
+          - paragraph [ref=f4e46]: Mercantil · Venezuela
+          - heading "Seleccione tipo de persona" [level=1] [ref=f4e47]
+        - generic [ref=f4e48]:
+          - button [ref=f4e49] [cursor=pointer]:
+            - paragraph [ref=f4e57]: Persona jurídica
+            - paragraph [ref=f4e58]: Onboarding para empresas o sociedades con representantes legales.
+          - button [ref=f4e59] [cursor=pointer]:
+            - paragraph [ref=f4e66]: Persona natural
+            - paragraph [ref=f4e67]: Onboarding individual para personas naturales.
+      - link [ref=f4e69] [cursor=pointer]:
+        - /url: /onboarding/demo-001
+        - button "Volver" [ref=f4e70]
+  - contentinfo [ref=f4e71]:
+    - generic [ref=f4e72]:
+      - paragraph [ref=f4e73]: Mercantil C.A., Banco Universal
+      - paragraph [ref=f4e74]: Venezuela · Demo de onboarding
