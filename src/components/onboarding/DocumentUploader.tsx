@@ -275,7 +275,7 @@ export function DocumentUploader({
         {feedbackStatus === 'valid' ? (
           <p className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700">
             <CheckCircle className="h-4 w-4" />
-            <span>{isReference && docRecord.validation.uiStatus?.message ? docRecord.validation.uiStatus.message : language === 'en' ? 'Document accepted.' : 'Documento aceptado.'}</span>
+            <span>{isReference ? language === 'en' ? 'File received.' : 'Archivo recibido.' : language === 'en' ? 'Document accepted.' : 'Documento aceptado.'}</span>
           </p>
         ) : null}
         {feedbackStatus === 'warning' ? (
