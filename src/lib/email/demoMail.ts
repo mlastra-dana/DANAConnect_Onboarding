@@ -52,7 +52,10 @@ const DANA_DOCUMENT_FIELD_BY_TYPE: Partial<Record<DocumentType, string>> = {
   referenciaBancaria: 'REFERENCIA_BANCARIA'
 };
 
-function resolveDanaDocumentField(_state: OnboardingState, documentType: DocumentType) {
+const FRONTEND_ONLY_NATURAL_DOCUMENTS = new Set<DocumentType>(['referenciaPersonal', 'referenciaComercial', 'referenciaBancaria']);
+
+function resolveDanaDocumentField(state: OnboardingState, documentType: DocumentType) {
+  if (state.personType === 'natural' && FRONTEND_ONLY_NATURAL_DOCUMENTS.has(documentType)) return undefined;
   return DANA_DOCUMENT_FIELD_BY_TYPE[documentType];
 }
 
@@ -70,7 +73,9 @@ export function buildDemoEmail(
 
   const companyName = state.tenant.name;
   const flow = getFlowConfig(state.country, state.personType);
-  const activeDocuments = getDocumentOrder(state.country, state.personType);
+  const activeDocuments = getDocumentOrder(state.country, state.personType).filter(
+    type => state.personType !== 'natural' || !FRONTEND_ONLY_NATURAL_DOCUMENTS.has(type)
+  );
   const optionalDocuments = getOptionalDocumentOrder(state.country, state.personType).filter(
     (docType) => Boolean(state.documents[docType].fileName)
   );
@@ -95,13 +100,6 @@ export function buildDemoEmail(
     summaryLines.push(`- Nombres: ${state.personalInfo.firstName || 'No extraídos'}`);
     summaryLines.push(`- Apellidos: ${state.personalInfo.lastName || 'No extraídos'}`);
     summaryLines.push(`- Identificación: ${state.personalInfo.documentNumber || 'No extraída'}`);
-    if (state.country === 've') {
-      summaryLines.push(`- Fecha de nacimiento: ${state.personalInfo.birthDate || 'No extraída'}`);
-      summaryLines.push(`- Nacionalidad: ${state.personalInfo.nationality || 'No extraída'}`);
-      summaryLines.push(`- Institución bancaria: ${state.personalInfo.bankInstitution || 'No extraída'}`);
-      summaryLines.push(`- Producto bancario: ${state.personalInfo.bankProduct || 'No extraído'}`);
-      summaryLines.push(`- Cifras del saldo: ${state.personalInfo.bankBalanceFigures || 'No extraídas'}`);
-    }
   }
   summaryLines.push(`- Prueba de vida: ${biometricStatusLabel(state.biometrics.status)}`);
   summaryLines.push(`- Geolocalización: ${formatBiometricLocation(state)}`);
@@ -343,7 +341,7 @@ function buildConversationData({
   const fiscalDocument = state.documents.rif.fileName ? state.documents.rif : state.documents.documentoFiscal;
   addConversationField(data, 'DOCUMENTO_FISCAL', fiscalDocument.fileName);
 
-  if (state.country === 've') {
+  if (state.country === 've' && state.personType === 'juridica') {
     for (const documentType of getDocumentOrder(state.country, state.personType)) {
       if (documentType === 'referenciaPersonal' || documentType === 'referenciaComercial' || documentType === 'referenciaBancaria') {
         addConversationField(data, DANA_DOCUMENT_FIELD_BY_TYPE[documentType]!, state.documents[documentType].fileName);
@@ -355,13 +353,6 @@ function buildConversationData({
     addConversationField(data, 'NOMBRES', state.personalInfo.firstName);
     addConversationField(data, 'APELLIDOS', state.personalInfo.lastName);
     addConversationField(data, 'NUMERO_IDENTIFICACION', state.personalInfo.documentNumber);
-    if (state.country === 've') {
-      addConversationField(data, 'FECHA_NACIMIENTO', state.personalInfo.birthDate);
-      addConversationField(data, 'NACIONALIDAD', state.personalInfo.nationality);
-      addConversationField(data, 'INSTITUCION_BANCARIA', state.personalInfo.bankInstitution);
-      addConversationField(data, 'PRODUCTO_BANCARIO', state.personalInfo.bankProduct);
-      addConversationField(data, 'CIFRAS_SALDO', state.personalInfo.bankBalanceFigures);
-    }
     addConversationField(data, 'DOCUMENTO_IDENTIDAD', state.documents.documentoIdentidad.fileName || state.documents.licenciaConducirFrente.fileName);
   } else {
     addConversationField(data, 'NOMBRE_EMPRESA', companyName);

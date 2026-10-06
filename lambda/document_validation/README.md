@@ -25,9 +25,11 @@ Handler configurado en AWS: `lambda_function.lambda_handler`.
   quedan disponibles para completarse manualmente en el frontend.
 - El frontend ya envia las referencias a esta Lambda. Desplegar primero este `lambda_function.py`
   en la funcion existente. No se agregaron dependencias ni se realizo despliegue desde el repositorio.
-- Configurar/verificar en DANAConnect los campos `REFERENCIA_PERSONAL`, `REFERENCIA_COMERCIAL`,
-  `REFERENCIA_BANCARIA`, `FECHA_NACIMIENTO`, `NACIONALIDAD`, `INSTITUCION_BANCARIA`,
-  `PRODUCTO_BANCARIO` y `CIFRAS_SALDO`, o sus equivalentes en `DANA_FIELD_MAP`/`DANA_FILE_FIELD_MAP`.
+- Para persona natural, referencias, nacimiento, nacionalidad y datos bancarios se conservan
+  en el portal y no se agregan al comando SMTP ni a los adjuntos de DANAConnect.
+  Se mantiene el contrato de envio anterior; no requiere campos nuevos en la conversacion.
+- Para persona juridica, verificar los campos `REFERENCIA_COMERCIAL` y `REFERENCIA_BANCARIA`,
+  o sus equivalentes en `DANA_FIELD_MAP`/`DANA_FILE_FIELD_MAP`.
 
 Pruebas sin llamadas a AWS:
 
