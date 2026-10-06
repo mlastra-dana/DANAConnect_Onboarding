@@ -7,7 +7,8 @@ import { Button } from '../components/ui/Button';
 import { Toast } from '../components/ui/Toast';
 import { buildValidationErrorResult, shouldUseS3ValidationUpload, validateDocumentFile } from '../lib/validators/documentValidators';
 import { createEmptyDocument, createEmptyRepresentative } from '../app/state';
-import { DocumentRecord, DocumentType, DocumentValidationResult, RepresentativeRecord } from '../app/types';
+import { DocumentRecord, DocumentType, DocumentValidationResult, PersonalInfo, RepresentativeRecord } from '../app/types';
+import { normalizeVenezuelanId } from '../lib/validators/venezuelanId';
 import {
   getDocumentLabel,
   getDocumentOrder,
@@ -109,6 +110,17 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
   async function handleUploadBase(docType: DocumentType, file: File) {
     const key: UploadKey = docType;
+    if (state.personType === 'natural' && state.documents[docType].fileName && runtimeFiles[key] !== file) {
+      if (docType === 'rif' || docType === 'documentoFiscal' || docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente') {
+        setPersonalInfo({ firstName: '', lastName: '', documentNumber: '' });
+      }
+      if (isVenezuelaNatural && docType === 'documentoIdentidad') {
+        setPersonalInfo({ birthDate: '', nationality: '' });
+      }
+      if (isVenezuelaNatural && docType === 'referenciaBancaria') {
+        setPersonalInfo({ bankInstitution: '', bankProduct: '', bankBalanceFigures: '' });
+      }
+    }
     setUploadingMap((prev) => ({ ...prev, [key]: true }));
     setUploadProgressMap((prev) => ({ ...prev, [key]: 0 }));
     setValidationProgressMap((prev) => ({ ...prev, [key]: 0 }));
@@ -167,50 +179,55 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
       setDocument(docType, nextDocument);
 
+      const resultAccepted = result.status === 'valid' || result.status === 'warning';
+      const previousApplicantId = normalizeVenezuelanId(state.documents.rif.validation.extractedIdentity?.documentNumber || state.personalInfo.documentNumber);
+      const nextApplicantId = normalizeVenezuelanId(result.extractedIdentity?.documentNumber ?? '');
+      const sameApplicant = resultAccepted && previousApplicantId !== null && previousApplicantId === nextApplicantId;
+
       if (isVenezuelaJuridica && docType === 'rif') {
-        clearVenezuelaJuridicaDependentDocuments();
+        invalidateVenezuelaJuridicaDependentDocuments();
       }
 
       if (isVenezuelaNatural && docType === 'rif') {
-        clearVenezuelaNaturalIdentityDocument();
+        if (state.documents.documentoIdentidad.fileName && !sameApplicant) {
+          invalidateVenezuelaNaturalIdentityDocument();
+        }
       }
 
       if (isVenezuelaJuridica && (docType === 'registroMercantil' || docType === 'actaDesignacionAutoridades')) {
         if (docType === 'registroMercantil') {
-          clearVenezuelaJuridicaAssembly();
+          invalidateVenezuelaJuridicaAssembly();
         }
-        clearVenezuelaJuridicaRepresentatives({ onlyValidated: true });
+        invalidateVenezuelaJuridicaRepresentatives({ onlyValidated: true });
       }
 
       if (
         state.personType === 'natural' &&
+        resultAccepted &&
         (docType === 'rif' || docType === 'documentoFiscal' || docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente') &&
         result.extractedIdentity
       ) {
-        setPersonalInfo({
-          firstName: result.extractedIdentity.firstName ?? '',
-          lastName: result.extractedIdentity.lastName ?? '',
-          documentNumber: result.extractedIdentity.documentNumber ?? '',
-          birthDate: isVenezuelaNatural ? docType === 'documentoIdentidad' && result.status !== 'error' ? result.extractedIdentity.birthDate ?? '' : '' : state.personalInfo.birthDate,
-          nationality: isVenezuelaNatural ? docType === 'documentoIdentidad' && result.status !== 'error' ? result.extractedIdentity.nationality ?? '' : '' : state.personalInfo.nationality
-        });
+        const personalInfo: Partial<PersonalInfo> = {};
+        for (const field of ['firstName', 'lastName', 'documentNumber'] as const) {
+          const value = result.extractedIdentity[field]?.trim();
+          if (value) personalInfo[field] = value;
+        }
+        if (isVenezuelaNatural && docType === 'documentoIdentidad') {
+          if (result.extractedIdentity.birthDate?.trim()) personalInfo.birthDate = result.extractedIdentity.birthDate.trim();
+          if (result.extractedIdentity.nationality?.trim()) personalInfo.nationality = result.extractedIdentity.nationality.trim();
+        }
+        setPersonalInfo(personalInfo);
       }
-      if (isVenezuelaNatural && docType === 'referenciaBancaria') {
-        const bank = result.status !== 'error' ? result.extractedBankReference : undefined;
-        setPersonalInfo({
-          bankInstitution: bank?.institution ?? '',
-          bankProduct: bank?.product ?? '',
-          bankBalanceFigures: bank?.balanceFigures ?? ''
-        });
+      if (isVenezuelaNatural && docType === 'referenciaBancaria' && resultAccepted) {
+        const bank = result.extractedBankReference;
+        const personalInfo: Partial<PersonalInfo> = {};
+        if (bank?.institution?.trim()) personalInfo.bankInstitution = bank.institution.trim();
+        if (bank?.product?.trim()) personalInfo.bankProduct = bank.product.trim();
+        if (bank?.balanceFigures?.trim()) personalInfo.bankBalanceFigures = bank.balanceFigures.trim();
+        setPersonalInfo(personalInfo);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No se pudo validar el documento. Intente nuevamente.';
-      if (isVenezuelaNatural && docType === 'referenciaBancaria') {
-        setPersonalInfo({ bankInstitution: '', bankProduct: '', bankBalanceFigures: '' });
-      }
-      if (isVenezuelaNatural && docType === 'documentoIdentidad') {
-        setPersonalInfo({ birthDate: '', nationality: '' });
-      }
       setDocument(docType, {
         type: docType,
         fileName: file.name,
@@ -314,27 +331,31 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     setDocument(docType, createEmptyDocument(docType));
     clearUploaderRuntime(key);
 
-    if (isVenezuelaNatural && (docType === 'rif' || docType === 'documentoIdentidad')) {
+    if (state.personType === 'natural' && (docType === 'rif' || docType === 'documentoFiscal' || docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente')) {
+      setPersonalInfo({ firstName: '', lastName: '', documentNumber: '' });
+    }
+
+    if (isVenezuelaNatural && docType === 'documentoIdentidad') {
       setPersonalInfo({ birthDate: '', nationality: '' });
     }
     if (isVenezuelaNatural && docType === 'rif') {
-      clearVenezuelaNaturalIdentityDocument();
+      invalidateVenezuelaNaturalIdentityDocument();
     }
     if (isVenezuelaNatural && docType === 'referenciaBancaria') {
       setPersonalInfo({ bankInstitution: '', bankProduct: '', bankBalanceFigures: '' });
     }
 
     if (isVenezuelaJuridica && docType === 'rif') {
-      clearVenezuelaJuridicaDependentDocuments();
+      invalidateVenezuelaJuridicaDependentDocuments();
     }
 
     if (isVenezuelaJuridica && docType === 'registroMercantil') {
-      clearVenezuelaJuridicaAssembly();
-      clearVenezuelaJuridicaRepresentatives();
+      invalidateVenezuelaJuridicaAssembly();
+      invalidateVenezuelaJuridicaRepresentatives();
     }
 
     if (isVenezuelaJuridica && docType === 'actaDesignacionAutoridades') {
-      clearVenezuelaJuridicaRepresentatives();
+      invalidateVenezuelaJuridicaRepresentatives();
     }
   }
 
@@ -382,41 +403,33 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     setValidationProgressMap((prev) => ({ ...prev, [key]: 0 }));
   }
 
-  function clearVenezuelaJuridicaDependentDocuments() {
+  function invalidateVenezuelaJuridicaDependentDocuments() {
     const constitution = state.documents.registroMercantil;
-    if (constitution.previewUrl) URL.revokeObjectURL(constitution.previewUrl);
-    setDocument('registroMercantil', createEmptyDocument('registroMercantil'));
-    clearUploaderRuntime('registroMercantil');
+    if (constitution.fileName) setDocument('registroMercantil', withPendingValidation(constitution));
 
-    clearVenezuelaJuridicaAssembly();
-    clearVenezuelaJuridicaRepresentatives();
+    invalidateVenezuelaJuridicaAssembly();
+    invalidateVenezuelaJuridicaRepresentatives();
   }
 
-  function clearVenezuelaJuridicaAssembly() {
+  function invalidateVenezuelaJuridicaAssembly() {
     const assembly = state.documents.actaDesignacionAutoridades;
-    if (assembly.previewUrl) URL.revokeObjectURL(assembly.previewUrl);
-    setDocument('actaDesignacionAutoridades', createEmptyDocument('actaDesignacionAutoridades'));
-    clearUploaderRuntime('actaDesignacionAutoridades');
-    setAssemblyEnabled(false);
+    if (assembly.fileName) setDocument('actaDesignacionAutoridades', withPendingValidation(assembly));
   }
 
-  function clearVenezuelaJuridicaRepresentatives(options: { onlyValidated?: boolean } = {}) {
+  function invalidateVenezuelaJuridicaRepresentatives(options: { onlyValidated?: boolean } = {}) {
     [representative1, representative2].forEach((representative) => {
+      if (!representative.document.fileName) return;
       if (options.onlyValidated && (!representative.enabled || representative.document.validation.status === 'pending')) return;
-      if (representative.document.previewUrl) URL.revokeObjectURL(representative.document.previewUrl);
       setRepresentative(representative.id, {
         ...representative,
-        document: createEmptyDocument('cedulaRepresentante')
+        document: withPendingValidation(representative.document)
       });
-      clearUploaderRuntime(representative.id === 1 ? 'rep1' : 'rep2');
     });
   }
 
-  function clearVenezuelaNaturalIdentityDocument() {
+  function invalidateVenezuelaNaturalIdentityDocument() {
     const identity = state.documents.documentoIdentidad;
-    if (identity.previewUrl) URL.revokeObjectURL(identity.previewUrl);
-    setDocument('documentoIdentidad', createEmptyDocument('documentoIdentidad'));
-    clearUploaderRuntime('documentoIdentidad');
+    if (identity.fileName) setDocument('documentoIdentidad', withPendingValidation(identity));
   }
 
   function getBaseValidationOptions(docType: DocumentType) {
@@ -704,6 +717,22 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       </div>
     </div>
   );
+}
+
+function withPendingValidation(record: DocumentRecord): DocumentRecord {
+  return {
+    ...record,
+    validation: {
+      ...record.validation,
+      status: 'pending',
+      checks: [],
+      warnings: [],
+      reasons: [],
+      failureKind: undefined,
+      internalDiagnostics: ['dependency_changed'],
+      uiStatus: { state: 'ok', title: 'Revalidación requerida', message: 'Un documento relacionado cambió. Vuelva a validar este archivo.' }
+    }
+  };
 }
 
 async function simulateUpload(onProgress: (progress: number) => void) {

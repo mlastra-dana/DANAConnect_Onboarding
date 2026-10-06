@@ -81,6 +81,7 @@ export function DocumentUploader({
     (language === 'en' ? 'No validations have been run yet.' : 'Aún no hay validaciones ejecutadas.');
   const warningMessages = docRecord.validation.warnings ?? [];
   const hasFile = Boolean(docRecord.fileName);
+  const needsRevalidation = docRecord.validation.internalDiagnostics?.includes('dependency_changed');
   const fileContainerClass =
     feedbackStatus === 'valid'
       ? 'border-green-200 bg-green-50/40'
@@ -310,6 +311,12 @@ export function DocumentUploader({
           </div>
         ) : null}
         {feedbackStatus === 'pending' && hasFile ? <p className="text-grayText">{pendingMessage}</p> : null}
+        {feedbackStatus === 'pending' && needsRevalidation && previewFile && !loading ? (
+          <Button type="button" variant="secondary" className="gap-2" disabled={disabled} onClick={() => void onSelectFile(previewFile)}>
+            <RotateCw className="h-4 w-4" />
+            {language === 'en' ? 'Revalidate document' : 'Revalidar documento'}
+          </Button>
+        ) : null}
       </div>
     </>
   );
