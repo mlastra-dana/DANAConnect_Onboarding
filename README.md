@@ -30,7 +30,7 @@ API local de correo: `http://localhost:8787`
   - `bo`: NIT, Matrícula de Comercio / Testimonio de Constitución, CI del representante
   - `mx`: Constancia de Situación Fiscal, Acta Constitutiva, Poder Notarial, identificación oficial
   - `ar`: CUIT, Estatuto / Contrato social, facultades del representante, DNI
-  - `cl`: solo persona natural, un único DNI / Cédula de identidad chilena (incluye extranjeros)
+  - `cl`: solo persona natural, cédula chilena con frente obligatorio y reverso opcional para comparar datos (incluye extranjeros)
   - `usa`: licencia de conducir para persona natural, frente y reverso
 - Mensajes al usuario simplificados: éxito `Documento aceptado.` y errores de una sola línea.
 - Pantalla final no técnica con checklist de recibidos y acciones `Copiar resumen`, `Abrir correo`, `Volver al inicio`.

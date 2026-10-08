@@ -124,6 +124,8 @@ export function DocumentUploader({
         )
       ) : null}
 
+      {!sectionTitle && sectionAction ? <div>{sectionAction}</div> : null}
+
       {loading ? (
         <div className="space-y-2 rounded-lg border border-borderLight bg-surface p-3">
           <div className="flex items-center gap-2 text-xs font-medium text-dark">

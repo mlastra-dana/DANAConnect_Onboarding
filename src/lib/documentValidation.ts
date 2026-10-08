@@ -139,6 +139,7 @@ const FILE_HINTS: Record<DocumentType, RegExp[]> = {
   registroMercantil: [/mercantil/i, /constitutiv/i, /estatuto/i, /registro/i],
   cedulaRepresentante: [/cedula/i, /saime/i, /identidad/i],
   documentoIdentidad: [/cedula/i, /dni/i, /identidad/i, /ce/i],
+  documentoIdentidadReverso: [/cedula/i, /dni/i, /identidad/i, /reverso/i, /back/i, /mrz/i],
   documentoFiscal: [/constancia/i, /fiscal/i, /situacion/i, /rfc/i],
   documentoConstitucion: [/acta/i, /constitutiv/i, /constitucion/i, /registro/i],
   facultadesRepresentante: [/poder/i, /notari/i, /facultad/i, /representante/i],

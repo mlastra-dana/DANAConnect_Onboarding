@@ -47,6 +47,7 @@ DEFAULT_FIELD_LIMITS = {
     "NOMBRE_EMPRESA": 100,
     "NUMERO_IDENTIFICACION": 100,
     "NUMERO_DOCUMENTO": 100,
+    "DOCUMENTO_IDENTIDAD_REVERSO": 250,
     "PAIS": 50,
     "REPRESENTANTE_LEGAL": 250,
     "TIPO_PERSONA": 100,
@@ -61,6 +62,7 @@ DEFAULT_FILE_FIELD_MAP = {
     "cedulaRepresentante": "DOCUMENTO_REPRESENTANTE",
     "documentoRepresentante": "DOCUMENTO_REPRESENTANTE",
     "documentoIdentidad": "DOCUMENTO_IDENTIDAD",
+    "documentoIdentidadReverso": "DOCUMENTO_IDENTIDAD_REVERSO",
     "licenciaConducirFrente": "LICENCIA_FRONT",
     "licenciaConducirReverso": "LICENCIA_BACK",
     "referenciaPersonal": "REFERENCIA_PERSONAL",
@@ -199,6 +201,7 @@ SLOT_ALIASES = {
 
     "documentoIdentidad": "documentoIdentidad",
     "identificacionOficial": "documentoIdentidad",
+    "documentoIdentidadReverso": "documentoIdentidadReverso",
 
     "referenciaPersonal": "referenciaPersonal",
     "referenciaComercial": "referenciaComercial",
@@ -276,7 +279,8 @@ DOC_SLOT_LABELS: Dict[Tuple[str, str], str] = {
     ("ar", "comprobanteDomicilio"): "Comprobante de domicilio fiscal",
 
     # Chile
-    ("cl", "documentoIdentidad"): "DNI / Cedula de identidad",
+    ("cl", "documentoIdentidad"): "RUT / Cedula de identidad - Frente",
+    ("cl", "documentoIdentidadReverso"): "RUT / Cedula de identidad - Reverso",
 
     # Estados Unidos
     ("usa", "licenciaConducirFrente"): "Driver License - front",
@@ -316,13 +320,19 @@ DOC_VALIDATION_RULES: Dict[str, Dict[str, str]] = {
         ),
     },
     "cl": {
+        "documentoIdentidadReverso": (
+            "Debe parecer el reverso de una Cedula de Identidad chilena, incluida la de extranjeros. "
+            "Indicadores: zona de lectura mecanica MRZ de tres lineas, CHL, nombres, numero de documento, "
+            "RUN, fechas, codigo QR, lugar de nacimiento o profesion e impresion dactilar. "
+            "No aceptes el frente como reverso. El QR visible no demuestra autenticidad."
+        ),
         "documentoIdentidad": (
             "Debe parecer una Cedula de Identidad chilena de persona natural, "
             "incluida la Cedula de Identidad para extranjeros, emitida por el Servicio de Registro Civil e Identificacion. "
             "Indicadores esperados: Republica de Chile, Cedula de Identidad, Servicio de Registro Civil e Identificacion, "
             "RUT o RUN, apellidos, nombres, fotografia, numero de documento, nacionalidad, fecha de nacimiento, "
             "fecha de emision, fecha de vencimiento y firma. "
-            "El nombre DNI es la etiqueta del portal; no es necesario que la cedula diga DNI. "
+            "RUT / Cedula de identidad es la etiqueta del portal; el identificador puede estar rotulado RUN. "
             "Un documento tributario con RUT sin cedula de identidad no corresponde a este slot."
         ),
     },
@@ -463,7 +473,7 @@ DOC_VALIDATION_RULES: Dict[str, Dict[str, str]] = {
     },
 }
 
-IDENTITY_EXTRACTION_SLOTS = {"documentoIdentidad", "documentoRepresentante", "licenciaConducirFrente"}
+IDENTITY_EXTRACTION_SLOTS = {"documentoIdentidad", "documentoIdentidadReverso", "documentoRepresentante", "licenciaConducirFrente"}
 
 
 def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
@@ -491,8 +501,8 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         person_type = normalize_person_type(payload.get("person_type") or payload.get("personType"))
         raw_slot = require_string(payload, "slot")
         slot = normalize_slot(raw_slot)
-        if country == "cl" and (slot != "documentoIdentidad" or person_type == "juridica"):
-            return response(400, {"ok": False, "error": "Chile solo admite DNI / Cedula de identidad de persona natural."})
+        if country == "cl" and (slot not in {"documentoIdentidad", "documentoIdentidadReverso"} or person_type == "juridica"):
+            return response(400, {"ok": False, "error": "Chile solo admite RUT / Cedula de identidad de persona natural."})
         expected_legal_representatives = (
             normalize_expected_legal_representatives(payload.get("expected_legal_representatives"))
             if "expected_legal_representatives" in payload
@@ -508,6 +518,10 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             if "expected_identity" in payload
             else None
         )
+        if slot == "documentoIdentidadReverso" and country != "cl":
+            raise ValueError("El reverso de cedula esta habilitado solo para Chile.")
+        if country == "cl" and slot == "documentoIdentidadReverso" and not expected_identity:
+            raise ValueError("Cargue el frente de la cedula antes de comparar el reverso.")
 
         if content_type not in ALLOWED_MIME_TYPES:
             return response(400, {"ok": False, "error": f"Tipo de archivo no permitido: {content_type}"})
@@ -676,6 +690,9 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             person_type=person_type,
             analysis=analysis,
             expected_identity=expected_identity,
+        )
+        analysis = apply_chile_back_comparison(
+            country=country, slot=slot, analysis=analysis, expected_identity=expected_identity,
         )
         identity = normalize_extracted_identity(analysis.get("extractedIdentity"))
         if country != "ve" or person_type != "natural" or slot != "documentoIdentidad" or normalize_status(analysis.get("status")) == "error":
@@ -1456,6 +1473,7 @@ Reglas criticas:
 - Si ves "Acta de designacion de autoridades", "Acta de asamblea", "Acta de accionistas", "Acta de junta directiva", "renovacion de junta directiva", "Acta de directorio", "Poder", "Apoderado", "Presidente", "Gerente", "Representante legal" o "facultades", clasifica como "facultadesRepresentante".
 - Si ves "Documento Nacional de Identidad", "DNI", "RENAPER" o "Republica Argentina" en una identificacion personal, clasifica como "documentoIdentidad" o "documentoRepresentante" segun contexto visible.
 - Si ves una Cedula de Identidad con "Republica de Chile", "Servicio de Registro Civil e Identificacion", fotografia y datos personales, clasifica como "documentoIdentidad" y detected_country="cl", incluso si dice "EXTRANJERO" o rotula el identificador como RUN o RUT. La nacionalidad del titular no determina el pais emisor.
+- El reverso de una cedula chilena con MRZ de tres lineas, CHL, datos personales, QR o impresion dactilar tambien es "documentoIdentidad", detected_country="cl"; no lo confundas con el reverso de una licencia estadounidense.
 - Un RUT en el nombre del archivo no convierte una cedula chilena en documentoFiscal; clasifica por el contenido visible.
 - Si ves "DRIVER LICENSE", "DL", "ID", una fotografia, nombre/direccion/DOB/EXP y el estado emisor de Estados Unidos, clasifica como "licenciaConducirFrente".
 - Si ves un barcode PDF417 grande, banda magnetica, restricciones, endorsements o texto administrativo sin fotografia principal, clasifica como "licenciaConducirReverso".
@@ -2479,7 +2497,7 @@ Si falta o es ilegible, devuelve cadena vacia. Para otros slots o tipos de perso
 """.strip() if country == "ve" and person_type == "natural" and slot == "documentoIdentidad" else "Devuelve birthDate y nationality vacios."
 
     extraction_rules = """
-Si el slot es "documentoIdentidad" o "documentoRepresentante", adicionalmente intenta extraer esta salida minima:
+Si el slot es "documentoIdentidad", "documentoIdentidadReverso" o "documentoRepresentante", adicionalmente intenta extraer esta salida minima:
 - firstName
 - lastName
 - documentNumber
@@ -2507,6 +2525,8 @@ Para Chile:
 - documentNumber debe ser el valor visible del campo NUMERO DOCUMENTO, no el RUN/RUT.
 - Extrae ambos en campos separados. Si uno no es legible, devuelve ese campo vacio sin copiar el otro ni inventar datos.
 - rawText debe incluir el numero de documento y las fechas de emision y vencimiento si son visibles.
+- Si el slot es documentoIdentidadReverso, extrae solo los datos visibles del reverso o MRZ: run, documentNumber, firstName, lastName y rawText. En MRZ, separa apellidos y nombres segun los separadores < y no incluyas digitos de control en documentNumber.
+- No copies datos de expected_identity para completar lo que no sea visible en el reverso.
 
 Para Estados Unidos:
 - Si el documento es el frente de una driver license, firstName y lastName deben salir de los campos visibles de nombre.
@@ -2681,7 +2701,11 @@ Reglas especiales Argentina:
 - Si el slot esperado es "documentoIdentidad" o "documentoRepresentante", acepta DNI argentino o documento de identidad personal, segun corresponda.
 
 Reglas especiales Chile:
-- Para el slot "documentoIdentidad", acepta una Cedula de Identidad chilena, incluida la de extranjeros; DNI es solo la etiqueta del portal.
+- Para documentoIdentidad acepta solo el frente; para documentoIdentidadReverso acepta solo el reverso. Si el lado es incorrecto, usa status="error" y document_type_match=false.
+- Para documentoIdentidadReverso, compara los datos visibles del reverso con esta identidad esperada del frente: {expected_identity_json}.
+- Si difieren RUN, numero de documento o nombres legibles, responde status="error". No aceptes una discrepancia como warning.
+- Si no puedes comparar por falta de legibilidad, usa warning y explica la limitacion. No afirmes autenticidad ni verificacion oficial por ver un QR.
+- Para el slot "documentoIdentidad", acepta una Cedula de Identidad chilena, incluida la de extranjeros; RUT / Cedula de identidad es la etiqueta del portal.
 - Una nacionalidad distinta de chilena o el texto EXTRANJERO no invalida la cedula emitida por Chile.
 - Reconoce el identificador personal tanto si esta rotulado RUT como RUN; no exijas un documento fiscal adicional.
 - Si solo es visible un documento tributario con RUT, sin cedula de identidad, responde status="error", document_type_match=false.
@@ -3507,6 +3531,41 @@ def build_representative_match_evidence_text(*, identity: Dict[str, str], analys
         ]
         if item
     )
+
+
+def apply_chile_back_comparison(
+    *, country: str, slot: str, analysis: Dict[str, Any],
+    expected_identity: Optional[Dict[str, str]],
+) -> Dict[str, Any]:
+    if country != "cl" or slot != "documentoIdentidadReverso" or normalize_status(analysis.get("status")) == "error":
+        return analysis
+    expected = normalize_extracted_identity(expected_identity)
+    visible = normalize_extracted_identity(analysis.get("extractedIdentity"))
+    compared = []
+    mismatches = []
+    for field, label in (("run", "RUN"), ("documentNumber", "numero de documento"), ("firstName", "nombres"), ("lastName", "apellidos")):
+        left = re.sub(r"[^a-z0-9]", "", normalize_text_for_matching(expected.get(field)))
+        right = re.sub(r"[^a-z0-9]", "", normalize_text_for_matching(visible.get(field)))
+        if not left or not right:
+            continue
+        compared.append(label)
+        matches = left == right
+        if field in {"firstName", "lastName"}:
+            # MRZ names may be truncated to the available line width.
+            matches = matches or left.startswith(right) or right.startswith(left)
+        if not matches:
+            mismatches.append(label)
+    if mismatches:
+        message = "El reverso no coincide con el frente: " + ", ".join(mismatches) + "."
+        analysis["status"] = "error"
+        analysis["summary"] = message
+        analysis["reasons"] = normalize_string_list(analysis.get("reasons")) + [message]
+    elif not any(label in compared for label in ("RUN", "numero de documento")):
+        message = "No fue posible comparar el RUN o numero de documento entre ambas caras. Requiere revision manual."
+        analysis["status"] = "warning"
+        analysis["summary"] = message
+        analysis["warnings"] = normalize_string_list(analysis.get("warnings")) + [message]
+    return analysis
 
 
 def apply_expected_identity_guard(

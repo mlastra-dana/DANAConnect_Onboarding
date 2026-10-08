@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useOnboarding } from '../app/OnboardingContext';
 import { FileUploadCard } from '../components/onboarding/FileUploadCard';
 import { Button } from '../components/ui/Button';
@@ -11,6 +11,7 @@ import { DocumentRecord, DocumentType, DocumentValidationResult, RepresentativeR
 import {
   getDocumentLabel,
   getDocumentOrder,
+  getOptionalDocumentOrder,
   getFlowConfig,
   requiresRepresentatives
 } from '../config/onboardingCountries';
@@ -22,6 +23,7 @@ const initialBoolMap: Record<UploadKey, boolean> = {
   rif: false,
   registroMercantil: false,
   documentoIdentidad: false,
+  documentoIdentidadReverso: false,
   cedulaRepresentante: false,
   documentoFiscal: false,
   documentoConstitucion: false,
@@ -39,6 +41,7 @@ const initialNumMap: Record<UploadKey, number> = {
   rif: 0,
   registroMercantil: 0,
   documentoIdentidad: 0,
+  documentoIdentidadReverso: 0,
   cedulaRepresentante: 0,
   documentoFiscal: 0,
   documentoConstitucion: 0,
@@ -59,6 +62,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
   const [uploadProgressMap, setUploadProgressMap] = useState<Record<UploadKey, number>>(initialNumMap);
   const [validationProgressMap, setValidationProgressMap] = useState<Record<UploadKey, number>>(initialNumMap);
   const [runtimeFiles, setRuntimeFiles] = useState<Partial<Record<UploadKey, File>>>({});
+  const uploadVersions = useRef<Partial<Record<UploadKey, number>>>({});
   const [assemblyEnabled, setAssemblyEnabled] = useState(Boolean(state.documents.actaDesignacionAutoridades.fileName));
 
   const representative1 = state.representatives.find((rep) => rep.id === 1)!;
@@ -66,6 +70,9 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
   const isMexicoNatural = state.country === 'mx' && state.personType === 'natural';
   const flowConfig = getFlowConfig(state.country, state.personType);
   const documentOrder = getDocumentOrder(state.country, state.personType);
+  const displayedDocuments = state.country === 'cl'
+    ? [...documentOrder, ...getOptionalDocumentOrder(state.country, state.personType)]
+    : documentOrder;
   const showRepresentatives = requiresRepresentatives(state.country, state.personType);
   const isVenezuelaJuridica = state.country === 've' && state.personType === 'juridica';
   const isVenezuelaNatural = state.country === 've' && state.personType === 'natural';
@@ -103,6 +110,9 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
   async function handleUploadBase(docType: DocumentType, file: File) {
     const key: UploadKey = docType;
+    const version = (uploadVersions.current[key] ?? 0) + 1;
+    uploadVersions.current[key] = version;
+    if (state.country === 'cl' && docType === 'documentoIdentidad') invalidateChileBackComparison();
     const fillsPersonalInfo = state.personType === 'natural' &&
       (docType === 'rif' || docType === 'documentoFiscal' || docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente');
     if (fillsPersonalInfo) {
@@ -120,6 +130,8 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       await simulateUpload((progress) => {
         setUploadProgressMap((prev) => ({ ...prev, [key]: progress }));
       });
+
+      if (uploadVersions.current[key] !== version) return;
 
       setUploadingMap((prev) => ({ ...prev, [key]: false }));
       setLoadingMap((prev) => ({ ...prev, [key]: true }));
@@ -140,6 +152,11 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         },
         getBaseValidationOptions(docType)
       );
+
+      if (uploadVersions.current[key] !== version) {
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        return;
+      }
 
       const nextDocument: DocumentRecord = {
         type: docType,
@@ -186,6 +203,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         });
       }
     } catch (error) {
+      if (uploadVersions.current[key] !== version) return;
       const message = error instanceof Error ? error.message : 'No se pudo validar el documento. Intente nuevamente.';
       setDocument(docType, {
         type: docType,
@@ -197,9 +215,11 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         validation: buildValidationErrorResult(message, ['upload_unhandled_error'])
       });
     } finally {
-      setUploadingMap((prev) => ({ ...prev, [key]: false }));
-      setLoadingMap((prev) => ({ ...prev, [key]: false }));
-      setValidationProgressMap((prev) => ({ ...prev, [key]: 100 }));
+      if (uploadVersions.current[key] === version) {
+        setUploadingMap((prev) => ({ ...prev, [key]: false }));
+        setLoadingMap((prev) => ({ ...prev, [key]: false }));
+        setValidationProgressMap((prev) => ({ ...prev, [key]: 100 }));
+      }
     }
   }
 
@@ -284,6 +304,8 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
   function handleRemoveBase(docType: DocumentType) {
     const key: UploadKey = docType;
+    uploadVersions.current[key] = (uploadVersions.current[key] ?? 0) + 1;
+    if (state.country === 'cl' && docType === 'documentoIdentidad') invalidateChileBackComparison();
     const previous = state.documents[docType];
     if (previous.previewUrl) URL.revokeObjectURL(previous.previewUrl);
 
@@ -393,6 +415,9 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
   }
 
   function getBaseValidationOptions(docType: DocumentType) {
+    if (state.country === 'cl' && docType === 'documentoIdentidadReverso') {
+      return { expectedIdentity: state.documents.documentoIdentidad.validation.extractedIdentity };
+    }
     if (
       isVenezuelaJuridica &&
       (docType === 'registroMercantil' || docType === 'actaDesignacionAutoridades') &&
@@ -412,14 +437,33 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     return undefined;
   }
 
+  function invalidateChileBackComparison() {
+    const key = 'documentoIdentidadReverso';
+    uploadVersions.current[key] = (uploadVersions.current[key] ?? 0) + 1;
+    setLoadingMap((prev) => ({ ...prev, [key]: false }));
+    setUploadingMap((prev) => ({ ...prev, [key]: false }));
+    const back = state.documents[key];
+    if (!back.fileName) return;
+    setDocument(key, {
+      ...back,
+      validation: {
+        status: 'review',
+        checks: [],
+        uiStatus: { state: 'error', title: 'Pendiente de comparación', message: 'El frente cambió. Compare nuevamente el reverso.' }
+      }
+    });
+  }
+
   return (
     <div className="space-y-6">
       <Toast type="info" message={flowConfig.documentsIntro} />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {documentOrder.map((docType) => {
+      <div className={`grid grid-cols-1 gap-4 ${state.country === 'cl' ? 'lg:grid-cols-2' : 'lg:grid-cols-3'}`}>
+        {displayedDocuments.map((docType) => {
           const constitutionUploadLocked = isVenezuelaJuridica && docType === 'registroMercantil' && !canUploadConstitution;
           const naturalIdentityUploadLocked = isVenezuelaNatural && docType === 'documentoIdentidad' && !canUploadNaturalIdentity;
+          const chileBackLocked = state.country === 'cl' && docType === 'documentoIdentidadReverso' &&
+            (!['valid', 'warning'].includes(state.documents.documentoIdentidad.validation.status) || loadingMap.documentoIdentidad || uploadingMap.documentoIdentidad);
 
           if (isVenezuelaJuridica && docType === 'registroMercantil') {
             return (
@@ -505,8 +549,17 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
               uploadProgress={uploadProgressMap[docType]}
               validationProgress={validationProgressMap[docType]}
               previewFile={runtimeFiles[docType]}
-              disabled={constitutionUploadLocked || naturalIdentityUploadLocked}
-              disabledMessage={naturalIdentityUploadLocked ? naturalIdentityDisabledMessage : constitutionDisabledMessage}
+              disabled={constitutionUploadLocked || naturalIdentityUploadLocked || chileBackLocked}
+              disabledMessage={chileBackLocked ? 'Primero cargue y valide el frente de la cédula.' : naturalIdentityUploadLocked ? naturalIdentityDisabledMessage : constitutionDisabledMessage}
+              sectionAction={docType === 'documentoIdentidadReverso' && runtimeFiles[docType] && state.documents[docType].validation.status === 'review' ? (
+                <Button
+                  variant="ghost"
+                  disabled={chileBackLocked || loadingMap[docType] || uploadingMap[docType]}
+                  onClick={() => handleUploadBase(docType, runtimeFiles[docType]!)}
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />Comparar de nuevo
+                </Button>
+              ) : undefined}
               language={language}
               onSelectFile={(file) => handleUploadBase(docType, file)}
               onRemoveFile={() => handleRemoveBase(docType)}
@@ -654,7 +707,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
           <Button variant="ghost">{isEnglish ? 'Back' : 'Volver'}</Button>
         </Link>
         <Link to={`/onboarding/${companyId}/biometria`}>
-          <Button disabled={!allDocumentsValid}>{isEnglish ? 'Continue' : 'Continuar'}</Button>
+          <Button disabled={!allDocumentsValid || Object.values(loadingMap).some(Boolean) || Object.values(uploadingMap).some(Boolean)}>{isEnglish ? 'Continue' : 'Continuar'}</Button>
         </Link>
       </div>
     </div>

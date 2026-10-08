@@ -281,10 +281,12 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
         heroHeadline: 'Portal de onboarding para personas naturales en Chile.',
         heroSubheadline: 'Cargue su documento de identidad en un flujo guiado y validado para Chile.',
         heroButton: 'Continuar con persona natural',
-        documentsIntro: 'Cargue su DNI / Cédula de identidad para continuar.',
+        documentsIntro: 'Cargue el frente de su RUT / Cédula de identidad. Puede adjuntar el reverso para comparar los datos.',
         documentOrder: ['documentoIdentidad'],
+        optionalDocumentOrder: ['documentoIdentidadReverso'],
         documents: {
-          documentoIdentidad: { label: 'DNI / Cédula de identidad' }
+          documentoIdentidad: { label: 'RUT / Cédula de identidad - Frente' },
+          documentoIdentidadReverso: { label: 'RUT / Cédula de identidad - Reverso (Opcional)' }
         }
       }
     }

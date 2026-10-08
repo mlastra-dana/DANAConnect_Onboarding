@@ -12,7 +12,7 @@ import {
   SubmissionState
 } from './types';
 import { clearState, createEmptyDocument, createInitialState, loadState, saveState } from './state';
-import { getDocumentOrder, requiresRepresentatives } from '../config/onboardingCountries';
+import { getDocumentOrder, getOptionalDocumentOrder, requiresRepresentatives } from '../config/onboardingCountries';
 
 type Action =
   | { type: 'set_country'; payload: CountryCode }
@@ -153,6 +153,10 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
       documentHasPayload(state.documents[docType])
     );
     const requiredDocs = [...activeDocumentStatuses];
+    const attachedOptionalDocuments = getOptionalDocumentOrder(state.country, state.personType)
+      .map((type) => state.documents[type])
+      .filter((document) => Boolean(document.fileName));
+    requiredDocs.push(...attachedOptionalDocuments.map((document) => document.validation.status));
     let representativeDocumentsHavePayload = true;
 
     if (requiresRepresentatives(state.country, state.personType) && representative1) {
@@ -165,7 +169,8 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
     }
 
     const allDocumentsValid = requiredDocs.every(isDocumentStatusAccepted);
-    const allRequiredFilesAvailable = activeDocumentsHavePayload && representativeDocumentsHavePayload;
+    const allRequiredFilesAvailable = activeDocumentsHavePayload && representativeDocumentsHavePayload &&
+      attachedOptionalDocuments.every(documentHasPayload);
     const allBiometricsPassed = state.biometrics.status === 'passed';
 
     return {

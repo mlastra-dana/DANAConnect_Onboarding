@@ -7,6 +7,7 @@ export type DocumentType =
   | 'registroMercantil'
   | 'cedulaRepresentante'
   | 'documentoIdentidad'
+  | 'documentoIdentidadReverso'
   | 'documentoFiscal'
   | 'documentoConstitucion'
   | 'facultadesRepresentante'

@@ -45,6 +45,7 @@ const DANA_DOCUMENT_FIELD_BY_TYPE: Partial<Record<DocumentType, string>> = {
   cedulaRepresentante: 'DOCUMENTO_REPRESENTANTE',
   documentoRepresentante: 'DOCUMENTO_REPRESENTANTE',
   documentoIdentidad: 'DOCUMENTO_IDENTIDAD',
+  documentoIdentidadReverso: 'DOCUMENTO_IDENTIDAD_REVERSO',
   licenciaConducirFrente: 'LICENCIA_FRONT',
   licenciaConducirReverso: 'LICENCIA_BACK'
 };
@@ -351,6 +352,9 @@ function buildConversationData({
       addConversationField(data, 'NUMERO_DOCUMENTO', state.personalInfo.documentNumber);
     }
     addConversationField(data, 'DOCUMENTO_IDENTIDAD', state.documents.documentoIdentidad.fileName || state.documents.licenciaConducirFrente.fileName);
+    if (state.country === 'cl') {
+      addConversationField(data, 'DOCUMENTO_IDENTIDAD_REVERSO', state.documents.documentoIdentidadReverso.fileName);
+    }
   } else {
     addConversationField(data, 'NOMBRE_EMPRESA', companyName);
     addConversationField(data, 'DOCUMENTO_CONSTITUCION', state.documents.registroMercantil.fileName || state.documents.documentoConstitucion.fileName);

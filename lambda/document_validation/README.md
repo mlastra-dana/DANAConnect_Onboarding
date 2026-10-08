@@ -73,7 +73,8 @@ Modelo usado en la demo:
 - La Lambda necesita permisos para `s3:PutObject`, `s3:DeleteObject`, `textract:StartDocumentTextDetection`,
   `textract:GetDocumentTextDetection` y `textract:DetectDocumentText`.
 - Soporta estos paises en el handler actual: `ve`, `pe`, `bo`, `mx`, `ar`, `cl`, `usa`.
-- Chile (`cl`) admite solo persona natural con un unico slot `documentoIdentidad`, etiquetado DNI / Cedula de identidad. Acepta cedulas chilenas de nacionales y extranjeros; extrae `extractedIdentity.run` (RUN/RUT con digito verificador) y `extractedIdentity.documentNumber` (campo NUMERO DOCUMENTO) por separado. El envio conserva RUN en `NUMERO_IDENTIFICACION` y agrega el numero de documento en `NUMERO_DOCUMENTO`.
+- Chile (`cl`) admite solo persona natural: `documentoIdentidad` (frente obligatorio) y `documentoIdentidadReverso` (opcional). Acepta cedulas chilenas de nacionales y extranjeros; extrae `extractedIdentity.run` (RUN/RUT con digito verificador) y `extractedIdentity.documentNumber` (campo NUMERO DOCUMENTO) por separado. El reverso recibe `expected_identity` del frente y compara los datos visibles/MRZ; las discrepancias se rechazan y una comparacion inconclusa requiere revision manual. El reverso nunca prellena el formulario. No se decodifica el QR ni se consulta autenticidad oficial.
+- El envio conserva RUN en `NUMERO_IDENTIFICACION`, numero de documento en `NUMERO_DOCUMENTO`, frente en `DOCUMENTO_IDENTIDAD` y reverso en `DOCUMENTO_IDENTIDAD_REVERSO`. Configurar este ultimo campo en la lista/conversacion destino antes de usarlo. Si se adjunta un reverso, debe estar aceptado para continuar; al cambiar el frente se conserva el adjunto pero se exige repetir su comparacion.
 - Soporta slots canonicos y aliases legacy:
   - `documentoFiscal` (`rif`, `ruc`, `nit`, `rfc`, `cuit`)
   - `documentoConstitucion` (`registroMercantil`, `actaConstitutiva`, `estatuto`, `contratoSocial`)
