@@ -1,6 +1,6 @@
 import { TenantConfig } from '../data/tenants';
 
-export type CountryCode = 've' | 'pe' | 'bo' | 'mx' | 'ar' | 'do' | 'usa';
+export type CountryCode = 've' | 'pe' | 'bo' | 'mx' | 'ar' | 'cl' | 'do' | 'usa';
 export type PersonType = 'juridica' | 'natural';
 export type DocumentType =
   | 'rif'
@@ -63,6 +63,7 @@ export type DocumentValidationResult = {
   extractedIdentity?: {
     firstName?: string;
     lastName?: string;
+    run?: string;
     documentNumber?: string;
     rawText?: string;
   };
@@ -129,6 +130,7 @@ export type SubmissionState = {
 export type PersonalInfo = {
   firstName: string;
   lastName: string;
+  run?: string;
   documentNumber: string;
 };
 

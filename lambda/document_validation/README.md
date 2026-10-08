@@ -72,7 +72,8 @@ Modelo usado en la demo:
 - El bucket S3 debe permanecer privado, con ACLs deshabilitadas y bloqueo de acceso publico.
 - La Lambda necesita permisos para `s3:PutObject`, `s3:DeleteObject`, `textract:StartDocumentTextDetection`,
   `textract:GetDocumentTextDetection` y `textract:DetectDocumentText`.
-- Soporta estos paises en el handler actual: `ve`, `pe`, `bo`, `mx`, `ar`, `usa`.
+- Soporta estos paises en el handler actual: `ve`, `pe`, `bo`, `mx`, `ar`, `cl`, `usa`.
+- Chile (`cl`) admite solo persona natural con un unico slot `documentoIdentidad`, etiquetado DNI / Cedula de identidad. Acepta cedulas chilenas de nacionales y extranjeros; extrae `extractedIdentity.run` (RUN/RUT con digito verificador) y `extractedIdentity.documentNumber` (campo NUMERO DOCUMENTO) por separado. El envio conserva RUN en `NUMERO_IDENTIFICACION` y agrega el numero de documento en `NUMERO_DOCUMENTO`.
 - Soporta slots canonicos y aliases legacy:
   - `documentoFiscal` (`rif`, `ruc`, `nit`, `rfc`, `cuit`)
   - `documentoConstitucion` (`registroMercantil`, `actaConstitutiva`, `estatuto`, `contratoSocial`)

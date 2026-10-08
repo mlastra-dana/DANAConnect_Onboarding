@@ -133,7 +133,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
         </p>
         {state.personType === 'natural' ? (
           <p className="mt-1 text-sm text-grayText">
-            {isEnglish ? 'Identity' : 'Identidad'}: {state.personalInfo.firstName || (isEnglish ? 'No first name' : 'Sin nombres')} {state.personalInfo.lastName || ''} {state.personalInfo.documentNumber ? `· ${state.personalInfo.documentNumber}` : ''}
+            {isEnglish ? 'Identity' : 'Identidad'}: {state.personalInfo.firstName || (isEnglish ? 'No first name' : 'Sin nombres')} {state.personalInfo.lastName || ''} {state.country === 'cl' ? `· RUN: ${state.personalInfo.run || 'Pendiente'} · Número de documento: ${state.personalInfo.documentNumber || 'Pendiente'}` : state.personalInfo.documentNumber ? `· ${state.personalInfo.documentNumber}` : ''}
           </p>
         ) : null}
         <ul className="mt-3 space-y-2">

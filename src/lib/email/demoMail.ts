@@ -91,7 +91,12 @@ export function buildDemoEmail(
   if (state.personType === 'natural') {
     summaryLines.push(`- Nombres: ${state.personalInfo.firstName || 'No extraídos'}`);
     summaryLines.push(`- Apellidos: ${state.personalInfo.lastName || 'No extraídos'}`);
-    summaryLines.push(`- Identificación: ${state.personalInfo.documentNumber || 'No extraída'}`);
+    if (state.country === 'cl') {
+      summaryLines.push(`- RUN: ${state.personalInfo.run || 'No extraído'}`);
+      summaryLines.push(`- Número de documento: ${state.personalInfo.documentNumber || 'No extraído'}`);
+    } else {
+      summaryLines.push(`- Identificación: ${state.personalInfo.documentNumber || 'No extraída'}`);
+    }
   }
   summaryLines.push(`- Prueba de vida: ${biometricStatusLabel(state.biometrics.status)}`);
   summaryLines.push(`- Geolocalización: ${formatBiometricLocation(state)}`);
@@ -148,7 +153,12 @@ export function buildFriendlySummaryLines(state: OnboardingState) {
   if (state.personType === 'natural') {
     lines.push(`Nombres: ${state.personalInfo.firstName || 'Pendiente'}`);
     lines.push(`Apellidos: ${state.personalInfo.lastName || 'Pendiente'}`);
-    lines.push(`Identificación: ${state.personalInfo.documentNumber || 'Pendiente'}`);
+    if (state.country === 'cl') {
+      lines.push(`RUN: ${state.personalInfo.run || 'Pendiente'}`);
+      lines.push(`Número de documento: ${state.personalInfo.documentNumber || 'Pendiente'}`);
+    } else {
+      lines.push(`Identificación: ${state.personalInfo.documentNumber || 'Pendiente'}`);
+    }
   }
   lines.push(`Prueba de vida: ${biometricStatusToFriendly(state.biometrics.status)}`);
   lines.push(`Geolocalización: ${formatBiometricLocation(state)}`);
@@ -336,7 +346,10 @@ function buildConversationData({
   if (state.personType === 'natural') {
     addConversationField(data, 'NOMBRES', state.personalInfo.firstName);
     addConversationField(data, 'APELLIDOS', state.personalInfo.lastName);
-    addConversationField(data, 'NUMERO_IDENTIFICACION', state.personalInfo.documentNumber);
+    addConversationField(data, 'NUMERO_IDENTIFICACION', state.country === 'cl' ? state.personalInfo.run : state.personalInfo.documentNumber);
+    if (state.country === 'cl') {
+      addConversationField(data, 'NUMERO_DOCUMENTO', state.personalInfo.documentNumber);
+    }
     addConversationField(data, 'DOCUMENTO_IDENTIDAD', state.documents.documentoIdentidad.fileName || state.documents.licenciaConducirFrente.fileName);
   } else {
     addConversationField(data, 'NOMBRE_EMPRESA', companyName);

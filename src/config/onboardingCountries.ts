@@ -257,6 +257,38 @@ export const ONBOARDING_COUNTRIES: Record<CountryCode, CountryOnboardingCopy> = 
       }
     }
   },
+  cl: {
+    code: 'cl',
+    name: 'Chile',
+    flag: '🇨🇱',
+    heroEyebrow: '',
+    personTypes: {
+      juridica: {
+        personType: 'juridica',
+        personTypeLabel: 'Persona jurídica',
+        personTypeDescription: 'No disponible para Chile en este flujo.',
+        heroHeadline: 'Portal de onboarding para empresas en Chile.',
+        heroSubheadline: '',
+        heroButton: 'Continuar',
+        documentsIntro: 'Este flujo no está disponible para personas jurídicas en Chile.',
+        documentOrder: [],
+        documents: {}
+      },
+      natural: {
+        personType: 'natural',
+        personTypeLabel: 'Persona natural',
+        personTypeDescription: 'Onboarding individual con cédula de identidad chilena.',
+        heroHeadline: 'Portal de onboarding para personas naturales en Chile.',
+        heroSubheadline: 'Cargue su documento de identidad en un flujo guiado y validado para Chile.',
+        heroButton: 'Continuar con persona natural',
+        documentsIntro: 'Cargue su DNI / Cédula de identidad para continuar.',
+        documentOrder: ['documentoIdentidad'],
+        documents: {
+          documentoIdentidad: { label: 'DNI / Cédula de identidad' }
+        }
+      }
+    }
+  },
   do: {
     code: 'do',
     name: 'República Dominicana',

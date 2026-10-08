@@ -71,6 +71,7 @@ export function createEmptyPersonalInfo() {
   return {
     firstName: '',
     lastName: '',
+    run: '',
     documentNumber: ''
   };
 }
@@ -234,6 +235,9 @@ function stripUploadedFilesForReload(state: OnboardingState): OnboardingState {
 
   return {
     ...stripTransientDocuments(state),
+    personalInfo: state.country === 'cl' && state.personalInfo.run === undefined
+      ? { ...state.personalInfo, run: state.personalInfo.documentNumber, documentNumber: '' }
+      : state.personalInfo,
     documents: createEmptyDocuments(),
     representatives: [createEmptyRepresentative(1, true), createEmptyRepresentative(2, representative2Enabled)],
     biometrics: createEmptyBiometric(),

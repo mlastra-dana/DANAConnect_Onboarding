@@ -6,7 +6,7 @@ import { FileUploadCard } from '../components/onboarding/FileUploadCard';
 import { Button } from '../components/ui/Button';
 import { Toast } from '../components/ui/Toast';
 import { buildValidationErrorResult, shouldUseS3ValidationUpload, validateDocumentFile } from '../lib/validators/documentValidators';
-import { createEmptyDocument, createEmptyRepresentative } from '../app/state';
+import { createEmptyDocument, createEmptyPersonalInfo, createEmptyRepresentative } from '../app/state';
 import { DocumentRecord, DocumentType, DocumentValidationResult, RepresentativeRecord } from '../app/types';
 import {
   getDocumentLabel,
@@ -103,6 +103,11 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
   async function handleUploadBase(docType: DocumentType, file: File) {
     const key: UploadKey = docType;
+    const fillsPersonalInfo = state.personType === 'natural' &&
+      (docType === 'rif' || docType === 'documentoFiscal' || docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente');
+    if (fillsPersonalInfo) {
+      setPersonalInfo(createEmptyPersonalInfo());
+    }
     setUploadingMap((prev) => ({ ...prev, [key]: true }));
     setUploadProgressMap((prev) => ({ ...prev, [key]: 0 }));
     setValidationProgressMap((prev) => ({ ...prev, [key]: 0 }));
@@ -166,14 +171,18 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       }
 
       if (
-        state.personType === 'natural' &&
-        (docType === 'rif' || docType === 'documentoFiscal' || docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente') &&
+        fillsPersonalInfo &&
+        (result.status === 'valid' || result.status === 'warning') &&
+        result.typeStatus !== 'error' &&
         result.extractedIdentity
       ) {
+        const identity = result.extractedIdentity;
+        const legacyChileIdentity = state.country === 'cl' && identity.run === undefined;
         setPersonalInfo({
-          firstName: result.extractedIdentity.firstName ?? '',
-          lastName: result.extractedIdentity.lastName ?? '',
-          documentNumber: result.extractedIdentity.documentNumber ?? ''
+          firstName: identity.firstName ?? '',
+          lastName: identity.lastName ?? '',
+          run: state.country === 'cl' ? (legacyChileIdentity ? identity.documentNumber : identity.run) ?? '' : '',
+          documentNumber: legacyChileIdentity ? '' : identity.documentNumber ?? ''
         });
       }
     } catch (error) {
@@ -280,6 +289,13 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
     setDocument(docType, createEmptyDocument(docType));
     clearUploaderRuntime(key);
+
+    if (
+      state.personType === 'natural' &&
+      (docType === 'rif' || docType === 'documentoFiscal' || docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente')
+    ) {
+      setPersonalInfo(createEmptyPersonalInfo());
+    }
 
     if (isVenezuelaJuridica && docType === 'rif') {
       clearVenezuelaJuridicaDependentDocuments();
@@ -571,7 +587,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       {state.personType === 'natural' ? (
         <Card>
           <h3 className="text-lg font-semibold text-dark">Datos de identidad</h3>
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <div className={`mt-4 grid gap-4 ${state.country === 'cl' ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
             <label className="space-y-2">
               <span className="text-sm font-medium text-dark">{firstNameLabel}</span>
               <input
@@ -602,8 +618,20 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                 placeholder={isEnglish ? 'Last name' : 'Apellidos'}
               />
             </label>
+            {state.country === 'cl' ? (
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-dark">RUN</span>
+                <input
+                  type="text"
+                  value={state.personalInfo.run ?? ''}
+                  onChange={(event) => setPersonalInfo({ ...state.personalInfo, run: event.target.value })}
+                  className="w-full rounded-lg border border-borderLight px-3 py-2.5 text-sm text-dark outline-none transition-colors focus:border-primary"
+                  placeholder="RUN"
+                />
+              </label>
+            ) : null}
             <label className="space-y-2">
-              <span className="text-sm font-medium text-dark">{isEnglish ? 'Identification number' : 'Número de identificación'}</span>
+              <span className="text-sm font-medium text-dark">{state.country === 'cl' ? 'Número de documento' : isEnglish ? 'Identification number' : 'Número de identificación'}</span>
               <input
                 type="text"
                 value={state.personalInfo.documentNumber}
@@ -614,7 +642,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                   })
                 }
                 className="w-full rounded-lg border border-borderLight px-3 py-2.5 text-sm text-dark outline-none transition-colors focus:border-primary"
-                placeholder={isEnglish ? 'Identification number' : 'Número de identificación'}
+                placeholder={state.country === 'cl' ? 'Número de documento' : isEnglish ? 'Identification number' : 'Número de identificación'}
               />
             </label>
           </div>

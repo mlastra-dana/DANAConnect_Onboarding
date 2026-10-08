@@ -317,9 +317,10 @@ function mapLambdaResponseToValidationResult(body: unknown, fileSize: number) {
   const uiStatus = isRecord(payload.uiStatus) ? payload.uiStatus : {};
   const analysis = isRecord(payload.analysis) ? payload.analysis : {};
   const diagnostics = isRecord(payload.providerDiagnostics) ? payload.providerDiagnostics : {};
-  const extractedIdentityPayload = isRecord(payload.extractedIdentity) ? payload.extractedIdentity : {};
-  const extractedCompanyPayload = isRecord(payload.extractedCompany) ? payload.extractedCompany : {};
-  const extractedLegalRepresentativesPayload = Array.isArray(payload.extractedLegalRepresentatives)
+  const acceptsExtractedData = status === 'valid' || status === 'warning';
+  const extractedIdentityPayload = acceptsExtractedData && isRecord(payload.extractedIdentity) ? payload.extractedIdentity : {};
+  const extractedCompanyPayload = acceptsExtractedData && isRecord(payload.extractedCompany) ? payload.extractedCompany : {};
+  const extractedLegalRepresentativesPayload = acceptsExtractedData && Array.isArray(payload.extractedLegalRepresentatives)
     ? payload.extractedLegalRepresentatives
     : [];
   const typeStatus: 'valid' | 'error' | 'review' = status === 'error' ? 'error' : status === 'warning' ? 'review' : 'valid';
@@ -357,6 +358,7 @@ function mapLambdaResponseToValidationResult(body: unknown, fileSize: number) {
     extractedIdentity: {
       firstName: typeof extractedIdentityPayload.firstName === 'string' ? extractedIdentityPayload.firstName.trim() : '',
       lastName: typeof extractedIdentityPayload.lastName === 'string' ? extractedIdentityPayload.lastName.trim() : '',
+      run: typeof extractedIdentityPayload.run === 'string' ? extractedIdentityPayload.run.trim() : undefined,
       documentNumber:
         typeof extractedIdentityPayload.documentNumber === 'string' ? extractedIdentityPayload.documentNumber.trim() : '',
       rawText: typeof extractedIdentityPayload.rawText === 'string' ? extractedIdentityPayload.rawText : ''

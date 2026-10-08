@@ -50,6 +50,7 @@ function reducer(state: OnboardingState, action: Action): OnboardingState {
       return {
         ...state,
         country: action.payload,
+        personType: getDocumentOrder(action.payload, state.personType).length > 0 ? state.personType : 'natural',
         documents: createInitialState(state.companyId, state.tenant).documents,
         representatives: createInitialState(state.companyId, state.tenant).representatives,
         personalInfo: createInitialState(state.companyId, state.tenant).personalInfo,
