@@ -21,6 +21,7 @@ API local de correo: `http://localhost:8787`
 - Navbar limpia con logo, enlaces clave y botón `Salir` visible durante todo el onboarding.
 - Reset global al usar `Inicio`, `Salir` o `Volver al inicio` (archivos, previews, validaciones y envío).
 - Uploads unificados con `FileUploadCard`, drag & drop y selector de archivo confiable.
+- Captura con icono de camara para identificaciones, frente/reverso y representantes en todos los paises; incluye cambio de dispositivo, rotacion y confirmacion antes de validar. Los documentos fiscales y societarios conservan solo carga de archivos. La camara requiere HTTPS o localhost y permiso del navegador.
 - Botón `X` en todos los adjuntos para limpiar archivo + preview + estado de validación.
 - Soporte de segundo representante opcional en layout responsivo de 2 columnas en desktop.
 - Validación documental remota vía Lambda + Bedrock, reemplazando la validación local heurística para la demo.

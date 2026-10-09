@@ -1,5 +1,5 @@
 import { useId, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle, Loader2, UploadCloud, XCircle } from 'lucide-react';
+import { AlertTriangle, Camera, CheckCircle, Loader2, UploadCloud, XCircle } from 'lucide-react';
 import { DocumentRecord } from '../../app/types';
 import { StatusBadge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -8,6 +8,7 @@ import { PdfPreview } from './PdfPreview';
 import { FileAttachmentChip } from '../ui/FileAttachmentChip';
 import { Progress } from '../ui/Progress';
 import { MAX_FILE_SIZE_LABEL } from '../../lib/validators/fileValidators';
+import { CameraCaptureDialog } from './CameraCaptureDialog';
 
 export function DocumentUploader({
   docRecord,
@@ -49,6 +50,7 @@ export function DocumentUploader({
   onRemoveFile: () => void;
 }) {
   const [dragOver, setDragOver] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
   const fileAccept = useMemo(() => '.pdf,.png,.jpg,.jpeg,.webp', []);
@@ -74,6 +76,20 @@ export function DocumentUploader({
     (language === 'en' ? 'No validations have been run yet.' : 'Aún no hay validaciones ejecutadas.');
   const warningMessages = docRecord.validation.warnings ?? [];
   const hasFile = Boolean(docRecord.fileName);
+  const cameraEnabled = ['documentoIdentidad', 'documentoIdentidadReverso', 'cedulaRepresentante', 'documentoRepresentante', 'licenciaConducirFrente', 'licenciaConducirReverso'].includes(docRecord.type);
+  const cameraLabel = `${language === 'en' ? 'Open camera for' : 'Abrir cámara para'} ${resolvedLabel}`;
+  const cameraButton = cameraEnabled ? (
+    <button
+      type="button"
+      aria-label={cameraLabel}
+      title={cameraLabel}
+      disabled={disabled || loading}
+      onClick={(event) => { event.stopPropagation(); setCameraOpen(true); }}
+      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-borderLight bg-white text-primary transition hover:border-primary hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      <Camera className="h-5 w-5" />
+    </button>
+  ) : null;
   const fileContainerClass =
     feedbackStatus === 'valid'
       ? 'border-green-200 bg-green-50/40'
@@ -100,6 +116,13 @@ export function DocumentUploader({
 
   const content = (
     <>
+      {cameraOpen ? <CameraCaptureDialog
+        label={resolvedLabel}
+        fileName={docRecord.type}
+        language={language}
+        onClose={() => setCameraOpen(false)}
+        onConfirm={(file) => { setCameraOpen(false); if (!disabled && !loading) void onSelectFile(file); }}
+      /> : null}
       {!embedded ? (
       <div className="absolute right-5 top-5">
         <StatusBadge status={feedbackStatus} language={language} />
@@ -150,6 +173,7 @@ export function DocumentUploader({
           aria-label={`${language === 'en' ? 'Upload' : 'Subir'} ${resolvedLabel}`}
           onClick={triggerFileDialog}
           onKeyDown={(event) => {
+            if (event.target !== event.currentTarget) return;
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault();
               triggerFileDialog();
@@ -192,6 +216,7 @@ export function DocumentUploader({
             <label htmlFor={inputId} className="sr-only">
               {language === 'en' ? 'Select file' : 'Seleccionar archivo'}
             </label>
+            <div className="flex items-center justify-center gap-2">
             <Button
               type="button"
               variant="secondary"
@@ -203,6 +228,8 @@ export function DocumentUploader({
             >
               {language === 'en' ? 'Select file' : 'Seleccionar archivo'}
             </Button>
+            {cameraButton}
+            </div>
             <p className="text-xs text-grayText">
               {disabled && disabledMessage
                 ? disabledMessage
@@ -228,7 +255,10 @@ export function DocumentUploader({
 
       {docRecord.fileName ? (
         <div className={`${embedded ? 'rounded-lg' : 'rounded-xl'} border p-3 ${fileContainerClass}`}>
-          <FileAttachmentChip fileName={docRecord.fileName} status={docRecord.validation.status} onRemove={handleRemoveClick} />
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1"><FileAttachmentChip fileName={docRecord.fileName} status={docRecord.validation.status} onRemove={handleRemoveClick} /></div>
+            {cameraButton}
+          </div>
           {docRecord.fileType?.includes('pdf') ? (
             previewFile ? (
               <div className="mt-3">
