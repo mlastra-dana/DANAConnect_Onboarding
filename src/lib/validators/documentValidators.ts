@@ -14,6 +14,7 @@ export async function validateDocumentFile(
   personType: PersonType,
   onProgress?: (progress: number) => void,
   options?: {
+    onboardingId?: string;
     expectedLegalRepresentatives?: DocumentValidationResult['extractedLegalRepresentatives'];
     expectedCompany?: DocumentValidationResult['extractedCompany'];
     expectedIdentity?: DocumentValidationResult['extractedIdentity'];
@@ -60,6 +61,7 @@ export async function validateDocumentFile(
     person_type: personType,
     slot: slotForValidation
   };
+  if (options?.onboardingId) payload.onboarding_id = options.onboardingId;
 
   let uploadedFileReference: PreparedDocumentUpload | null = null;
   try {

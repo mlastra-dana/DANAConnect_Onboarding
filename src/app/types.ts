@@ -161,6 +161,7 @@ export type PersonalInfo = {
 };
 
 export type OnboardingState = {
+  onboardingId: string;
   companyId: string;
   country: CountryCode;
   personType: PersonType;

@@ -65,6 +65,68 @@ class TokenUsageTests(unittest.TestCase):
         self.assertNotIn("tokenUsage", json.loads(result["body"]))
 
 
+class TokenAuditTests(unittest.TestCase):
+    def setUp(self):
+        self.usage_token = validation.TOKEN_USAGE.set({
+            "modelId": "test-model", "inputTokens": 100, "outputTokens": 20, "totalTokens": 120,
+            "callCount": 2, "measuredCallCount": 2, "complete": True,
+        })
+        self.audit_token = validation.TOKEN_AUDIT_CONTEXT.set({
+            "auditId": "attempt-1", "onboardingId": "application-1", "document": "documentoFiscal", "fileName": "rif.pdf",
+        })
+        self.env = patch.dict(validation.os.environ, {
+            "DANA_TOKEN_AUDIT_PROJECT_ID": "207867", "DANA_ID_COMPANY": "test-company",
+            "DANA_ID_CONVERSATION": "original-project", "DANA_SMTP_USER": "test-user",
+            "DANA_SMTP_PASS": "test-password", "DANA_FROM": "test@example.com",
+            "DANA_CC": "must-not-copy@example.com", "DANA_STATIC_DATA": '{"UNRELATED":"value"}',
+        })
+        self.env.start()
+
+    def tearDown(self):
+        self.env.stop()
+        validation.TOKEN_USAGE.reset(self.usage_token)
+        validation.TOKEN_AUDIT_CONTEXT.reset(self.audit_token)
+
+    def test_audit_uses_exact_fields_and_separate_recipient(self):
+        from urllib.parse import parse_qs
+        with patch.object(validation.smtplib, "SMTP") as smtp:
+            smtp.return_value.__enter__.return_value.send_message.return_value = {}
+            result = validation.response(200, {"status": "valid"})
+            message = smtp.return_value.__enter__.return_value.send_message.call_args.args[0]
+            self.assertEqual(message["To"], "207867@test-company.email-platform.com")
+            self.assertIsNone(message["Cc"])
+            fields = parse_qs(message.get_content().strip(), keep_blank_values=True)
+            self.assertEqual(set(fields), {"command", "AUDIT_ID", "ONBOARDING_ID", "DOCUMENT", "FILENAME", "LAMBDA_NAME", "MODEL_ID", "LLAMADAS", "RESULTADO_DOCUMENT", "TOKEN_INPUT", "TOKEN_OUTPUT", "TOKENS_TOTALES"})
+            self.assertEqual(fields["ONBOARDING_ID"], ["application-1"])
+            self.assertEqual(fields["TOKENS_TOTALES"], ["120"])
+            self.assertEqual(fields["command"], ["StartConversationWithData"])
+            self.assertEqual(json.loads(result["body"])["status"], "valid")
+            validation.response(200, {"status": "valid"})
+            self.assertEqual(smtp.call_count, 1)
+
+    def test_audit_failure_does_not_change_validation(self):
+        with patch.object(validation.smtplib, "SMTP", side_effect=RuntimeError("unavailable")), self.assertLogs(level="ERROR"):
+            result = validation.response(200, {"status": "valid"})
+        self.assertEqual(json.loads(result["body"])["status"], "valid")
+        self.assertEqual(result["statusCode"], 200)
+
+    def test_disabled_audit_does_not_open_connection(self):
+        with patch.dict(validation.os.environ, {"DANA_TOKEN_AUDIT_PROJECT_ID": ""}), patch.object(validation.smtplib, "SMTP") as smtp:
+            validation.response(200, {"status": "valid"})
+        smtp.assert_not_called()
+
+    def test_unknown_measurement_is_not_written_as_zero(self):
+        from urllib.parse import parse_qs
+        validation.TOKEN_USAGE.get().update(complete=False, measuredCallCount=0)
+        with patch.object(validation.smtplib, "SMTP") as smtp:
+            smtp.return_value.__enter__.return_value.send_message.return_value = {}
+            validation.response(500, {"error": "unavailable"})
+            message = smtp.return_value.__enter__.return_value.send_message.call_args.args[0]
+        fields = parse_qs(message.get_content().strip(), keep_blank_values=True)
+        self.assertEqual(fields["TOKENS_TOTALES"], [""])
+        self.assertEqual(fields["RESULTADO_DOCUMENT"], ["error_medicion_no_disponible"])
+
+
 class ReferenceValidationTests(unittest.TestCase):
     def request(self, slot, person_type="natural", file_bytes=b"%PDF-1.4\nformat fixture", country="ve", **extra):
         payload = {

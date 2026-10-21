@@ -126,6 +126,7 @@ export function OnboardingProvider({ companyId, tenant, children }: PropsWithChi
       : {
           ...initial,
           ...restored,
+          onboardingId: restored.onboardingId || initial.onboardingId,
           personalInfo: { ...initial.personalInfo, ...restored.personalInfo },
           documents: {
             ...initial.documents,

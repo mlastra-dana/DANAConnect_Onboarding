@@ -88,6 +88,7 @@ export function createEmptyPersonalInfo() {
 
 export function createInitialState(companyId: string, tenant: TenantConfig): OnboardingState {
   return {
+    onboardingId: crypto.randomUUID(),
     companyId,
     country: 've',
     personType: 'juridica',

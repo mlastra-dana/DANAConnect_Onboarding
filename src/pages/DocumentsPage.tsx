@@ -152,7 +152,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         (progress) => {
           setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
         },
-        getBaseValidationOptions(docType)
+        { ...getBaseValidationOptions(docType), onboardingId: state.onboardingId }
       );
 
       if (isReference && result.status !== 'error') {
@@ -279,11 +279,10 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         (progress) => {
           setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
         },
-        isVenezuelaJuridica
-          ? {
-              expectedLegalRepresentatives: legalRepresentatives
-            }
-          : undefined
+        {
+          onboardingId: state.onboardingId,
+          ...(isVenezuelaJuridica ? { expectedLegalRepresentatives: legalRepresentatives } : {})
+        }
       );
 
       setRepresentative(repId, {

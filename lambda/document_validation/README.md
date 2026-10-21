@@ -105,8 +105,28 @@ Modelo usado en la demo:
   `complete: false` indica una medicion parcial. Cero llamadas confirma que no se uso Bedrock.
 - Se registra `bedrock_token_usage` por llamada en CloudWatch, sin contenido del documento.
   No incluye cobros de Textract/S3/Lambda ni consumos de intentos internos del SDK sin respuesta.
-  No se envia esta auditoria a DANA ni se modifica el contrato SMTP.
+  No se modifica el contrato SMTP del envio del onboarding.
 - Para ver numeros reales se debe desplegar esta version de la Lambda y publicar el frontend.
+
+### Auditoria en DANA (proyecto 207867)
+
+- Configurar `DANA_TOKEN_AUDIT_PROJECT_ID=207867` para habilitarla. Sin esa variable no hay envios de auditoria.
+- Reutiliza host, puerto, usuario, password y remitente SMTP existentes. El destinatario es
+  `207867@<DANA_ID_COMPANY>.email-platform.com`, independientemente del destinatario del onboarding.
+- Envia un `StartConversationWithData` separado por intento de validacion, sin adjuntos, CC/BCC,
+  datos estaticos ni mapeos de campos del onboarding. DANA escribe la fecha.
+- Campos: `AUDIT_ID`, `ONBOARDING_ID`, `DOCUMENT`, `FILENAME`, `LAMBDA_NAME`, `MODEL_ID`,
+  `LLAMADAS`, `RESULTADO_DOCUMENT`, `TOKEN_INPUT`, `TOKEN_OUTPUT`, `TOKENS_TOTALES`.
+- `RESULTADO_DOCUMENT` usa valid/warning/error y agrega `_medicion_parcial` o
+  `_medicion_no_disponible` cuando corresponde. Consumo desconocido se envia vacio, no cero.
+- `ONBOARDING_ID` es un UUID generado por el frontend y conservado para la solicitud;
+  `AUDIT_ID` es un UUID generado por el backend por intento. Clientes antiguos pueden enviar
+  auditorias sin `ONBOARDING_ID` hasta publicar el frontend actualizado.
+- Una respuesta SMTP aceptada confirma entrega al servidor, no la insercion final en la lista.
+  Configurar unicidad en DANA si se requiere deduplicacion por `AUDIT_ID`.
+- Un fallo se registra como `token_audit_failed` sin cambiar el resultado de la validacion;
+  no hay reintentos automaticos ni garantia de entrega. La conexion SMTP usa timeout de 5 segundos
+  por operacion y agrega latencia a la respuesta. Revisar CloudWatch para detectar perdidas.
 
 - La clasificacion y validacion general siguen usando Bedrock. La extraccion de representantes/junta directiva
   desde actas venezolanas usa Textract + S3 para OCR y Bedrock solo estructura texto ya extraido.
