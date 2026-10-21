@@ -132,7 +132,10 @@ export async function validateDocumentFile(
   if (!lambdaResponse.ok) {
     onProgress?.(100);
     const errorMessage = extractLambdaError(responseBody) ?? 'No se pudo validar el documento.';
-    return buildValidationErrorResult(errorMessage, ['lambda_http_error'], lambdaResponse.status >= 500 ? 'service' : 'document');
+    return {
+      ...buildValidationErrorResult(errorMessage, ['lambda_http_error'], lambdaResponse.status >= 500 ? 'service' : 'document'),
+      tokenUsage: parseTokenUsage(isRecord(responseBody) ? responseBody.tokenUsage : undefined)
+    };
   }
 
   if (!isRecord(responseBody) || !['valid', 'warning', 'error'].includes(responseBody.status)) {
@@ -159,6 +162,7 @@ export async function validateDocumentFile(
     extractedLegalRepresentatives: result.extractedLegalRepresentatives,
     extractedCompany: result.extractedCompany,
     extractedBankReference: result.extractedBankReference,
+    tokenUsage: result.tokenUsage,
     companyDocumentMatch: result.companyDocumentMatch,
     matchedCompanyEvidence: result.matchedCompanyEvidence,
     legalRepresentativeMatch: result.legalRepresentativeMatch,
@@ -318,6 +322,21 @@ function extractLambdaError(body: unknown) {
   return typeof maybeError === 'string' && maybeError.trim() ? maybeError.trim() : null;
 }
 
+export function parseTokenUsage(value: unknown): DocumentValidationResult['tokenUsage'] {
+  if (!isRecord(value)) return undefined;
+  const keys = ['inputTokens', 'outputTokens', 'totalTokens', 'callCount', 'measuredCallCount'] as const;
+  if (!keys.every(key => typeof value[key] === 'number' && Number.isSafeInteger(value[key]) && value[key] >= 0)) return undefined;
+  return {
+    modelId: typeof value.modelId === 'string' ? value.modelId : '',
+    inputTokens: value.inputTokens,
+    outputTokens: value.outputTokens,
+    totalTokens: value.totalTokens,
+    callCount: value.callCount,
+    measuredCallCount: value.measuredCallCount,
+    complete: value.complete === true
+  };
+}
+
 function mapLambdaResponseToValidationResult(body: unknown, fileSize: number) {
   const payload = isRecord(body) ? body : {};
   const status = normalizeStatus(payload.status);
@@ -338,6 +357,7 @@ function mapLambdaResponseToValidationResult(body: unknown, fileSize: number) {
 
   return {
     status,
+    tokenUsage: parseTokenUsage(payload.tokenUsage),
     typeStatus,
     validityStatus: normalizeValidityStatus(payload.validityStatus),
     validationScope: payload.validationScope === 'file_format' ? 'file_format' as const : 'document' as const,

@@ -18,6 +18,53 @@ with patch.dict(sys.modules, {"boto3": boto_stub, "botocore": types.ModuleType("
     spec.loader.exec_module(validation)
 
 
+class TokenUsageTests(unittest.TestCase):
+    def setUp(self):
+        self.context_token = validation.TOKEN_USAGE.set({
+            "modelId": "test-model", "inputTokens": 0, "outputTokens": 0, "totalTokens": 0,
+            "callCount": 0, "measuredCallCount": 0, "complete": True,
+        })
+
+    def tearDown(self):
+        validation.TOKEN_USAGE.reset(self.context_token)
+
+    def test_sums_all_calls_without_changing_model_response(self):
+        result = {"usage": {"inputTokens": 100, "outputTokens": 20, "totalTokens": 120}}
+        with patch.object(validation.BEDROCK_CLIENT, "converse", return_value=result):
+            for phase in ("classification", "validation"):
+                self.assertIs(validation.converse_with_usage(phase=phase, modelId="test-model"), result)
+        body = json.loads(validation.response(200, {"status": "valid"})["body"])
+        self.assertEqual(body["tokenUsage"]["totalTokens"], 240)
+        self.assertEqual(body["tokenUsage"]["inputTokens"], 200)
+        self.assertEqual(body["tokenUsage"]["outputTokens"], 40)
+        self.assertEqual(body["tokenUsage"]["callCount"], 2)
+        self.assertEqual(body["tokenUsage"]["measuredCallCount"], 2)
+        self.assertTrue(body["tokenUsage"]["complete"])
+
+    def test_missing_usage_is_not_reported_as_complete_zero(self):
+        with patch.object(validation.BEDROCK_CLIENT, "converse", return_value={}):
+            validation.converse_with_usage(phase="classification", modelId="test-model")
+        self.assertFalse(validation.TOKEN_USAGE.get()["complete"])
+        self.assertEqual(validation.TOKEN_USAGE.get()["measuredCallCount"], 0)
+
+    def test_failure_preserves_measured_tokens_in_error_response(self):
+        with patch.object(validation.BEDROCK_CLIENT, "converse", side_effect=[
+            {"usage": {"inputTokens": 100, "outputTokens": 20, "totalTokens": 120}}, RuntimeError("unavailable")
+        ]):
+            validation.converse_with_usage(phase="classification", modelId="test-model")
+            with self.assertRaises(RuntimeError):
+                validation.converse_with_usage(phase="validation", modelId="test-model")
+        usage = json.loads(validation.response(500, {"error": "unavailable"})["body"])["tokenUsage"]
+        self.assertEqual(usage["totalTokens"], 120)
+        self.assertEqual(usage["callCount"], 2)
+        self.assertFalse(usage["complete"])
+
+    def test_warm_invocation_does_not_leak_usage(self):
+        validation.TOKEN_USAGE.get()["totalTokens"] = 999
+        result = validation.lambda_handler({"requestContext": {"http": {"method": "OPTIONS"}}}, None)
+        self.assertNotIn("tokenUsage", json.loads(result["body"]))
+
+
 class ReferenceValidationTests(unittest.TestCase):
     def request(self, slot, person_type="natural", file_bytes=b"%PDF-1.4\nformat fixture", country="ve", **extra):
         payload = {
@@ -43,6 +90,9 @@ class ReferenceValidationTests(unittest.TestCase):
                     self.assertEqual(result["validityStatus"], "unknown")
                     self.assertFalse(result["document_type_match"])
                     self.assertEqual(result["extractedBankReference"]["institution"], "")
+                    self.assertEqual(result["tokenUsage"]["totalTokens"], 0)
+                    self.assertEqual(result["tokenUsage"]["callCount"], 0)
+                    self.assertTrue(result["tokenUsage"]["complete"])
             classify.assert_not_called()
             extract.assert_not_called()
 

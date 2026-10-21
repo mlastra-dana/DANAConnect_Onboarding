@@ -8,6 +8,7 @@ import { PdfPreview } from './PdfPreview';
 import { FileAttachmentChip } from '../ui/FileAttachmentChip';
 import { Progress } from '../ui/Progress';
 import { MAX_FILE_SIZE_LABEL } from '../../lib/validators/fileValidators';
+import { DocumentTokenUsage } from './DocumentTokenUsage';
 
 export function DocumentUploader({
   docRecord,
@@ -256,6 +257,8 @@ export function DocumentUploader({
           )}
         </div>
       ) : null}
+
+      {hasFile && !loading ? <DocumentTokenUsage usage={docRecord.validation.tokenUsage} language={language} /> : null}
 
       <div className="space-y-1 text-sm">
         {feedbackStatus === 'unavailable' ? (

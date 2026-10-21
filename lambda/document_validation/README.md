@@ -97,6 +97,17 @@ Modelo usado en la demo:
 
 ## Notas
 
+- Las respuestas de validacion incluyen `tokenUsage`: `modelId`, `inputTokens`, `outputTokens`,
+  `totalTokens`, `callCount`, `measuredCallCount` y `complete`. Suma las metricas devueltas por
+  todas las llamadas Converse de esa solicitud, incluso si despues falla la validacion.
+- El frontend muestra ese consumo por documento en la carga y en el resumen. Corresponde a la
+  ultima validacion, no al acumulado de reintentos. Sin metricas se muestra consumo no disponible;
+  `complete: false` indica una medicion parcial. Cero llamadas confirma que no se uso Bedrock.
+- Se registra `bedrock_token_usage` por llamada en CloudWatch, sin contenido del documento.
+  No incluye cobros de Textract/S3/Lambda ni consumos de intentos internos del SDK sin respuesta.
+  No se envia esta auditoria a DANA ni se modifica el contrato SMTP.
+- Para ver numeros reales se debe desplegar esta version de la Lambda y publicar el frontend.
+
 - La clasificacion y validacion general siguen usando Bedrock. La extraccion de representantes/junta directiva
   desde actas venezolanas usa Textract + S3 para OCR y Bedrock solo estructura texto ya extraido.
 - El bucket S3 debe permanecer privado, con ACLs deshabilitadas y bloqueo de acceso publico.

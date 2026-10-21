@@ -43,6 +43,15 @@ export type BankReferenceInfo = {
 };
 
 export type DocumentValidationResult = {
+  tokenUsage?: {
+    modelId: string;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    callCount: number;
+    measuredCallCount: number;
+    complete: boolean;
+  };
   status: ValidationStatus;
   failureKind?: 'document' | 'service';
   checks: DocumentCheck[];
