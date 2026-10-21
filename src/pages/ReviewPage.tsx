@@ -6,7 +6,6 @@ import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/ui/Badge';
 import { DocumentTokenUsage } from '../components/onboarding/DocumentTokenUsage';
 import { Toast } from '../components/ui/Toast';
-import { buildDemoEmail, sendEmailViaApi } from '../lib/email/demoMail';
 import {
   getDocumentLabel,
   getDocumentOrder,
@@ -19,7 +18,6 @@ import { clearState } from '../app/state';
 export function ReviewPage({ companyId }: { companyId: string }) {
   const { state, canSubmit, setSubmission } = useOnboarding();
   const [errorToast, setErrorToast] = useState<string | null>(null);
-  const [recipientEmail, setRecipientEmail] = useState('');
   const navigate = useNavigate();
   const representative1 = state.representatives.find((rep) => rep.id === 1)!;
   const representative2 = state.representatives.find((rep) => rep.id === 2)!;
@@ -38,8 +36,6 @@ export function ReviewPage({ companyId }: { companyId: string }) {
   ];
   const receivedDocumentsCount = requiredDocuments.filter(Boolean).length;
   const requiredDocumentsCount = requiredDocuments.length;
-  const normalizedRecipientEmail = recipientEmail.trim();
-  const recipientEmailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedRecipientEmail);
   const showSubmissionError = canSubmit && state.submission.status === 'error';
 
   useEffect(() => {
@@ -52,38 +48,22 @@ export function ReviewPage({ companyId }: { companyId: string }) {
     setErrorToast(null);
     if (!canSubmit) return;
 
-    if (!recipientEmailIsValid) {
-      setErrorToast(isEnglish ? 'Enter a valid email address.' : 'Ingrese un correo electrónico válido.');
-      return;
-    }
     setSubmission({ status: 'loading' });
 
     try {
-      const externalTrigger = new URLSearchParams(window.location.search).get('externalTrigger');
-      const email = buildDemoEmail(state, companyId, externalTrigger, normalizedRecipientEmail);
-      const sendResult = await sendEmailViaApi(email.subject, email.body, email.data, email.files);
-
-      if (!sendResult.ok) {
-        const fallbackError = isEnglish ? 'The submission could not be completed.' : 'No se pudo completar el envío.';
-        setSubmission({ status: 'error', error: sendResult.error ?? fallbackError });
-        setErrorToast(sendResult.error ?? fallbackError);
-        return;
-      }
+      const registrationId = state.onboardingId;
+      const submittedAt = new Date().toISOString();
 
       setSubmission({
         status: 'success',
-        registrationId: email.trackingId,
-        submittedAt: email.submittedAtISO,
-        emailSubject: email.subject,
-        emailBody: email.body,
-        emailTo: sendResult.to ?? 'DANAConnect Cloud SMTP'
+        registrationId,
+        submittedAt
       });
 
       const payload = {
         companyId,
-        registrationId: email.trackingId,
-        submittedAt: email.submittedAtISO,
-        to: sendResult.to ?? 'DANAConnect Cloud SMTP',
+        registrationId,
+        submittedAt,
         documents: summarizeDocuments(state.documents),
         representatives: state.representatives.map((representative) => ({
           id: representative.id,
@@ -94,7 +74,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
       };
 
       try {
-        localStorage.setItem(`onboarding_submission:${companyId}:${email.trackingId}`, JSON.stringify(payload));
+        localStorage.setItem(`onboarding_submission:${companyId}:${registrationId}`, JSON.stringify(payload));
       } catch (storageError) {
         console.warn('No se pudo guardar el comprobante local del envío.', storageError);
       }
@@ -214,25 +194,12 @@ export function ReviewPage({ companyId }: { companyId: string }) {
         </Card>
       ) : null}
 
-      <Card>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-dark">{isEnglish ? 'Email address' : 'Correo electrónico'}</span>
-          <input
-            type="email"
-            value={recipientEmail}
-            onChange={(event) => setRecipientEmail(event.target.value)}
-            className="w-full rounded-lg border border-borderLight px-3 py-2.5 text-sm text-dark outline-none transition-colors focus:border-primary"
-            placeholder={isEnglish ? 'email@company.com' : 'correo@empresa.com'}
-          />
-        </label>
-      </Card>
-
       <div className="flex flex-wrap justify-between gap-3">
         <Link to={`/onboarding/${companyId}/biometria`}>
           <Button variant="ghost">{isEnglish ? 'Back' : 'Volver'}</Button>
         </Link>
-        <Button onClick={() => void submit()} disabled={!canSubmit || !recipientEmailIsValid || state.submission.status === 'loading'}>
-          {state.submission.status === 'loading' ? (isEnglish ? 'Submitting...' : 'Enviando...') : isEnglish ? 'Submit' : 'Enviar'}
+        <Button onClick={() => void submit()} disabled={!canSubmit || state.submission.status === 'loading'}>
+          {state.submission.status === 'loading' ? (isEnglish ? 'Completing...' : 'Finalizando...') : isEnglish ? 'Finish' : 'Finalizar'}
         </Button>
       </div>
     </div>

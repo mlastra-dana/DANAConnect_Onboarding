@@ -13,7 +13,7 @@ export function SuccessPage() {
         </div>
         <h1 className="mt-4 text-3xl font-bold text-dark">{isEnglish ? 'Process completed' : 'Proceso completado'}</h1>
         <p className="mx-auto mt-2 max-w-xl text-sm text-grayText md:text-base">
-          {isEnglish ? 'Your documentation was received and is under review.' : 'Su documentación fue recibida y está en revisión.'}
+          {isEnglish ? 'You have completed your application.' : 'Ha completado su solicitud.'}
         </p>
       </div>
     </div>
