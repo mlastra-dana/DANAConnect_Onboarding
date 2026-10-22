@@ -4240,14 +4240,58 @@ def normalize_string_list(value: Any) -> List[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
+def dana_response_diagnostic(value: Any, request: Request) -> str:
+    # Keep the response structure and service messages, never arbitrary record values.
+    private_values = [request.get_header("Authorization") or ""]
+    private_values.extend(private_values[0].split(" ", 1)[1:])
+    private_values.extend(
+        value for key, value in os.environ.items()
+        if key.startswith("DANA_") and any(part in key for part in ("SECRET", "PASS", "USER", "CLIENT_ID", "ACCESS_TOKEN"))
+    )
+    try:
+        submitted = json.loads(request.data or b"{}")
+        if isinstance(submitted, dict):
+            private_values.extend(str(item) for item in submitted.values() if item is not None)
+    except (ValueError, UnicodeDecodeError):
+        pass
+
+    def summarize(item: Any, key: str = "", depth: int = 0) -> Any:
+        if depth > 4:
+            return "<depth_limit>"
+        if isinstance(item, dict):
+            return {str(name)[:80]: summarize(content, str(name), depth + 1) for name, content in list(item.items())[:20]}
+        if isinstance(item, list):
+            return [summarize(content, depth=depth + 1) for content in item[:3]]
+        if key.lower() in {"idresult", "code", "status", "statuscode", "success", "ok", "resultdescription", "message", "error", "errormessage", "error_description"}:
+            if isinstance(item, str):
+                for private in sorted(set(private_values), key=len, reverse=True):
+                    if len(private) >= 3:
+                        item = re.sub(re.escape(private), "[redacted]", item, flags=re.IGNORECASE)
+                item = re.sub(r"[\w.+-]+@[\w.-]+", "[redacted-email]", item)
+                return item[:400]
+            if item is None or type(item) in (bool, int, float):
+                return item
+        return f"<{type(item).__name__}>"
+
+    return json.dumps(summarize(value), ensure_ascii=True)[:6000]
+
+
 def dana_json_request(request: Request) -> Any:
     if urlsplit(request.full_url).scheme != "https":
         raise ValueError("DANA requiere endpoints HTTPS")
+    conversation_path = urlsplit(request.full_url).path
+    is_conversation = conversation_path.startswith("/api/2.0/rest/conversation/")
     try:
         with urlopen(request, timeout=int(optional_env("DANA_TIMEOUT_SECONDS") or 20)) as result:
+            if is_conversation:
+                LOGGER.info("dana_conversation_http path=%s http_status=%s", conversation_path, result.status)
             raw = result.read().decode("utf-8")
             parsed = json.loads(raw) if raw else {}
+            if is_conversation:
+                LOGGER.info("dana_conversation_response path=%s diagnostic=%s", conversation_path, dana_response_diagnostic(parsed, request))
     except HTTPError as exc:
+        if is_conversation:
+            LOGGER.warning("dana_conversation_http path=%s http_status=%s", conversation_path, exc.code)
         if exc.code in {401, 403}:
             _DANA_TOKEN_CACHE.update(access_token="", expires_at=0)
         exc.close()
@@ -4306,11 +4350,27 @@ def start_dana_conversation(project_id: str, fields: Dict[str, str]) -> Any:
         raise ValueError("El Project ID de DANA debe ser numerico")
     base_url = (optional_env("DANA_BASE_URL") or "https://appserv.danaconnect.com").rstrip("/")
     url = f"{base_url}/api/2.0/rest/conversation/ProjectID/{project_id}/start/data"
-    return dana_json_request(Request(url, data=json.dumps(fields).encode("utf-8"), method="POST", headers={
+    LOGGER.info("dana_start_requested project_id=%s field_count=%s", project_id, len(fields))
+    result = dana_json_request(Request(url, data=json.dumps(fields).encode("utf-8"), method="POST", headers={
         "Authorization": f"Bearer {get_dana_access_token()}",
         "Content-Type": "application/json", "Accept": "application/json",
         "X-DEBUG": optional_env("DANA_CONVERSATION_DEBUG") or "0",
     }))
+    ws_result = result.get("wsResult") if isinstance(result, dict) else None
+    ws_result = ws_result if isinstance(ws_result, dict) else {}
+    result_id = ws_result.get("idResult")
+    # Never log arbitrary response text: it may echo credentials or applicant data.
+    numeric_id = result_id if type(result_id) is int else None
+    description = ws_result.get("resultDescription")
+    description_ok = isinstance(description, str) and description.strip().upper() == "OK"
+    confirmed = numeric_id is not None and numeric_id >= 0 and description_ok
+    LOGGER.info(
+        "dana_start_result project_id=%s id_result=%s description_status=%s confirmed=%s",
+        project_id, numeric_id, "OK" if description_ok else "missing_or_rejected", confirmed,
+    )
+    if not confirmed:
+        raise RuntimeError("DANA StartConversation sin confirmacion wsResult OK; revise dana_start_result en CloudWatch")
+    return result
 
 
 def submit_onboarding_via_rest(payload: Dict[str, Any]) -> Dict[str, Any]:

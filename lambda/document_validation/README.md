@@ -7,6 +7,24 @@ Lambda desplegada: `Onboarding_validate_DanaConnect`.
 Archivo fuente principal: `lambda_function.py`.
 Handler configurado en AWS: `lambda_function.lambda_handler`.
 
+## Diagnostico de StartConversation
+
+Los diagnosticos se escriben desde la Lambda en CloudWatch, no en la lista de auditoria.
+Despues de desplegar `lambda_function.py`, buscar estos eventos:
+
+- `dana_start_requested`: proyecto y cantidad de campos enviados, sin sus valores.
+- `dana_conversation_http`: ruta y estado HTTP de la respuesta.
+- `dana_conversation_response`: estructura JSON y mensajes/codigos de servicio;
+  omite valores de registros y oculta credenciales, valores enviados y correos.
+- `dana_start_result`: proyecto, `id_result`, estado de confirmacion y `confirmed`.
+
+Solo se acepta exito con `wsResult.resultDescription: "OK"` y un `idResult` entero
+no negativo. Un HTTP 200 por si solo no confirma StartConversation. No se registran
+tokens OAuth, credenciales ni valores arbitrarios de registros de la respuesta.
+La confirmacion de la API no verifica por separado la escritura en la lista de DANA.
+Auditoria usa el proyecto `207867`; el envio final usa `204507`. Un fallo de auditoria
+se registra sin impedir la validacion documental. No se reintenta automaticamente.
+
 ## Referencias (compatibilidad del backend)
 
 Main no muestra referencias ni campos bancarios y no los envia al onboarding. El backend

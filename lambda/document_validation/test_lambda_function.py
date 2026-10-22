@@ -186,6 +186,7 @@ class DanaRestTests(unittest.TestCase):
 
     def http_result(self, data):
         context = MagicMock()
+        context.__enter__.return_value.status = 200
         context.__enter__.return_value.read.return_value = json.dumps(data).encode()
         return context
 
@@ -193,7 +194,8 @@ class DanaRestTests(unittest.TestCase):
         from urllib.parse import parse_qs
         with patch.object(validation, "urlopen", side_effect=[
             self.http_result({"access_token": "test-token", "expires_in": 3600}),
-            self.http_result({"success": True}), self.http_result({"success": True}),
+            self.http_result({"wsResult": {"idResult": 23617, "resultDescription": "OK"}}),
+            self.http_result({"wsResult": {"idResult": 23618, "resultDescription": "OK"}}),
         ]) as http, patch.object(validation.smtplib, "SMTP") as smtp:
             validation.start_dana_conversation("207867", {"TOKENS_TOTALES": "120"})
             validation.start_dana_conversation("204507", {"NOMBRES": "Demo"})
@@ -207,6 +209,63 @@ class DanaRestTests(unittest.TestCase):
         self.assertEqual(json.loads(request.data), {"TOKENS_TOTALES": "120"})
         self.assertNotIn("command", json.loads(request.data))
         smtp.assert_not_called()
+
+    def test_start_requires_explicit_ws_result_confirmation(self):
+        responses = [
+            {}, {"success": True}, [], {"wsResult": "invalid"},
+            {"wsResult": {"idResult": -1, "resultDescription": "OK"}},
+            {"wsResult": {"idResult": 0, "resultDescription": "Rejected"}},
+            {"wsResult": {"idResult": True, "resultDescription": "OK"}},
+            {"wsResult": {"resultDescription": "OK"}},
+        ]
+        for result in responses:
+            with self.subTest(result=result), patch.object(validation, "get_dana_access_token", return_value="token"), patch.object(validation, "dana_json_request", return_value=result):
+                with self.assertRaisesRegex(RuntimeError, "sin confirmacion"):
+                    validation.start_dana_conversation("207867", {})
+
+    def test_start_logs_safe_http_and_business_confirmation(self):
+        result = {"wsResult": {"idResult": 23617, "resultDescription": "OK"}, "private": "private-response"}
+        with patch.object(validation, "get_dana_access_token", return_value="private-token"), patch.object(validation, "urlopen", return_value=self.http_result(result)), self.assertLogs(level="INFO") as logs:
+            self.assertEqual(validation.start_dana_conversation("207867", {"EMAIL": "private@example.com"}), result)
+        output = " ".join(logs.output)
+        self.assertIn("http_status=200", output)
+        self.assertIn("project_id=207867 id_result=23617 description_status=OK confirmed=True", output)
+        for private in ("private-token", "private@example.com", "private-response"):
+            self.assertNotIn(private, output)
+
+    def test_start_does_not_log_arbitrary_rejection_text(self):
+        result = {"wsResult": {"idResult": -5, "resultDescription": "private@example.com test-secret"}}
+        with patch.object(validation, "get_dana_access_token", return_value="token"), patch.object(validation, "dana_json_request", return_value=result), self.assertLogs(level="INFO") as logs:
+            with self.assertRaises(RuntimeError):
+                validation.start_dana_conversation("207867", {})
+        output = " ".join(logs.output)
+        self.assertIn("id_result=-5", output)
+        self.assertIn("confirmed=False", output)
+        self.assertNotIn("private@example.com", output)
+        self.assertNotIn("test-secret", output)
+
+    def test_response_diagnostic_preserves_envelope_and_redacts_private_values(self):
+        request = validation.Request("https://example.com", data=json.dumps({"NOMBRES": "Demo Person"}).encode(), headers={"Authorization": "Bearer private-token"})
+        result = {"response": {"code": 42, "message": "Denied Demo Person test-secret private-token private@example.com"}, "access_token": "private-token", "record": {"NOMBRES": "Demo Person"}}
+        diagnostic = validation.dana_response_diagnostic(result, request)
+        self.assertIn('"code": 42', diagnostic)
+        self.assertIn("Denied", diagnostic)
+        self.assertIn('"response"', diagnostic)
+        for private in ("Demo Person", "test-secret", "private-token", "private@example.com"):
+            self.assertNotIn(private, diagnostic)
+
+    def test_nested_rejection_diagnostic_is_logged_before_strict_confirmation(self):
+        result = {"response": {"code": 42, "message": "Project not active"}}
+        with patch.object(validation, "get_dana_access_token", return_value="token"), patch.object(validation, "urlopen", return_value=self.http_result(result)), self.assertLogs(level="INFO") as logs:
+            with self.assertRaisesRegex(RuntimeError, "sin confirmacion"):
+                validation.start_dana_conversation("204507", {})
+        self.assertIn("dana_conversation_response", " ".join(logs.output))
+        self.assertIn("Project not active", " ".join(logs.output))
+
+    def test_start_accepts_documented_zero_result_id(self):
+        result = {"wsResult": {"idResult": 0, "resultDescription": "OK"}}
+        with patch.object(validation, "get_dana_access_token", return_value="token"), patch.object(validation, "dana_json_request", return_value=result):
+            self.assertEqual(validation.start_dana_conversation("207867", {}), result)
 
     def test_expired_token_refreshes(self):
         with patch.object(validation, "dana_json_request", return_value={"access_token": "new-token", "expires_in": 3600}) as request:
