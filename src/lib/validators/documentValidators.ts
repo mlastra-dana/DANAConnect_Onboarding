@@ -1,5 +1,6 @@
 import { CountryCode, DocumentType, DocumentValidationResult, PersonType } from '../../app/types';
 import { validateBasicFile } from './fileValidators';
+import { createDemoAuditIds } from './auditIds';
 
 export const DOCUMENT_VALIDATION_URL =
   import.meta.env.VITE_DOCUMENT_VALIDATION_URL?.trim() ||
@@ -61,7 +62,9 @@ export async function validateDocumentFile(
     person_type: personType,
     slot: slotForValidation
   };
-  if (options?.onboardingId) payload.onboarding_id = options.onboardingId;
+  const auditIds = createDemoAuditIds(country, personType, slotForValidation, options?.onboardingId ?? crypto.randomUUID());
+  payload.onboarding_id = auditIds.onboardingId;
+  payload.audit_id = auditIds.auditId;
 
   let uploadedFileReference: PreparedDocumentUpload | null = null;
   try {

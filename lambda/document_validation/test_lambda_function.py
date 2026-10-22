@@ -154,6 +154,19 @@ class TokenAuditTests(unittest.TestCase):
         self.smtp.assert_not_called()
         self.assertNotIn("tokenUsage", json.loads(result["body"]))
 
+    def test_frontend_demo_ids_are_sent_unchanged_to_dana(self):
+        with patch.object(validation, "run_bedrock_classification", return_value={"detected_document_type": "documentoFiscal", "detected_country": "ve", "confidence": 0.99}), patch.object(validation, "run_bedrock_validation", return_value={"status": "valid", "document_type_match": True}):
+            payload = {
+                "file_name": "rif.pdf", "content_type": "application/pdf",
+                "file_base64": base64.b64encode(b"%PDF-1.4 fixture").decode(),
+                "country": "ve", "person_type": "natural", "slot": "documentoFiscal",
+                "onboarding_id": "VE-PN-000123", "audit_id": "VE-PN-000123-RIF-02",
+            }
+            validation.lambda_handler({"body": json.dumps(payload)}, None)
+        fields = self.rest.call_args.args[1]
+        self.assertEqual(fields["ONBOARDING_ID"], "VE-PN-000123")
+        self.assertEqual(fields["AUDIT_ID"], "VE-PN-000123-RIF-02")
+
     def test_disabled_audit_does_not_open_connection(self):
         with patch.dict(validation.os.environ, {"DANA_TOKEN_AUDIT_PROJECT_ID": ""}):
             validation.response(200, {"status": "valid"})

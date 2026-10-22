@@ -7,6 +7,19 @@ Lambda desplegada: `Onboarding_validate_DanaConnect`.
 Archivo fuente principal: `lambda_function.py`.
 Handler configurado en AWS: `lambda_function.lambda_handler`.
 
+## Identificadores de demo
+
+El frontend envia IDs legibles a la auditoria: `VE-PN-000123` para un onboarding
+y `VE-PN-000123-RIF-01` para el primer intento del RIF. `PN` significa persona natural
+y `PJ` persona juridica. Cada documento lleva su propio contador de intentos.
+El UUID de sesion permanece interno para agrupar los documentos.
+
+Los correlativos se guardan solo en el navegador: no se usa DynamoDB ni se agregan
+variables de entorno o permisos AWS. Son etiquetas para la demo, no IDs globalmente
+unicos entre navegadores, pestanas simultaneas o despues de borrar el almacenamiento.
+Los registros anteriores no cambian. Para activar el formato, publicar el frontend
+y desplegar esta Lambda; clientes anteriores conservan el fallback UUID.
+
 ## Diagnostico de StartConversation
 
 Los diagnosticos se escriben desde la Lambda en CloudWatch, no en la lista de auditoria.

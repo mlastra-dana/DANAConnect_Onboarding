@@ -535,7 +535,7 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             "callCount": 0, "measuredCallCount": 0, "complete": True,
         })
         TOKEN_AUDIT_CONTEXT.set({
-            "auditId": str(uuid.uuid4()),
+            "auditId": str(payload.get("audit_id") or uuid.uuid4())[:100],
             "onboardingId": str(payload.get("onboarding_id") or "")[:100],
             "fileName": str(payload.get("file_name") or "")[:100],
             "document": str(payload.get("slot") or "")[:100],
