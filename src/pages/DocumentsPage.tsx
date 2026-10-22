@@ -6,8 +6,9 @@ import { FileUploadCard } from '../components/onboarding/FileUploadCard';
 import { Button } from '../components/ui/Button';
 import { Toast } from '../components/ui/Toast';
 import { buildValidationErrorResult, shouldUseS3ValidationUpload, validateDocumentFile } from '../lib/validators/documentValidators';
-import { createEmptyDocument, createEmptyPersonalInfo, createEmptyRepresentative } from '../app/state';
-import { DocumentRecord, DocumentType, DocumentValidationResult, RepresentativeRecord } from '../app/types';
+import { createEmptyDocument, createEmptyRepresentative } from '../app/state';
+import { DocumentRecord, DocumentType, DocumentValidationResult, PersonalInfo, RepresentativeRecord } from '../app/types';
+import { normalizeVenezuelanId } from '../lib/validators/venezuelanId';
 import {
   getDocumentLabel,
   getDocumentOrder,
@@ -33,6 +34,9 @@ const initialBoolMap: Record<UploadKey, boolean> = {
   actaDesignacionAutoridades: false,
   licenciaConducirFrente: false,
   licenciaConducirReverso: false,
+  referenciaPersonal: false,
+  referenciaComercial: false,
+  referenciaBancaria: false,
   rep1: false,
   rep2: false
 };
@@ -51,6 +55,9 @@ const initialNumMap: Record<UploadKey, number> = {
   actaDesignacionAutoridades: 0,
   licenciaConducirFrente: 0,
   licenciaConducirReverso: 0,
+  referenciaPersonal: 0,
+  referenciaComercial: 0,
+  referenciaBancaria: 0,
   rep1: 0,
   rep2: 0
 };
@@ -113,10 +120,16 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     const version = (uploadVersions.current[key] ?? 0) + 1;
     uploadVersions.current[key] = version;
     if (state.country === 'cl' && docType === 'documentoIdentidad') invalidateChileBackComparison();
-    const fillsPersonalInfo = state.personType === 'natural' &&
-      (docType === 'rif' || docType === 'documentoFiscal' || docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente');
-    if (fillsPersonalInfo) {
-      setPersonalInfo(createEmptyPersonalInfo());
+    if (state.personType === 'natural' && state.documents[docType].fileName && runtimeFiles[key] !== file) {
+      if (docType === 'rif' || docType === 'documentoFiscal' || docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente') {
+        restoreRemainingIdentity(docType);
+      }
+      if (isVenezuelaNatural && docType === 'documentoIdentidad') {
+        setPersonalInfo({ birthDate: '', nationality: '' });
+      }
+      if (isVenezuelaNatural && docType === 'referenciaBancaria') {
+        setPersonalInfo({ bankInstitution: '', bankProduct: '', bankBalanceFigures: '' });
+      }
     }
     setUploadingMap((prev) => ({ ...prev, [key]: true }));
     setUploadProgressMap((prev) => ({ ...prev, [key]: 0 }));
@@ -139,10 +152,11 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       if (previousPreview) URL.revokeObjectURL(previousPreview);
 
       previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
+      const isReference = docType === 'referenciaPersonal' || docType === 'referenciaComercial' || docType === 'referenciaBancaria';
       fileBase64 = shouldUseS3ValidationUpload(file) ? '' : await fileToBase64(file);
       setRuntimeFiles((prev) => ({ ...prev, [key]: file }));
 
-      const result = await validateDocumentFile(
+      let result = await validateDocumentFile(
         docType,
         file,
         state.country,
@@ -150,12 +164,21 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         (progress) => {
           setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
         },
-        getBaseValidationOptions(docType)
+        { ...getBaseValidationOptions(docType), onboardingId: state.onboardingId }
       );
 
       if (uploadVersions.current[key] !== version) {
         if (previewUrl) URL.revokeObjectURL(previewUrl);
         return;
+      }
+      if (isReference && result.status !== 'error') {
+        const otherDocuments = [
+          ...Object.entries(state.documents).filter(([type]) => type !== docType).map(([, record]) => record),
+          ...state.representatives.filter((representative) => representative.enabled).map((representative) => representative.document)
+        ];
+        if (otherDocuments.some((record) => record.fileBase64 && record.fileBase64 === fileBase64)) {
+          result = buildValidationErrorResult('Este archivo ya se cargó en otro recaudo. Seleccione el documento de referencia correspondiente.');
+        }
       }
 
       const nextDocument: DocumentRecord = {
@@ -172,35 +195,58 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
       setDocument(docType, nextDocument);
 
+      const resultAccepted = result.status === 'valid' || result.status === 'warning';
+      const previousApplicantId = normalizeVenezuelanId(state.documents.rif.validation.extractedIdentity?.documentNumber || state.personalInfo.documentNumber);
+      const nextApplicantId = normalizeVenezuelanId(result.extractedIdentity?.documentNumber ?? '');
+      const sameApplicant = resultAccepted && previousApplicantId !== null && previousApplicantId === nextApplicantId;
+
       if (isVenezuelaJuridica && docType === 'rif') {
-        clearVenezuelaJuridicaDependentDocuments();
+        invalidateVenezuelaJuridicaDependentDocuments();
       }
 
       if (isVenezuelaNatural && docType === 'rif') {
-        clearVenezuelaNaturalIdentityDocument();
+        if (state.documents.documentoIdentidad.fileName && !sameApplicant) {
+          invalidateVenezuelaNaturalIdentityDocument();
+        }
       }
 
       if (isVenezuelaJuridica && (docType === 'registroMercantil' || docType === 'actaDesignacionAutoridades')) {
         if (docType === 'registroMercantil') {
-          clearVenezuelaJuridicaAssembly();
+          invalidateVenezuelaJuridicaAssembly();
         }
-        clearVenezuelaJuridicaRepresentatives({ onlyValidated: true });
+        invalidateVenezuelaJuridicaRepresentatives({ onlyValidated: true });
       }
 
       if (
-        fillsPersonalInfo &&
-        (result.status === 'valid' || result.status === 'warning') &&
-        result.typeStatus !== 'error' &&
+        state.personType === 'natural' &&
+        resultAccepted &&
+        (docType === 'rif' || docType === 'documentoFiscal' || docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente') &&
         result.extractedIdentity
       ) {
-        const identity = result.extractedIdentity;
-        const legacyChileIdentity = state.country === 'cl' && identity.run === undefined;
-        setPersonalInfo({
-          firstName: identity.firstName ?? '',
-          lastName: identity.lastName ?? '',
-          run: state.country === 'cl' ? (legacyChileIdentity ? identity.documentNumber : identity.run) ?? '' : '',
-          documentNumber: legacyChileIdentity ? '' : identity.documentNumber ?? ''
-        });
+        const personalInfo: Partial<PersonalInfo> = {};
+        for (const field of ['firstName', 'lastName', 'documentNumber'] as const) {
+          const value = result.extractedIdentity[field]?.trim();
+          if (value) personalInfo[field] = value;
+        }
+        if (state.country === 'cl') {
+          const identity = result.extractedIdentity;
+          const legacy = identity.run === undefined;
+          personalInfo.run = (legacy ? identity.documentNumber : identity.run) ?? '';
+          personalInfo.documentNumber = legacy ? '' : identity.documentNumber ?? '';
+        }
+        if (isVenezuelaNatural && docType === 'documentoIdentidad') {
+          if (result.extractedIdentity.birthDate?.trim()) personalInfo.birthDate = result.extractedIdentity.birthDate.trim();
+          if (result.extractedIdentity.nationality?.trim()) personalInfo.nationality = result.extractedIdentity.nationality.trim();
+        }
+        setPersonalInfo(personalInfo);
+      }
+      if (isVenezuelaNatural && docType === 'referenciaBancaria' && resultAccepted) {
+        const bank = result.extractedBankReference;
+        const personalInfo: Partial<PersonalInfo> = {};
+        if (bank?.institution?.trim()) personalInfo.bankInstitution = bank.institution.trim();
+        if (bank?.product?.trim()) personalInfo.bankProduct = bank.product.trim();
+        if (bank?.balanceFigures?.trim()) personalInfo.bankBalanceFigures = bank.balanceFigures.trim();
+        setPersonalInfo(personalInfo);
       }
     } catch (error) {
       if (uploadVersions.current[key] !== version) return;
@@ -258,11 +304,10 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
         (progress) => {
           setValidationProgressMap((prev) => ({ ...prev, [key]: progress }));
         },
-        isVenezuelaJuridica
-          ? {
-              expectedLegalRepresentatives: legalRepresentatives
-            }
-          : undefined
+        {
+          onboardingId: state.onboardingId,
+          ...(isVenezuelaJuridica ? { expectedLegalRepresentatives: legalRepresentatives } : {})
+        }
       );
 
       setRepresentative(repId, {
@@ -302,6 +347,21 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     }
   }
 
+  function restoreRemainingIdentity(excludedDocType: DocumentType) {
+    const source = isVenezuelaNatural && (excludedDocType === 'rif' || excludedDocType === 'documentoIdentidad')
+      ? state.documents[excludedDocType === 'documentoIdentidad' ? 'rif' : 'documentoIdentidad']
+      : undefined;
+    const identity = source?.fileName && (source.validation.status === 'valid' || source.validation.status === 'warning')
+      ? source.validation.extractedIdentity
+      : undefined;
+    setPersonalInfo({
+      firstName: identity?.firstName ?? '',
+      lastName: identity?.lastName ?? '',
+      documentNumber: identity?.documentNumber ?? '',
+      ...(state.country === 'cl' ? { run: '' } : {})
+    });
+  }
+
   function handleRemoveBase(docType: DocumentType) {
     const key: UploadKey = docType;
     uploadVersions.current[key] = (uploadVersions.current[key] ?? 0) + 1;
@@ -312,24 +372,31 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     setDocument(docType, createEmptyDocument(docType));
     clearUploaderRuntime(key);
 
-    if (
-      state.personType === 'natural' &&
-      (docType === 'rif' || docType === 'documentoFiscal' || docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente')
-    ) {
-      setPersonalInfo(createEmptyPersonalInfo());
+    if (state.personType === 'natural' && (docType === 'rif' || docType === 'documentoFiscal' || docType === 'documentoIdentidad' || docType === 'licenciaConducirFrente')) {
+      restoreRemainingIdentity(docType);
+    }
+
+    if (isVenezuelaNatural && docType === 'documentoIdentidad') {
+      setPersonalInfo({ birthDate: '', nationality: '' });
+    }
+    if (isVenezuelaNatural && docType === 'rif') {
+      invalidateVenezuelaNaturalIdentityDocument();
+    }
+    if (isVenezuelaNatural && docType === 'referenciaBancaria') {
+      setPersonalInfo({ bankInstitution: '', bankProduct: '', bankBalanceFigures: '' });
     }
 
     if (isVenezuelaJuridica && docType === 'rif') {
-      clearVenezuelaJuridicaDependentDocuments();
+      invalidateVenezuelaJuridicaDependentDocuments();
     }
 
     if (isVenezuelaJuridica && docType === 'registroMercantil') {
-      clearVenezuelaJuridicaAssembly();
-      clearVenezuelaJuridicaRepresentatives();
+      invalidateVenezuelaJuridicaAssembly();
+      invalidateVenezuelaJuridicaRepresentatives();
     }
 
     if (isVenezuelaJuridica && docType === 'actaDesignacionAutoridades') {
-      clearVenezuelaJuridicaRepresentatives();
+      invalidateVenezuelaJuridicaRepresentatives();
     }
   }
 
@@ -377,41 +444,33 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     setValidationProgressMap((prev) => ({ ...prev, [key]: 0 }));
   }
 
-  function clearVenezuelaJuridicaDependentDocuments() {
+  function invalidateVenezuelaJuridicaDependentDocuments() {
     const constitution = state.documents.registroMercantil;
-    if (constitution.previewUrl) URL.revokeObjectURL(constitution.previewUrl);
-    setDocument('registroMercantil', createEmptyDocument('registroMercantil'));
-    clearUploaderRuntime('registroMercantil');
+    if (constitution.fileName) setDocument('registroMercantil', withPendingValidation(constitution));
 
-    clearVenezuelaJuridicaAssembly();
-    clearVenezuelaJuridicaRepresentatives();
+    invalidateVenezuelaJuridicaAssembly();
+    invalidateVenezuelaJuridicaRepresentatives();
   }
 
-  function clearVenezuelaJuridicaAssembly() {
+  function invalidateVenezuelaJuridicaAssembly() {
     const assembly = state.documents.actaDesignacionAutoridades;
-    if (assembly.previewUrl) URL.revokeObjectURL(assembly.previewUrl);
-    setDocument('actaDesignacionAutoridades', createEmptyDocument('actaDesignacionAutoridades'));
-    clearUploaderRuntime('actaDesignacionAutoridades');
-    setAssemblyEnabled(false);
+    if (assembly.fileName) setDocument('actaDesignacionAutoridades', withPendingValidation(assembly));
   }
 
-  function clearVenezuelaJuridicaRepresentatives(options: { onlyValidated?: boolean } = {}) {
+  function invalidateVenezuelaJuridicaRepresentatives(options: { onlyValidated?: boolean } = {}) {
     [representative1, representative2].forEach((representative) => {
+      if (!representative.document.fileName) return;
       if (options.onlyValidated && (!representative.enabled || representative.document.validation.status === 'pending')) return;
-      if (representative.document.previewUrl) URL.revokeObjectURL(representative.document.previewUrl);
       setRepresentative(representative.id, {
         ...representative,
-        document: createEmptyDocument('cedulaRepresentante')
+        document: withPendingValidation(representative.document)
       });
-      clearUploaderRuntime(representative.id === 1 ? 'rep1' : 'rep2');
     });
   }
 
-  function clearVenezuelaNaturalIdentityDocument() {
+  function invalidateVenezuelaNaturalIdentityDocument() {
     const identity = state.documents.documentoIdentidad;
-    if (identity.previewUrl) URL.revokeObjectURL(identity.previewUrl);
-    setDocument('documentoIdentidad', createEmptyDocument('documentoIdentidad'));
-    clearUploaderRuntime('documentoIdentidad');
+    if (identity.fileName) setDocument('documentoIdentidad', withPendingValidation(identity));
   }
 
   function getBaseValidationOptions(docType: DocumentType) {
@@ -458,7 +517,8 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
     <div className="space-y-6">
       <Toast type="info" message={flowConfig.documentsIntro} />
 
-      <div className={`grid grid-cols-1 gap-4 ${state.country === 'cl' ? 'lg:grid-cols-2' : 'lg:grid-cols-3'}`}>
+      <div className={state.personType === 'natural' ? 'grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_350px]' : ''}>
+      <div className={`grid min-w-0 grid-cols-1 gap-4 ${state.personType === 'natural' ? 'md:grid-cols-2' : isVenezuelaJuridica ? 'lg:grid-cols-2 xl:grid-cols-4' : 'lg:grid-cols-3'}`}>
         {displayedDocuments.map((docType) => {
           const constitutionUploadLocked = isVenezuelaJuridica && docType === 'registroMercantil' && !canUploadConstitution;
           const naturalIdentityUploadLocked = isVenezuelaNatural && docType === 'documentoIdentidad' && !canUploadNaturalIdentity;
@@ -495,7 +555,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
                 {!assemblyEnabled ? (
                   <div className="border-t border-borderLight pt-4">
-                    <Button type="button" variant="secondary" fullWidth onClick={handleAddAssembly} disabled={!canUploadAssembly}>
+                    <Button type="button" variant="secondary" fullWidth className="gap-2" onClick={handleAddAssembly} disabled={!canUploadAssembly}>
                       <Plus className="h-4 w-4" />
                       Agregar acta de asamblea
                     </Button>
@@ -595,7 +655,7 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
 
             {!representative2.enabled ? (
               <div className="border-t border-borderLight pt-4">
-                <Button type="button" variant="secondary" fullWidth onClick={handleAddRepresentative2}>
+                <Button type="button" variant="secondary" fullWidth className="gap-2" onClick={handleAddRepresentative2}>
                   <Plus className="h-4 w-4" />
                   {flowConfig.addSecondRepresentativeLabel}
                 </Button>
@@ -638,9 +698,10 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       </div>
 
       {state.personType === 'natural' ? (
+        <aside className="min-w-0 space-y-4 lg:sticky lg:top-28 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto" aria-label={isEnglish ? 'Identity details' : 'Datos de identidad'}>
         <Card>
           <h3 className="text-lg font-semibold text-dark">Datos de identidad</h3>
-          <div className={`mt-4 grid gap-4 ${state.country === 'cl' ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
+          <div className="mt-4 grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
             <label className="space-y-2">
               <span className="text-sm font-medium text-dark">{firstNameLabel}</span>
               <input
@@ -648,7 +709,6 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                 value={state.personalInfo.firstName}
                 onChange={(event) =>
                   setPersonalInfo({
-                    ...state.personalInfo,
                     firstName: event.target.value
                   })
                 }
@@ -663,7 +723,6 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                 value={state.personalInfo.lastName}
                 onChange={(event) =>
                   setPersonalInfo({
-                    ...state.personalInfo,
                     lastName: event.target.value
                   })
                 }
@@ -690,7 +749,6 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
                 value={state.personalInfo.documentNumber}
                 onChange={(event) =>
                   setPersonalInfo({
-                    ...state.personalInfo,
                     documentNumber: event.target.value
                   })
                 }
@@ -699,8 +757,39 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
               />
             </label>
           </div>
+          {isVenezuelaNatural ? (
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-dark">Fecha de nacimiento</span>
+                <input type="date" value={state.personalInfo.birthDate} onChange={event => setPersonalInfo({ birthDate: event.target.value })} className="w-full min-w-0 rounded-lg border border-borderLight px-3 py-2.5 text-sm text-dark outline-none focus:border-primary" />
+              </label>
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-dark">Nacionalidad</span>
+                <input type="text" maxLength={100} value={state.personalInfo.nationality} onChange={event => setPersonalInfo({ nationality: event.target.value })} className="w-full rounded-lg border border-borderLight px-3 py-2.5 text-sm text-dark outline-none focus:border-primary" />
+              </label>
+            </div>
+          ) : null}
         </Card>
+        {isVenezuelaNatural ? (
+          <Card>
+            <h3 className="text-lg font-semibold text-dark">Datos bancarios</h3>
+            <div className="mt-4 grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
+              {([
+                ['bankInstitution', 'Institución bancaria'],
+                ['bankProduct', 'Producto bancario'],
+                ['bankBalanceFigures', 'Cifras del saldo']
+              ] as const).map(([field, label]) => (
+                <label key={field} className="space-y-2">
+                  <span className="text-sm font-medium text-dark">{label}</span>
+                  <input type="text" maxLength={200} value={state.personalInfo[field]} onChange={event => setPersonalInfo({ [field]: event.target.value })} className="w-full rounded-lg border border-borderLight px-3 py-2.5 text-sm text-dark outline-none focus:border-primary" />
+                </label>
+              ))}
+            </div>
+          </Card>
+        ) : null}
+        </aside>
       ) : null}
+      </div>
 
       <div className="flex flex-wrap justify-between gap-3">
         <Link to={`/onboarding/${companyId}/tipo-persona`}>
@@ -712,6 +801,22 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
       </div>
     </div>
   );
+}
+
+function withPendingValidation(record: DocumentRecord): DocumentRecord {
+  return {
+    ...record,
+    validation: {
+      ...record.validation,
+      status: 'pending',
+      checks: [],
+      warnings: [],
+      reasons: [],
+      failureKind: undefined,
+      internalDiagnostics: ['dependency_changed'],
+      uiStatus: { state: 'ok', title: 'Revalidación requerida', message: 'Un documento relacionado cambió. Vuelva a validar este archivo.' }
+    }
+  };
 }
 
 async function simulateUpload(onProgress: (progress: number) => void) {

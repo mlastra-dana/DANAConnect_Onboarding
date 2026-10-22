@@ -1,5 +1,5 @@
 import { useId, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Camera, CheckCircle, Loader2, UploadCloud, XCircle } from 'lucide-react';
+import { AlertTriangle, Camera, CheckCircle, Loader2, RotateCw, UploadCloud, XCircle } from 'lucide-react';
 import { DocumentRecord } from '../../app/types';
 import { StatusBadge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -9,6 +9,7 @@ import { FileAttachmentChip } from '../ui/FileAttachmentChip';
 import { Progress } from '../ui/Progress';
 import { MAX_FILE_SIZE_LABEL } from '../../lib/validators/fileValidators';
 import { CameraCaptureDialog } from './CameraCaptureDialog';
+import { DocumentTokenUsage } from './DocumentTokenUsage';
 
 export function DocumentUploader({
   docRecord,
@@ -55,8 +56,15 @@ export function DocumentUploader({
   const inputId = useId();
   const fileAccept = useMemo(() => '.pdf,.png,.jpg,.jpeg,.webp', []);
   const resolvedLabel = label ?? title ?? docRecord.type;
+  const isReference = docRecord.type === 'referenciaPersonal' || docRecord.type === 'referenciaComercial' || docRecord.type === 'referenciaBancaria';
+  const isServiceFailure = docRecord.validation.status === 'error' && (
+    docRecord.validation.failureKind === 'service' ||
+    docRecord.validation.internalDiagnostics?.some(code => ['lambda_network_error', 'lambda_client_timeout', 'lambda_service_timeout', 'lambda_invalid_response'].includes(code))
+  );
   const feedbackStatus = loading
     ? 'pending'
+    : isServiceFailure
+      ? 'unavailable'
     : docRecord.validation.status === 'valid'
       ? 'valid'
       : docRecord.validation.status === 'warning'
@@ -90,6 +98,7 @@ export function DocumentUploader({
       <Camera className="h-5 w-5" />
     </button>
   ) : null;
+  const needsRevalidation = docRecord.validation.internalDiagnostics?.includes('dependency_changed');
   const fileContainerClass =
     feedbackStatus === 'valid'
       ? 'border-green-200 bg-green-50/40'
@@ -256,7 +265,7 @@ export function DocumentUploader({
       {docRecord.fileName ? (
         <div className={`${embedded ? 'rounded-lg' : 'rounded-xl'} border p-3 ${fileContainerClass}`}>
           <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1"><FileAttachmentChip fileName={docRecord.fileName} status={docRecord.validation.status} onRemove={handleRemoveClick} /></div>
+            <div className="min-w-0 flex-1"><FileAttachmentChip fileName={docRecord.fileName} status={isServiceFailure ? 'pending' : docRecord.validation.status} onRemove={handleRemoveClick} /></div>
             {cameraButton}
           </div>
           {docRecord.fileType?.includes('pdf') ? (
@@ -281,11 +290,28 @@ export function DocumentUploader({
         </div>
       ) : null}
 
+      {hasFile && !loading ? <DocumentTokenUsage usage={docRecord.validation.tokenUsage} language={language} /> : null}
+
       <div className="space-y-1 text-sm">
+        {feedbackStatus === 'unavailable' ? (
+          <div className="space-y-3">
+            <p className="flex items-center gap-2 font-medium text-amber-700">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {language === 'en' ? 'Validation unavailable' : 'Validación no disponible'}
+            </p>
+            <p className="text-grayText">{friendlyErrorMessage}</p>
+            {previewFile ? (
+              <Button type="button" variant="secondary" className="gap-2" disabled={loading || disabled} onClick={() => void onSelectFile(previewFile)}>
+                <RotateCw className="h-4 w-4" />
+                {language === 'en' ? 'Retry validation' : 'Reintentar validación'}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
         {feedbackStatus === 'valid' ? (
           <p className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700">
             <CheckCircle className="h-4 w-4" />
-            <span>{language === 'en' ? 'Document accepted.' : 'Documento aceptado.'}</span>
+            <span>{isReference ? language === 'en' ? 'File received.' : 'Archivo recibido.' : language === 'en' ? 'Document accepted.' : 'Documento aceptado.'}</span>
           </p>
         ) : null}
         {feedbackStatus === 'warning' ? (
@@ -320,6 +346,12 @@ export function DocumentUploader({
           </div>
         ) : null}
         {feedbackStatus === 'pending' && hasFile ? <p className="text-grayText">{pendingMessage}</p> : null}
+        {feedbackStatus === 'pending' && needsRevalidation && previewFile && !loading ? (
+          <Button type="button" variant="secondary" className="gap-2" disabled={disabled} onClick={() => void onSelectFile(previewFile)}>
+            <RotateCw className="h-4 w-4" />
+            {language === 'en' ? 'Revalidate document' : 'Revalidar documento'}
+          </Button>
+        ) : null}
       </div>
     </>
   );

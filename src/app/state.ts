@@ -14,7 +14,10 @@ export const DOCUMENT_LABELS: Record<DocumentRecordType, string> = {
   comprobanteDomicilio: 'Comprobante de Domicilio',
   actaDesignacionAutoridades: 'Acta de designación de autoridades',
   licenciaConducirFrente: 'Licencia de conducir - frente',
-  licenciaConducirReverso: 'Licencia de conducir - reverso'
+  licenciaConducirReverso: 'Licencia de conducir - reverso',
+  referenciaPersonal: 'Referencia personal',
+  referenciaComercial: 'Referencia comercial',
+  referenciaBancaria: 'Referencia bancaria'
 };
 
 const ALL_DOCUMENT_TYPES: DocumentType[] = [
@@ -30,7 +33,10 @@ const ALL_DOCUMENT_TYPES: DocumentType[] = [
   'comprobanteDomicilio',
   'actaDesignacionAutoridades',
   'licenciaConducirFrente',
-  'licenciaConducirReverso'
+  'licenciaConducirReverso',
+  'referenciaPersonal',
+  'referenciaComercial',
+  'referenciaBancaria'
 ];
 
 export function createEmptyDocument(type: DocumentRecordType) {
@@ -74,12 +80,18 @@ export function createEmptyPersonalInfo() {
     firstName: '',
     lastName: '',
     run: '',
-    documentNumber: ''
+    documentNumber: '',
+    birthDate: '',
+    nationality: '',
+    bankInstitution: '',
+    bankProduct: '',
+    bankBalanceFigures: ''
   };
 }
 
 export function createInitialState(companyId: string, tenant: TenantConfig): OnboardingState {
   return {
+    onboardingId: crypto.randomUUID(),
     companyId,
     country: 've',
     personType: 'juridica',

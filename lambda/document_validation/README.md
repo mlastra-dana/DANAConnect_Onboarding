@@ -7,6 +7,36 @@ Lambda desplegada: `Onboarding_validate_DanaConnect`.
 Archivo fuente principal: `lambda_function.py`.
 Handler configurado en AWS: `lambda_function.lambda_handler`.
 
+## Referencias y persona natural (Mercantil)
+
+- Slots nuevos para Venezuela: `referenciaPersonal`, `referenciaComercial`, `referenciaBancaria`.
+- Las referencias se comprueban solo por formato: MIME permitido, limite de tamano y firma binaria
+  PDF/JPEG/PNG/WEBP. No se certifican contenido, autenticidad, titularidad ni vigencia.
+- La respuesta identifica este alcance con `validationScope: "file_format"`,
+  `validityStatus: "unknown"` y `document_type_match: false`, aunque `status` sea `valid`.
+- Solo `person_type: "natural"` con `slot: "referenciaBancaria"` solicita a Bedrock
+  `extractedBankReference: {institution, product, balanceFigures}`. `institution` es el banco emisor,
+  no el destinatario. `balanceFigures` conserva expresiones como "cuatro cifras bajas";
+  no es el numero de cuenta ni un monto calculado. Datos ausentes o ilegibles quedan vacios.
+- Solo persona natural de Venezuela con `slot: "documentoIdentidad"` devuelve ademas
+  `extractedIdentity.birthDate` (YYYY-MM-DD) y `extractedIdentity.nationality`.
+  No se inventa nacionalidad: "E" solo permite "Extranjera", no un pais concreto.
+- Si falla la extraccion bancaria, el formato sigue aceptado con `status: "warning"` y los campos
+  quedan disponibles para completarse manualmente en el frontend.
+- El frontend ya envia las referencias a esta Lambda. Desplegar primero este `lambda_function.py`
+  en la funcion existente. No se agregaron dependencias ni se realizo despliegue desde el repositorio.
+- Para persona natural, referencias, nacimiento, nacionalidad y datos bancarios se conservan
+  en el portal y no se agregan al comando SMTP ni a los adjuntos de DANAConnect.
+  Se mantiene el contrato de envio anterior; no requiere campos nuevos en la conversacion.
+- Para persona juridica, verificar los campos `REFERENCIA_COMERCIAL` y `REFERENCIA_BANCARIA`,
+  o sus equivalentes en `DANA_FIELD_MAP`/`DANA_FILE_FIELD_MAP`.
+
+Pruebas sin llamadas a AWS:
+
+```bash
+python3 -m unittest discover -s lambda/document_validation -p 'test_*.py'
+```
+
 ## Flujo
 
 1. Recibe un archivo en base64 por `POST`.
@@ -66,6 +96,37 @@ Modelo usado en la demo:
 ```
 
 ## Notas
+
+- Las respuestas de validacion incluyen `tokenUsage`: `modelId`, `inputTokens`, `outputTokens`,
+  `totalTokens`, `callCount`, `measuredCallCount` y `complete`. Suma las metricas devueltas por
+  todas las llamadas Converse de esa solicitud, incluso si despues falla la validacion.
+- El frontend muestra ese consumo por documento en la carga y en el resumen. Corresponde a la
+  ultima validacion, no al acumulado de reintentos. Sin metricas se muestra consumo no disponible;
+  `complete: false` indica una medicion parcial. Cero llamadas confirma que no se uso Bedrock.
+- Se registra `bedrock_token_usage` por llamada en CloudWatch, sin contenido del documento.
+  No incluye cobros de Textract/S3/Lambda ni consumos de intentos internos del SDK sin respuesta.
+  No se modifica el contrato SMTP del envio del onboarding.
+- Para ver numeros reales se debe desplegar esta version de la Lambda y publicar el frontend.
+
+### Auditoria en DANA (proyecto 207867)
+
+- Configurar `DANA_TOKEN_AUDIT_PROJECT_ID=207867` para habilitarla. Sin esa variable no hay envios de auditoria.
+- Reutiliza host, puerto, usuario, password y remitente SMTP existentes. El destinatario es
+  `207867@<DANA_ID_COMPANY>.email-platform.com`, independientemente del destinatario del onboarding.
+- Envia un `StartConversationWithData` separado por intento de validacion, sin adjuntos, CC/BCC,
+  datos estaticos ni mapeos de campos del onboarding. DANA escribe la fecha.
+- Campos: `AUDIT_ID`, `ONBOARDING_ID`, `DOCUMENT`, `FILENAME`, `LAMBDA_NAME`, `MODEL_ID`,
+  `LLAMADAS`, `RESULTADO_DOCUMENT`, `TOKEN_INPUT`, `TOKEN_OUTPUT`, `TOKENS_TOTALES`.
+- `RESULTADO_DOCUMENT` usa valid/warning/error y agrega `_medicion_parcial` o
+  `_medicion_no_disponible` cuando corresponde. Consumo desconocido se envia vacio, no cero.
+- `ONBOARDING_ID` es un UUID generado por el frontend y conservado para la solicitud;
+  `AUDIT_ID` es un UUID generado por el backend por intento. Clientes antiguos pueden enviar
+  auditorias sin `ONBOARDING_ID` hasta publicar el frontend actualizado.
+- Una respuesta SMTP aceptada confirma entrega al servidor, no la insercion final en la lista.
+  Configurar unicidad en DANA si se requiere deduplicacion por `AUDIT_ID`.
+- Un fallo se registra como `token_audit_failed` sin cambiar el resultado de la validacion;
+  no hay reintentos automaticos ni garantia de entrega. La conexion SMTP usa timeout de 5 segundos
+  por operacion y agrega latencia a la respuesta. Revisar CloudWatch para detectar perdidas.
 
 - La clasificacion y validacion general siguen usando Bedrock. La extraccion de representantes/junta directiva
   desde actas venezolanas usa Textract + S3 para OCR y Bedrock solo estructura texto ya extraido.

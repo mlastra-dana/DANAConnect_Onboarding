@@ -47,10 +47,16 @@ const DANA_DOCUMENT_FIELD_BY_TYPE: Partial<Record<DocumentType, string>> = {
   documentoIdentidad: 'DOCUMENTO_IDENTIDAD',
   documentoIdentidadReverso: 'DOCUMENTO_IDENTIDAD_REVERSO',
   licenciaConducirFrente: 'LICENCIA_FRONT',
-  licenciaConducirReverso: 'LICENCIA_BACK'
+  licenciaConducirReverso: 'LICENCIA_BACK',
+  referenciaPersonal: 'REFERENCIA_PERSONAL',
+  referenciaComercial: 'REFERENCIA_COMERCIAL',
+  referenciaBancaria: 'REFERENCIA_BANCARIA'
 };
 
-function resolveDanaDocumentField(_state: OnboardingState, documentType: DocumentType) {
+const FRONTEND_ONLY_NATURAL_DOCUMENTS = new Set<DocumentType>(['referenciaPersonal', 'referenciaComercial', 'referenciaBancaria']);
+
+function resolveDanaDocumentField(state: OnboardingState, documentType: DocumentType) {
+  if (state.personType === 'natural' && FRONTEND_ONLY_NATURAL_DOCUMENTS.has(documentType)) return undefined;
   return DANA_DOCUMENT_FIELD_BY_TYPE[documentType];
 }
 
@@ -68,7 +74,9 @@ export function buildDemoEmail(
 
   const companyName = state.tenant.name;
   const flow = getFlowConfig(state.country, state.personType);
-  const activeDocuments = getDocumentOrder(state.country, state.personType);
+  const activeDocuments = getDocumentOrder(state.country, state.personType).filter(
+    type => state.personType !== 'natural' || !FRONTEND_ONLY_NATURAL_DOCUMENTS.has(type)
+  );
   const optionalDocuments = getOptionalDocumentOrder(state.country, state.personType).filter(
     (docType) => Boolean(state.documents[docType].fileName)
   );
@@ -343,6 +351,14 @@ function buildConversationData({
 
   const fiscalDocument = state.documents.rif.fileName ? state.documents.rif : state.documents.documentoFiscal;
   addConversationField(data, 'DOCUMENTO_FISCAL', fiscalDocument.fileName);
+
+  if (state.country === 've' && state.personType === 'juridica') {
+    for (const documentType of getDocumentOrder(state.country, state.personType)) {
+      if (documentType === 'referenciaPersonal' || documentType === 'referenciaComercial' || documentType === 'referenciaBancaria') {
+        addConversationField(data, DANA_DOCUMENT_FIELD_BY_TYPE[documentType]!, state.documents[documentType].fileName);
+      }
+    }
+  }
 
   if (state.personType === 'natural') {
     addConversationField(data, 'NOMBRES', state.personalInfo.firstName);

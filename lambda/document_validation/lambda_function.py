@@ -6,6 +6,7 @@ import os
 import re
 import uuid
 import time
+from contextvars import ContextVar
 from datetime import date, datetime
 from email.message import EmailMessage
 from typing import Any, Dict, List, Optional, Tuple
@@ -18,6 +19,32 @@ from botocore.config import Config
 
 LOGGER = logging.getLogger()
 LOGGER.setLevel(logging.INFO)
+
+TOKEN_USAGE: ContextVar = ContextVar("document_token_usage", default=None)
+TOKEN_AUDIT_CONTEXT: ContextVar = ContextVar("document_token_audit_context", default=None)
+
+
+def converse_with_usage(*, phase: str, **kwargs: Any) -> Dict[str, Any]:
+    usage = TOKEN_USAGE.get()
+    if usage is not None:
+        usage["callCount"] += 1
+    try:
+        result = BEDROCK_CLIENT.converse(**kwargs)
+    except Exception:
+        if usage is not None:
+            usage["complete"] = False
+        raise
+    metrics = result.get("usage") or {}
+    counts = [metrics.get(key) for key in ("inputTokens", "outputTokens", "totalTokens")]
+    if usage is not None:
+        if all(type(value) is int and value >= 0 for value in counts):
+            usage["measuredCallCount"] += 1
+            for key, value in zip(("inputTokens", "outputTokens", "totalTokens"), counts):
+                usage[key] += value
+            LOGGER.info("bedrock_token_usage %s", json.dumps({"phase": phase, "modelId": kwargs["modelId"], **metrics}))
+        else:
+            usage["complete"] = False
+    return result
 
 AWS_REGION = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-1"
 BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
@@ -477,6 +504,8 @@ IDENTITY_EXTRACTION_SLOTS = {"documentoIdentidad", "documentoIdentidadReverso", 
 
 
 def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    TOKEN_USAGE.set(None)
+    TOKEN_AUDIT_CONTEXT.set(None)
     method = ((event.get("requestContext") or {}).get("http") or {}).get("method", "POST").upper()
 
     if method == "OPTIONS":
@@ -495,6 +524,17 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         if action in {"previewEmail", "preview_email"}:
             return response(200, preview_cloud_smtp_email(payload))
 
+        TOKEN_USAGE.set({
+            "modelId": BEDROCK_MODEL_ID,
+            "inputTokens": 0, "outputTokens": 0, "totalTokens": 0,
+            "callCount": 0, "measuredCallCount": 0, "complete": True,
+        })
+        TOKEN_AUDIT_CONTEXT.set({
+            "auditId": str(uuid.uuid4()),
+            "onboardingId": str(payload.get("onboarding_id") or "")[:100],
+            "fileName": str(payload.get("file_name") or "")[:100],
+            "document": str(payload.get("slot") or "")[:100],
+        })
         file_name = require_string(payload, "file_name")
         content_type = normalize_content_type(require_string(payload, "content_type"))
         country = normalize_country(payload.get("country"))
@@ -1299,7 +1339,8 @@ Devuelve JSON puro con institution, product y balanceFigures como strings.
     content = build_bedrock_user_content(
         prompt=prompt, file_bytes=file_bytes, file_name=file_name, content_type=content_type,
     )
-    model_response = BEDROCK_CLIENT.converse(
+    model_response = converse_with_usage(
+        phase="bank_reference_extraction",
         modelId=BEDROCK_MODEL_ID,
         messages=[{"role": "user", "content": content}],
         inferenceConfig={"temperature": 0, "maxTokens": 700},
@@ -1420,7 +1461,8 @@ def run_bedrock_classification(
         content_type=content_type,
     )
 
-    bedrock_response = BEDROCK_CLIENT.converse(
+    bedrock_response = converse_with_usage(
+        phase="classification",
         modelId=BEDROCK_MODEL_ID,
         messages=[{"role": "user", "content": user_content}],
         inferenceConfig={"temperature": 0, "maxTokens": 900},
@@ -1530,7 +1572,8 @@ def run_bedrock_validation(
         content_type=content_type,
     )
 
-    bedrock_response = BEDROCK_CLIENT.converse(
+    bedrock_response = converse_with_usage(
+        phase="validation",
         modelId=BEDROCK_MODEL_ID,
         messages=[{"role": "user", "content": user_content}],
         inferenceConfig={"temperature": 0, "maxTokens": 1600},
@@ -2109,7 +2152,8 @@ Texto OCR:
 {ocr_text}
 """.strip()
 
-    bedrock_response = BEDROCK_CLIENT.converse(
+    bedrock_response = converse_with_usage(
+        phase="representative_ocr_extraction",
         modelId=BEDROCK_MODEL_ID,
         messages=[{"role": "user", "content": [{"text": prompt}]}],
         inferenceConfig={"temperature": 0, "maxTokens": 1800},
@@ -2312,7 +2356,8 @@ def run_bedrock_legal_representative_extraction_pass(
         content_type=content_type,
     )
 
-    bedrock_response = BEDROCK_CLIENT.converse(
+    bedrock_response = converse_with_usage(
+        phase="representative_extraction",
         modelId=BEDROCK_MODEL_ID,
         messages=[{"role": "user", "content": user_content}],
         inferenceConfig={"temperature": 0, "maxTokens": 1200},
@@ -2372,7 +2417,8 @@ Si confirmas candidatos, usa objetos con esta forma:
         content_type=content_type,
     )
 
-    bedrock_response = BEDROCK_CLIENT.converse(
+    bedrock_response = converse_with_usage(
+        phase="representative_verification",
         modelId=BEDROCK_MODEL_ID,
         messages=[{"role": "user", "content": user_content}],
         inferenceConfig={"temperature": 0, "maxTokens": 1200},
@@ -4183,7 +4229,54 @@ def normalize_string_list(value: Any) -> List[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
+def record_token_audit(body: Dict[str, Any], usage: Dict[str, Any]) -> None:
+    project_id = optional_env("DANA_TOKEN_AUDIT_PROJECT_ID")
+    context = TOKEN_AUDIT_CONTEXT.get()
+    if not project_id or not context:
+        return
+    # Clear before sending so a failed audit cannot trigger a second send.
+    TOKEN_AUDIT_CONTEXT.set(None)
+    try:
+        if not project_id.isdigit():
+            raise ValueError("DANA_TOKEN_AUDIT_PROJECT_ID debe ser numerico")
+        config = get_cloud_smtp_config(require_password=True)
+        recipient = f"{project_id}@{required_env('DANA_ID_COMPANY')}.email-platform.com"
+        outcome = str(body.get("status") or "error")
+        if not usage["complete"]:
+            outcome += "_medicion_parcial" if usage["measuredCallCount"] else "_medicion_no_disponible"
+        fields = {
+            "AUDIT_ID": context["auditId"],
+            "ONBOARDING_ID": context["onboardingId"],
+            "DOCUMENT": context["document"],
+            "FILENAME": context["fileName"],
+            "LAMBDA_NAME": os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or "Onboarding_validate_Danaconnect",
+            "MODEL_ID": usage["modelId"],
+            "LLAMADAS": str(usage["callCount"]),
+            "RESULTADO_DOCUMENT": outcome,
+        }
+        for field, key in (("TOKEN_INPUT", "inputTokens"), ("TOKEN_OUTPUT", "outputTokens"), ("TOKENS_TOTALES", "totalTokens")):
+            fields[field] = str(usage[key]) if usage["complete"] or usage["measuredCallCount"] else ""
+        message = EmailMessage()
+        message["From"] = config["from"]
+        message["To"] = recipient
+        message["Subject"] = f"Onboarding token audit {context['auditId']}"
+        message.set_content(urlencode({"command": "StartConversationWithData", **fields}))
+        with smtplib.SMTP(config["host"], config["port"], timeout=5) as smtp:
+            smtp.starttls()
+            smtp.login(config["user"], config["password"])
+            refused = smtp.send_message(message, to_addrs=[recipient])
+            if refused:
+                raise RuntimeError("Audit recipient rejected")
+        LOGGER.info("token_audit_sent audit_id=%s project_id=%s", context["auditId"], project_id)
+    except Exception:
+        LOGGER.exception("token_audit_failed audit_id=%s project_id=%s", context["auditId"], project_id)
+
+
 def response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:
+    usage = TOKEN_USAGE.get()
+    if usage is not None:
+        body = {**body, "tokenUsage": dict(usage)}
+        record_token_audit(body, usage)
     return {
         "statusCode": status_code,
         "headers": {

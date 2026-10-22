@@ -4,6 +4,7 @@ import { useOnboarding } from '../app/OnboardingContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/ui/Badge';
+import { DocumentTokenUsage } from '../components/onboarding/DocumentTokenUsage';
 import { Toast } from '../components/ui/Toast';
 import { buildDemoEmail, sendEmailViaApi } from '../lib/email/demoMail';
 import {
@@ -144,6 +145,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
               <div>
                   <p className="font-medium text-dark">{getDocumentLabel(state.country, state.personType, docType)}</p>
                 <p className="text-xs text-grayText">{doc.fileName ?? (isEnglish ? 'No file' : 'Sin archivo')}</p>
+                {doc.fileName ? <DocumentTokenUsage usage={doc.validation.tokenUsage} language={isEnglish ? 'en' : 'es'} /> : null}
               </div>
               <StatusBadge status={doc.validation.status} language={isEnglish ? 'en' : 'es'} />
             </li>
@@ -154,6 +156,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
               <div>
                 <p className="font-medium text-dark">{flowConfig.reviewRepresentativePrimaryLabel}</p>
                 <p className="text-xs text-grayText">{representative1.document.fileName ?? (isEnglish ? 'No file' : 'Sin archivo')}</p>
+                {representative1.document.fileName ? <DocumentTokenUsage usage={representative1.document.validation.tokenUsage} language={isEnglish ? 'en' : 'es'} /> : null}
               </div>
               <StatusBadge status={representative1.document.validation.status} language={isEnglish ? 'en' : 'es'} />
             </li>
@@ -167,6 +170,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
                     ? isEnglish ? 'Not applicable' : 'No aplica'
                     : representative2.document.fileName ?? (isEnglish ? 'Pending' : 'Pendiente')}
                 </p>
+                {representative2.enabled && representative2.document.fileName ? <DocumentTokenUsage usage={representative2.document.validation.tokenUsage} language={isEnglish ? 'en' : 'es'} /> : null}
               </div>
               <StatusBadge
                 language={isEnglish ? 'en' : 'es'}
@@ -189,6 +193,26 @@ export function ReviewPage({ companyId }: { companyId: string }) {
           </li>
         </ul>
       </Card>
+
+      {state.country === 've' && state.personType === 'natural' ? (
+        <Card>
+          <h2 className="text-lg font-semibold text-dark">Datos del solicitante</h2>
+          <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              ['Fecha de nacimiento', state.personalInfo.birthDate],
+              ['Nacionalidad', state.personalInfo.nationality],
+              ['Institución bancaria', state.personalInfo.bankInstitution],
+              ['Producto bancario', state.personalInfo.bankProduct],
+              ['Cifras del saldo', state.personalInfo.bankBalanceFigures]
+            ].map(([label, value]) => (
+              <div key={label} className="min-w-0">
+                <dt className="text-sm text-grayText">{label}</dt>
+                <dd className="mt-1 break-words text-sm font-medium text-dark">{value || 'Sin dato'}</dd>
+              </div>
+            ))}
+          </dl>
+        </Card>
+      ) : null}
 
       <Card>
         <label className="block space-y-2">
