@@ -7,7 +7,10 @@ Lambda desplegada: `Onboarding_validate_DanaConnect`.
 Archivo fuente principal: `lambda_function.py`.
 Handler configurado en AWS: `lambda_function.lambda_handler`.
 
-## Referencias y persona natural (Mercantil)
+## Referencias (compatibilidad del backend)
+
+Main no muestra referencias ni campos bancarios y no los envia al onboarding. El backend
+conserva estos slots por compatibilidad con la demo bancaria; lo siguiente describe ese uso.
 
 - Slots nuevos para Venezuela: `referenciaPersonal`, `referenciaComercial`, `referenciaBancaria`.
 - Las referencias se comprueban solo por formato: MIME permitido, limite de tamano y firma binaria
@@ -23,9 +26,9 @@ Handler configurado en AWS: `lambda_function.lambda_handler`.
   No se inventa nacionalidad: "E" solo permite "Extranjera", no un pais concreto.
 - Si falla la extraccion bancaria, el formato sigue aceptado con `status: "warning"` y los campos
   quedan disponibles para completarse manualmente en el frontend.
-- El frontend ya envia las referencias a esta Lambda. Desplegar primero este `lambda_function.py`
+- El frontend de la demo bancaria envia las referencias a esta Lambda. Desplegar primero este `lambda_function.py`
   en la funcion existente. No se agregaron dependencias ni se realizo despliegue desde el repositorio.
-- Para persona natural, referencias, nacimiento, nacionalidad y datos bancarios se conservan
+- En la demo bancaria, para persona natural, referencias, nacimiento, nacionalidad y datos bancarios se conservan
   en el portal y no se agregan al comando SMTP ni a los adjuntos de DANAConnect.
   Se mantiene el contrato de envio anterior; no requiere campos nuevos en la conversacion.
 - Para persona juridica, verificar los campos `REFERENCIA_COMERCIAL` y `REFERENCIA_BANCARIA`,
@@ -105,16 +108,21 @@ Modelo usado en la demo:
   `complete: false` indica una medicion parcial. Cero llamadas confirma que no se uso Bedrock.
 - Se registra `bedrock_token_usage` por llamada en CloudWatch, sin contenido del documento.
   No incluye cobros de Textract/S3/Lambda ni consumos de intentos internos del SDK sin respuesta.
-  No se modifica el contrato SMTP del envio del onboarding.
+  El inicio de conversaciones de main usa REST; SMTP queda solo como compatibilidad para clientes antiguos.
 - Para ver numeros reales se debe desplegar esta version de la Lambda y publicar el frontend.
 
 ### Auditoria en DANA (proyecto 207867)
 
 - Configurar `DANA_TOKEN_AUDIT_PROJECT_ID=207867` para habilitarla. Sin esa variable no hay envios de auditoria.
-- Reutiliza host, puerto, usuario, password y remitente SMTP existentes. El destinatario es
-  `207867@<DANA_ID_COMPANY>.email-platform.com`, independientemente del destinatario del onboarding.
-- Envia un `StartConversationWithData` separado por intento de validacion, sin adjuntos, CC/BCC,
+- Usa OAuth y un POST JSON a `/api/2.0/rest/conversation/ProjectID/207867/start/data`,
+  igual que la Lambda de referencia Validoc. No usa SMTP ni agrega el campo `command` al JSON.
+- Inicia una conversacion separada por intento de validacion, sin adjuntos, CC/BCC,
   datos estaticos ni mapeos de campos del onboarding. DANA escribe la fecha.
+- Se envia al terminar la validacion de cada archivo, antes de responder al frontend. No espera
+  a otros documentos ni al boton Continuar. El envio final del onboarding no repite esta auditoria.
+- En main, Venezuela mantiene RIF y cedula para persona natural, y RIF/Registro Mercantil
+  para juridica (con representantes y asamblea opcional). Las referencias y los datos bancarios
+  no se muestran ni se envian desde este frontend; pertenecen a la demo bancaria.
 - Campos: `AUDIT_ID`, `ONBOARDING_ID`, `DOCUMENT`, `FILENAME`, `LAMBDA_NAME`, `MODEL_ID`,
   `LLAMADAS`, `RESULTADO_DOCUMENT`, `TOKEN_INPUT`, `TOKEN_OUTPUT`, `TOKENS_TOTALES`.
 - `RESULTADO_DOCUMENT` usa valid/warning/error y agrega `_medicion_parcial` o
@@ -122,11 +130,45 @@ Modelo usado en la demo:
 - `ONBOARDING_ID` es un UUID generado por el frontend y conservado para la solicitud;
   `AUDIT_ID` es un UUID generado por el backend por intento. Clientes antiguos pueden enviar
   auditorias sin `ONBOARDING_ID` hasta publicar el frontend actualizado.
-- Una respuesta SMTP aceptada confirma entrega al servidor, no la insercion final en la lista.
-  Configurar unicidad en DANA si se requiere deduplicacion por `AUDIT_ID`.
+- Se considera aceptada una respuesta HTTP exitosa con JSON sin rechazo explicito; verificar
+  la insercion en DANA durante la prueba de despliegue. Configurar unicidad en DANA si se requiere
+  deduplicacion por `AUDIT_ID`.
 - Un fallo se registra como `token_audit_failed` sin cambiar el resultado de la validacion;
-  no hay reintentos automaticos ni garantia de entrega. La conexion SMTP usa timeout de 5 segundos
-  por operacion y agrega latencia a la respuesta. Revisar CloudWatch para detectar perdidas.
+  no hay reintentos automaticos ni garantia de entrega. `DANA_TIMEOUT_SECONDS` (default 20)
+  limita cada llamada HTTP y agrega latencia a la respuesta. Revisar CloudWatch para detectar perdidas.
+
+### Envio Final REST (proyecto 204507)
+
+- El frontend usa `action: "submitOnboarding"` contra la Function URL de validacion o
+  `VITE_ONBOARDING_SUBMIT_URL` si esta configurada. Ya no usa `/api/send-email` ni `VITE_EMAIL_SEND_URL`.
+- Configurar `DANA_ONBOARDING_PROJECT_ID=204507` (tambien es el default). El proyecto de auditoria
+  es independiente y no se permite usar su ID como destino del expediente.
+- Primero valida OAuth, luego sube los adjuntos y finalmente hace POST JSON a
+  `/api/2.0/rest/conversation/ProjectID/204507/start/data` con los campos existentes y sus fileID.
+- Conserva `DANA_FIELD_MAP`, `DANA_STATIC_DATA`, limites y mapeos de documentos solo en el envio
+  final. No mezcla esos campos con la auditoria. CC/BCC SMTP no se aplican por REST: las notificaciones
+  se configuran en la conversacion DANA.
+- Los errores distinguen `oauth`, `file_upload` y `start_conversation`. Un HTTP 507 del servicio
+  de archivos aun debe resolverse en DANA; cambiar SMTP por REST no elimina el almacenamiento.
+- Un error HTTP de autenticacion limpia el token en cache. No se reintentan automaticamente
+  los POST de conversaciones para evitar duplicados. Si se reintenta un envio final desde el portal,
+  los adjuntos podrian subirse otra vez; ante un timeout de respuesta comprobar DANA antes de reintentar.
+
+### Configuracion REST
+
+- En Lambda: `DANA_CLIENT_ID`, `DANA_CLIENT_SECRET`, `DANA_OAUTH_SCOPE=conversation:access2api`.
+  OAuth usa client_credentials, autenticacion Basic y token en cache con vencimiento.
+  `DANA_OAUTH_AUTH_METHOD=body` permite credenciales en el formulario; si no hay client ID/secret,
+  admite el grant password con `DANA_USERNAME`/`DANA_PASSWORD`, igual que el ejemplo.
+- Opcionales: `DANA_BASE_URL=https://appserv.danaconnect.com`,
+  `DANA_TOKEN_URL=https://auth.danaconnect.com/oauth2/token`, `DANA_ACCESS_TOKEN` para un token
+  configurado manualmente (sin renovacion automatica), `DANA_TIMEOUT_SECONDS=20`.
+- Para archivos: `DANA_ID_COMPANY`, `DANA_USERNAME` y `DANA_PASSWORD`. Se mantienen los overrides
+  `DANA_FILE_UPLOAD_USER`/`DANA_FILE_UPLOAD_PASS`; SMTP es el ultimo fallback para clientes antiguos.
+- Los secretos pertenecen solo al backend, nunca a variables `VITE_*`, repositorio ni logs.
+  Configurar credenciales de la cuenta Venture Stars; no copiar las de otra cuenta del ejemplo.
+- Desplegar primero esta Lambda y sus variables, luego publicar el frontend. Las acciones antiguas
+  `sendEmail`/`previewEmail` se conservan para compatibilidad, pero el nuevo frontend no las utiliza.
 
 - La clasificacion y validacion general siguen usando Bedrock. La extraccion de representantes/junta directiva
   desde actas venezolanas usa Textract + S3 para OCR y Bedrock solo estructura texto ya extraido.

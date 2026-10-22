@@ -6,7 +6,7 @@ import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/ui/Badge';
 import { DocumentTokenUsage } from '../components/onboarding/DocumentTokenUsage';
 import { Toast } from '../components/ui/Toast';
-import { buildDemoEmail, sendEmailViaApi } from '../lib/email/demoMail';
+import { buildDemoEmail, submitOnboardingViaApi } from '../lib/email/demoMail';
 import {
   getDocumentLabel,
   getDocumentOrder,
@@ -61,7 +61,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
     try {
       const externalTrigger = new URLSearchParams(window.location.search).get('externalTrigger');
       const email = buildDemoEmail(state, companyId, externalTrigger, normalizedRecipientEmail);
-      const sendResult = await sendEmailViaApi(email.subject, email.body, email.data, email.files);
+      const sendResult = await submitOnboardingViaApi(email.subject, email.body, email.data, email.files);
 
       if (!sendResult.ok) {
         const fallbackError = isEnglish ? 'The submission could not be completed.' : 'No se pudo completar el envío.';
@@ -76,14 +76,14 @@ export function ReviewPage({ companyId }: { companyId: string }) {
         submittedAt: email.submittedAtISO,
         emailSubject: email.subject,
         emailBody: email.body,
-        emailTo: sendResult.to ?? 'DANAConnect Cloud SMTP'
+        emailTo: sendResult.to ?? 'DANAConnect REST'
       });
 
       const payload = {
         companyId,
         registrationId: email.trackingId,
         submittedAt: email.submittedAtISO,
-        to: sendResult.to ?? 'DANAConnect Cloud SMTP',
+        to: sendResult.to ?? 'DANAConnect REST',
         documents: summarizeDocuments(state.documents),
         representatives: state.representatives.map((representative) => ({
           id: representative.id,
@@ -200,10 +200,7 @@ export function ReviewPage({ companyId }: { companyId: string }) {
           <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[
               ['Fecha de nacimiento', state.personalInfo.birthDate],
-              ['Nacionalidad', state.personalInfo.nationality],
-              ['Institución bancaria', state.personalInfo.bankInstitution],
-              ['Producto bancario', state.personalInfo.bankProduct],
-              ['Cifras del saldo', state.personalInfo.bankBalanceFigures]
+              ['Nacionalidad', state.personalInfo.nationality]
             ].map(([label, value]) => (
               <div key={label} className="min-w-0">
                 <dt className="text-sm text-grayText">{label}</dt>

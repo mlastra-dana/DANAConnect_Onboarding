@@ -10,7 +10,8 @@ from contextvars import ContextVar
 from datetime import date, datetime
 from email.message import EmailMessage
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 import boto3
@@ -22,6 +23,7 @@ LOGGER.setLevel(logging.INFO)
 
 TOKEN_USAGE: ContextVar = ContextVar("document_token_usage", default=None)
 TOKEN_AUDIT_CONTEXT: ContextVar = ContextVar("document_token_audit_context", default=None)
+_DANA_TOKEN_CACHE: Dict[str, Any] = {"access_token": "", "expires_at": 0, "config": None}
 
 
 def converse_with_usage(*, phase: str, **kwargs: Any) -> Dict[str, Any]:
@@ -517,6 +519,9 @@ def lambda_handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     try:
         payload = parse_json_body(event)
         action = str(payload.get("action") or "").strip()
+        if action in {"submitOnboarding", "submit_onboarding"}:
+            result = submit_onboarding_via_rest(payload)
+            return response(200 if result["ok"] else 502, result)
         if action in {"prepareDocumentValidationUpload", "prepare_document_validation_upload"}:
             return response(200, prepare_document_validation_upload(payload))
         if action in {"sendEmail", "send_email"}:
@@ -976,14 +981,14 @@ def resolve_smtp_recipient(id_company: str) -> str:
     return f"{id_conversation}@{id_company}.email-platform.com"
 
 
-def build_start_conversation_with_data(data: Any) -> str:
+def build_conversation_fields(data: Any) -> Dict[str, str]:
     if not isinstance(data, dict):
-        raise ValueError("data es requerido para activar conversaciones por SMTP")
+        raise ValueError("data es requerido para activar conversaciones")
 
     field_map = parse_json_object_env("DANA_FIELD_MAP")
     static_data = parse_json_object_env("DANA_STATIC_DATA")
     merged_data = {**static_data, **data}
-    params: Dict[str, str] = {"command": "StartConversationWithData"}
+    params: Dict[str, str] = {}
 
     for key, value in merged_data.items():
         if value is None:
@@ -993,8 +998,14 @@ def build_start_conversation_with_data(data: Any) -> str:
             continue
         params[field_name] = normalize_field_value(field_name, value)
 
-    if len(params) <= 1:
+    if not params:
         raise ValueError("data no contiene campos para enviar a DANAConnect")
+
+    return params
+
+
+def build_start_conversation_with_data(data: Any) -> str:
+    params = {"command": "StartConversationWithData", **build_conversation_fields(data)}
 
     return urlencode(params)
 
@@ -1006,14 +1017,14 @@ def resolve_file_field(document_type: str, requested_field: str) -> str:
 
 
 def resolve_file_upload_user(id_company: str) -> str:
-    explicit_user = optional_env("DANA_FILE_UPLOAD_USER")
+    explicit_user = optional_env("DANA_FILE_UPLOAD_USER") or optional_env("DANA_USERNAME")
     if explicit_user:
         return explicit_user
     return resolve_smtp_user(id_company)
 
 
 def resolve_file_upload_password() -> str:
-    return optional_env("DANA_FILE_UPLOAD_PASS") or required_env("DANA_SMTP_PASS")
+    return optional_env("DANA_FILE_UPLOAD_PASS") or optional_env("DANA_PASSWORD") or required_env("DANA_SMTP_PASS")
 
 
 def encode_multipart_file(*, field_name: str, file_name: str, content_type: str, file_bytes: bytes) -> Tuple[bytes, str]:
@@ -4229,6 +4240,107 @@ def normalize_string_list(value: Any) -> List[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
+def dana_json_request(request: Request) -> Any:
+    if urlsplit(request.full_url).scheme != "https":
+        raise ValueError("DANA requiere endpoints HTTPS")
+    try:
+        with urlopen(request, timeout=int(optional_env("DANA_TIMEOUT_SECONDS") or 20)) as result:
+            raw = result.read().decode("utf-8")
+            parsed = json.loads(raw) if raw else {}
+    except HTTPError as exc:
+        if exc.code in {401, 403}:
+            _DANA_TOKEN_CACHE.update(access_token="", expires_at=0)
+        exc.close()
+        raise RuntimeError(f"DANA API HTTP {exc.code}") from None
+    except URLError:
+        raise RuntimeError("No fue posible conectar con la API de DANA") from None
+    except (ValueError, UnicodeDecodeError):
+        raise RuntimeError("La API de DANA devolvio una respuesta JSON invalida") from None
+    if isinstance(parsed, dict) and (
+        parsed.get("ok") is False or parsed.get("success") is False or parsed.get("error") or parsed.get("errorMessage")
+    ):
+        raise RuntimeError("La API de DANA rechazo la operacion")
+    return parsed
+
+
+def get_dana_access_token() -> str:
+    explicit = optional_env("DANA_ACCESS_TOKEN")
+    if explicit:
+        return explicit
+    token_url = optional_env("DANA_TOKEN_URL") or "https://auth.danaconnect.com/oauth2/token"
+    client_id = optional_env("DANA_CLIENT_ID")
+    client_secret = optional_env("DANA_CLIENT_SECRET")
+    username = optional_env("DANA_USERNAME")
+    password = optional_env("DANA_PASSWORD")
+    scope = optional_env("DANA_OAUTH_SCOPE") or "conversation:access2api"
+    auth_method = optional_env("DANA_OAUTH_AUTH_METHOD") or "basic"
+    config = (token_url, client_id, client_secret, username, password, scope, auth_method)
+    now = time.time()
+    if _DANA_TOKEN_CACHE["config"] == config and _DANA_TOKEN_CACHE["expires_at"] > now + 60:
+        return _DANA_TOKEN_CACHE["access_token"]
+    headers = {"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"}
+    form = {"grant_type": "client_credentials", "scope": scope}
+    if client_id and client_secret:
+        if auth_method == "basic":
+            credentials = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode("ascii")
+            headers["Authorization"] = f"Basic {credentials}"
+        elif auth_method == "body":
+            form.update(client_id=client_id, client_secret=client_secret)
+        else:
+            raise ValueError("DANA_OAUTH_AUTH_METHOD debe ser basic o body")
+    elif username and password and not client_id and not client_secret:
+        form.update(grant_type="password", username=username, password=password)
+    else:
+        raise ValueError("Configure DANA_CLIENT_ID y DANA_CLIENT_SECRET para OAuth")
+    result = dana_json_request(Request(token_url, data=urlencode(form).encode(), method="POST", headers=headers))
+    token = result.get("access_token") if isinstance(result, dict) else None
+    if not isinstance(token, str) or not token.strip():
+        raise RuntimeError("DANA OAuth no devolvio access_token")
+    expires_in = max(0, int(result.get("expires_in", 300)))
+    _DANA_TOKEN_CACHE.update(access_token=token, expires_at=now + expires_in, config=config)
+    return token
+
+
+def start_dana_conversation(project_id: str, fields: Dict[str, str]) -> Any:
+    if not project_id.isdigit():
+        raise ValueError("El Project ID de DANA debe ser numerico")
+    base_url = (optional_env("DANA_BASE_URL") or "https://appserv.danaconnect.com").rstrip("/")
+    url = f"{base_url}/api/2.0/rest/conversation/ProjectID/{project_id}/start/data"
+    return dana_json_request(Request(url, data=json.dumps(fields).encode("utf-8"), method="POST", headers={
+        "Authorization": f"Bearer {get_dana_access_token()}",
+        "Content-Type": "application/json", "Accept": "application/json",
+        "X-DEBUG": optional_env("DANA_CONVERSATION_DEBUG") or "0",
+    }))
+
+
+def submit_onboarding_via_rest(payload: Dict[str, Any]) -> Dict[str, Any]:
+    project_id = optional_env("DANA_ONBOARDING_PROJECT_ID") or "204507"
+    if not project_id.isdigit() or project_id == optional_env("DANA_TOKEN_AUDIT_PROJECT_ID"):
+        raise ValueError("Configure un Project ID de onboarding distinto al de auditoria")
+    build_conversation_fields(payload.get("data"))
+    try:
+        # Authenticate before uploading to avoid orphan files when OAuth is misconfigured.
+        get_dana_access_token()
+    except Exception:
+        LOGGER.exception("onboarding_rest_auth_failed")
+        return {"ok": False, "stage": "oauth", "error": "No fue posible autenticar el envio con DANA. Revise la configuracion OAuth."}
+    try:
+        data, uploaded = upload_files_and_merge_data(payload, id_company=required_env("DANA_ID_COMPANY"))
+    except Exception as exc:
+        LOGGER.exception("onboarding_rest_file_upload_failed")
+        code = f" HTTP {exc.code}" if isinstance(exc, HTTPError) else ""
+        if isinstance(exc, HTTPError):
+            exc.close()
+        return {"ok": False, "stage": "file_upload", "error": f"No se pudieron subir los adjuntos a DANA.{code}"}
+    try:
+        start_dana_conversation(project_id, build_conversation_fields(data))
+    except Exception:
+        LOGGER.exception("onboarding_rest_start_failed project_id=%s", project_id)
+        return {"ok": False, "stage": "start_conversation", "error": "DANA no confirmo el inicio de la conversacion del onboarding. Revise CloudWatch."}
+    LOGGER.info("onboarding_rest_started project_id=%s uploaded_files=%s", project_id, len(uploaded))
+    return {"ok": True, "mode": "rest", "to": f"DANA Project {project_id}", "projectId": project_id, "uploadedFiles": uploaded}
+
+
 def record_token_audit(body: Dict[str, Any], usage: Dict[str, Any]) -> None:
     project_id = optional_env("DANA_TOKEN_AUDIT_PROJECT_ID")
     context = TOKEN_AUDIT_CONTEXT.get()
@@ -4239,8 +4351,6 @@ def record_token_audit(body: Dict[str, Any], usage: Dict[str, Any]) -> None:
     try:
         if not project_id.isdigit():
             raise ValueError("DANA_TOKEN_AUDIT_PROJECT_ID debe ser numerico")
-        config = get_cloud_smtp_config(require_password=True)
-        recipient = f"{project_id}@{required_env('DANA_ID_COMPANY')}.email-platform.com"
         outcome = str(body.get("status") or "error")
         if not usage["complete"]:
             outcome += "_medicion_parcial" if usage["measuredCallCount"] else "_medicion_no_disponible"
@@ -4256,20 +4366,10 @@ def record_token_audit(body: Dict[str, Any], usage: Dict[str, Any]) -> None:
         }
         for field, key in (("TOKEN_INPUT", "inputTokens"), ("TOKEN_OUTPUT", "outputTokens"), ("TOKENS_TOTALES", "totalTokens")):
             fields[field] = str(usage[key]) if usage["complete"] or usage["measuredCallCount"] else ""
-        message = EmailMessage()
-        message["From"] = config["from"]
-        message["To"] = recipient
-        message["Subject"] = f"Onboarding token audit {context['auditId']}"
-        message.set_content(urlencode({"command": "StartConversationWithData", **fields}))
-        with smtplib.SMTP(config["host"], config["port"], timeout=5) as smtp:
-            smtp.starttls()
-            smtp.login(config["user"], config["password"])
-            refused = smtp.send_message(message, to_addrs=[recipient])
-            if refused:
-                raise RuntimeError("Audit recipient rejected")
-        LOGGER.info("token_audit_sent audit_id=%s project_id=%s", context["auditId"], project_id)
+        start_dana_conversation(project_id, fields)
+        LOGGER.info("token_audit_sent transport=rest audit_id=%s project_id=%s", context["auditId"], project_id)
     except Exception:
-        LOGGER.exception("token_audit_failed audit_id=%s project_id=%s", context["auditId"], project_id)
+        LOGGER.exception("token_audit_failed transport=rest audit_id=%s project_id=%s", context["auditId"], project_id)
 
 
 def response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:

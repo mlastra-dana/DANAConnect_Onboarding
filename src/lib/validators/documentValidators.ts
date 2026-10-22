@@ -1,7 +1,7 @@
 import { CountryCode, DocumentType, DocumentValidationResult, PersonType } from '../../app/types';
 import { validateBasicFile } from './fileValidators';
 
-const DOCUMENT_VALIDATION_URL =
+export const DOCUMENT_VALIDATION_URL =
   import.meta.env.VITE_DOCUMENT_VALIDATION_URL?.trim() ||
   'https://uou6hka7wmyfgtirokika5bkme0wfwzj.lambda-url.us-east-1.on.aws/';
 const DOCUMENT_VALIDATION_TIMEOUT_MS = Number(import.meta.env.VITE_DOCUMENT_VALIDATION_TIMEOUT_MS || 120000);

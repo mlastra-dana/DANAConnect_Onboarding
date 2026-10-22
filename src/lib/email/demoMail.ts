@@ -1,4 +1,5 @@
 import { DocumentType, OnboardingState } from '../../app/types';
+import { DOCUMENT_VALIDATION_URL } from '../validators/documentValidators';
 import {
   getDocumentLabel,
   getDocumentOrder,
@@ -47,10 +48,7 @@ const DANA_DOCUMENT_FIELD_BY_TYPE: Partial<Record<DocumentType, string>> = {
   documentoIdentidad: 'DOCUMENTO_IDENTIDAD',
   documentoIdentidadReverso: 'DOCUMENTO_IDENTIDAD_REVERSO',
   licenciaConducirFrente: 'LICENCIA_FRONT',
-  licenciaConducirReverso: 'LICENCIA_BACK',
-  referenciaPersonal: 'REFERENCIA_PERSONAL',
-  referenciaComercial: 'REFERENCIA_COMERCIAL',
-  referenciaBancaria: 'REFERENCIA_BANCARIA'
+  licenciaConducirReverso: 'LICENCIA_BACK'
 };
 
 const FRONTEND_ONLY_NATURAL_DOCUMENTS = new Set<DocumentType>(['referenciaPersonal', 'referenciaComercial', 'referenciaBancaria']);
@@ -209,14 +207,13 @@ export async function copyEmailToClipboard(subject: string, body: string) {
   await navigator.clipboard.writeText(content);
 }
 
-export async function sendEmailViaApi(
+export async function submitOnboardingViaApi(
   subject: string,
   body: string,
   conversationData?: Record<string, string>,
   files?: DemoEmailPayload['files']
 ): Promise<SendEmailResult> {
-  const endpoint = import.meta.env.VITE_EMAIL_SEND_URL?.trim() || '/api/send-email';
-  const isLambdaEndpoint = endpoint !== '/api/send-email';
+  const endpoint = import.meta.env.VITE_ONBOARDING_SUBMIT_URL?.trim() || DOCUMENT_VALIDATION_URL;
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -224,7 +221,7 @@ export async function sendEmailViaApi(
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        action: isLambdaEndpoint ? 'sendEmail' : undefined,
+        action: 'submitOnboarding',
         subject,
         body,
         data: conversationData,
@@ -246,7 +243,8 @@ export async function sendEmailViaApi(
       const serviceError = result.error || result.smtpError;
       return {
         ok: false,
-        error: serviceError ?? 'No se pudo enviar el correo'
+        stage: result.stage,
+        error: serviceError ?? 'No se pudo enviar el onboarding'
       };
     }
 
@@ -351,14 +349,6 @@ function buildConversationData({
 
   const fiscalDocument = state.documents.rif.fileName ? state.documents.rif : state.documents.documentoFiscal;
   addConversationField(data, 'DOCUMENTO_FISCAL', fiscalDocument.fileName);
-
-  if (state.country === 've' && state.personType === 'juridica') {
-    for (const documentType of getDocumentOrder(state.country, state.personType)) {
-      if (documentType === 'referenciaPersonal' || documentType === 'referenciaComercial' || documentType === 'referenciaBancaria') {
-        addConversationField(data, DANA_DOCUMENT_FIELD_BY_TYPE[documentType]!, state.documents[documentType].fileName);
-      }
-    }
-  }
 
   if (state.personType === 'natural') {
     addConversationField(data, 'NOMBRES', state.personalInfo.firstName);

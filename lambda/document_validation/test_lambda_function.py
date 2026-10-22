@@ -6,6 +6,7 @@ import types
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError
 
 
 boto_stub = types.ModuleType("boto3")
@@ -89,56 +90,196 @@ class TokenAuditTests(unittest.TestCase):
             "auditId": "attempt-1", "onboardingId": "application-1", "document": "documentoFiscal", "fileName": "rif.pdf",
         })
         self.env = patch.dict(validation.os.environ, {
-            "DANA_TOKEN_AUDIT_PROJECT_ID": "207867", "DANA_ID_COMPANY": "test-company",
-            "DANA_ID_CONVERSATION": "original-project", "DANA_SMTP_USER": "test-user",
-            "DANA_SMTP_PASS": "test-password", "DANA_FROM": "test@example.com",
-            "DANA_CC": "must-not-copy@example.com", "DANA_STATIC_DATA": '{"UNRELATED":"value"}',
+            "DANA_TOKEN_AUDIT_PROJECT_ID": "207867", "DANA_STATIC_DATA": '{"UNRELATED":"value"}',
         })
         self.env.start()
+        self.rest_patch = patch.object(validation, "start_dana_conversation", return_value={"success": True})
+        self.rest = self.rest_patch.start()
+        self.smtp_patch = patch.object(validation.smtplib, "SMTP", side_effect=AssertionError("SMTP must not be used"))
+        self.smtp = self.smtp_patch.start()
 
     def tearDown(self):
+        self.smtp_patch.stop()
+        self.rest_patch.stop()
         self.env.stop()
         validation.TOKEN_USAGE.reset(self.usage_token)
         validation.TOKEN_AUDIT_CONTEXT.reset(self.audit_token)
 
-    def test_audit_uses_exact_fields_and_separate_recipient(self):
-        from urllib.parse import parse_qs
-        with patch.object(validation.smtplib, "SMTP") as smtp:
-            smtp.return_value.__enter__.return_value.send_message.return_value = {}
-            result = validation.response(200, {"status": "valid"})
-            message = smtp.return_value.__enter__.return_value.send_message.call_args.args[0]
-            self.assertEqual(message["To"], "207867@test-company.email-platform.com")
-            self.assertIsNone(message["Cc"])
-            fields = parse_qs(message.get_content().strip(), keep_blank_values=True)
-            self.assertEqual(set(fields), {"command", "AUDIT_ID", "ONBOARDING_ID", "DOCUMENT", "FILENAME", "LAMBDA_NAME", "MODEL_ID", "LLAMADAS", "RESULTADO_DOCUMENT", "TOKEN_INPUT", "TOKEN_OUTPUT", "TOKENS_TOTALES"})
-            self.assertEqual(fields["ONBOARDING_ID"], ["application-1"])
-            self.assertEqual(fields["TOKENS_TOTALES"], ["120"])
-            self.assertEqual(fields["command"], ["StartConversationWithData"])
-            self.assertEqual(json.loads(result["body"])["status"], "valid")
-            validation.response(200, {"status": "valid"})
-            self.assertEqual(smtp.call_count, 1)
+    def test_audit_uses_exact_fields_and_separate_project(self):
+        result = validation.response(200, {"status": "valid"})
+        project, fields = self.rest.call_args.args
+        self.assertEqual(project, "207867")
+        self.assertEqual(set(fields), {"AUDIT_ID", "ONBOARDING_ID", "DOCUMENT", "FILENAME", "LAMBDA_NAME", "MODEL_ID", "LLAMADAS", "RESULTADO_DOCUMENT", "TOKEN_INPUT", "TOKEN_OUTPUT", "TOKENS_TOTALES"})
+        self.assertEqual(fields["ONBOARDING_ID"], "application-1")
+        self.assertEqual(fields["TOKENS_TOTALES"], "120")
+        self.assertEqual(json.loads(result["body"])["status"], "valid")
+        validation.response(200, {"status": "valid"})
+        self.assertEqual(self.rest.call_count, 1)
+        self.smtp.assert_not_called()
 
     def test_audit_failure_does_not_change_validation(self):
-        with patch.object(validation.smtplib, "SMTP", side_effect=RuntimeError("unavailable")), self.assertLogs(level="ERROR"):
+        self.rest.side_effect = RuntimeError("unavailable")
+        with self.assertLogs(level="ERROR"):
             result = validation.response(200, {"status": "valid"})
         self.assertEqual(json.loads(result["body"])["status"], "valid")
         self.assertEqual(result["statusCode"], 200)
 
+    def test_each_document_sends_audit_before_any_final_submission(self):
+        with patch.object(validation, "submit_onboarding_via_rest") as final_send, patch.object(validation, "run_bedrock_classification") as classify, patch.object(validation, "run_bedrock_validation") as validate:
+            for index, slot in enumerate(("documentoFiscal", "documentoIdentidad"), start=1):
+                classify.return_value = {"detected_document_type": slot, "detected_country": "ve", "confidence": 0.99}
+                validate.return_value = {"status": "valid", "document_type_match": True, "summary": "Accepted"}
+                payload = {
+                    "file_name": f"document-{index}.pdf", "content_type": "application/pdf",
+                    "file_base64": base64.b64encode(b"%PDF-1.4 fixture").decode(),
+                    "country": "ve", "person_type": "natural", "slot": slot,
+                    "onboarding_id": "application-1",
+                }
+                result = validation.lambda_handler({"body": json.dumps(payload)}, None)
+                self.assertEqual(result["statusCode"], 200)
+                self.assertEqual(json.loads(result["body"])["status"], "valid")
+                self.assertEqual(self.rest.call_count, index)
+            fields = [call.args[1] for call in self.rest.call_args_list]
+            self.assertEqual([row["DOCUMENT"] for row in fields], ["documentoFiscal", "documentoIdentidad"])
+            self.assertEqual([row["ONBOARDING_ID"] for row in fields], ["application-1", "application-1"])
+            self.assertNotEqual(fields[0]["AUDIT_ID"], fields[1]["AUDIT_ID"])
+            final_send.assert_not_called()
+
+    def test_final_submission_does_not_send_token_audit_again(self):
+        with patch.object(validation, "submit_onboarding_via_rest", return_value={"ok": True}) as final_send:
+            result = validation.lambda_handler({"body": json.dumps({"action": "submitOnboarding"})}, None)
+        self.assertEqual(result["statusCode"], 200)
+        final_send.assert_called_once()
+        self.rest.assert_not_called()
+        self.smtp.assert_not_called()
+        self.assertNotIn("tokenUsage", json.loads(result["body"]))
+
     def test_disabled_audit_does_not_open_connection(self):
-        with patch.dict(validation.os.environ, {"DANA_TOKEN_AUDIT_PROJECT_ID": ""}), patch.object(validation.smtplib, "SMTP") as smtp:
+        with patch.dict(validation.os.environ, {"DANA_TOKEN_AUDIT_PROJECT_ID": ""}):
             validation.response(200, {"status": "valid"})
-        smtp.assert_not_called()
+        self.rest.assert_not_called()
+        self.smtp.assert_not_called()
 
     def test_unknown_measurement_is_not_written_as_zero(self):
-        from urllib.parse import parse_qs
         validation.TOKEN_USAGE.get().update(complete=False, measuredCallCount=0)
-        with patch.object(validation.smtplib, "SMTP") as smtp:
-            smtp.return_value.__enter__.return_value.send_message.return_value = {}
-            validation.response(500, {"error": "unavailable"})
-            message = smtp.return_value.__enter__.return_value.send_message.call_args.args[0]
-        fields = parse_qs(message.get_content().strip(), keep_blank_values=True)
-        self.assertEqual(fields["TOKENS_TOTALES"], [""])
-        self.assertEqual(fields["RESULTADO_DOCUMENT"], ["error_medicion_no_disponible"])
+        validation.response(500, {"error": "unavailable"})
+        fields = self.rest.call_args.args[1]
+        self.assertEqual(fields["TOKENS_TOTALES"], "")
+        self.assertEqual(fields["RESULTADO_DOCUMENT"], "error_medicion_no_disponible")
+
+
+class DanaRestTests(unittest.TestCase):
+    def setUp(self):
+        self.env = patch.dict(validation.os.environ, {
+            "DANA_CLIENT_ID": "test-client", "DANA_CLIENT_SECRET": "test-secret",
+            "DANA_USERNAME": "test-user", "DANA_PASSWORD": "test-password",
+            "DANA_ONBOARDING_PROJECT_ID": "204507", "DANA_TOKEN_AUDIT_PROJECT_ID": "207867",
+            "DANA_ID_COMPANY": "venturestars",
+        }, clear=True)
+        self.env.start()
+        self.cache = patch.dict(validation._DANA_TOKEN_CACHE, {"access_token": "", "expires_at": 0, "config": None}, clear=True)
+        self.cache.start()
+
+    def tearDown(self):
+        self.cache.stop()
+        self.env.stop()
+
+    def http_result(self, data):
+        context = MagicMock()
+        context.__enter__.return_value.read.return_value = json.dumps(data).encode()
+        return context
+
+    def test_oauth_client_credentials_and_cached_bearer_json_post(self):
+        from urllib.parse import parse_qs
+        with patch.object(validation, "urlopen", side_effect=[
+            self.http_result({"access_token": "test-token", "expires_in": 3600}),
+            self.http_result({"success": True}), self.http_result({"success": True}),
+        ]) as http, patch.object(validation.smtplib, "SMTP") as smtp:
+            validation.start_dana_conversation("207867", {"TOKENS_TOTALES": "120"})
+            validation.start_dana_conversation("204507", {"NOMBRES": "Demo"})
+        self.assertEqual(http.call_count, 3)
+        token_request = http.call_args_list[0].args[0]
+        self.assertEqual(parse_qs(token_request.data.decode())["grant_type"], ["client_credentials"])
+        self.assertTrue(token_request.get_header("Authorization").startswith("Basic "))
+        request = http.call_args_list[1].args[0]
+        self.assertEqual(request.full_url, "https://appserv.danaconnect.com/api/2.0/rest/conversation/ProjectID/207867/start/data")
+        self.assertEqual(request.get_header("Authorization"), "Bearer test-token")
+        self.assertEqual(json.loads(request.data), {"TOKENS_TOTALES": "120"})
+        self.assertNotIn("command", json.loads(request.data))
+        smtp.assert_not_called()
+
+    def test_expired_token_refreshes(self):
+        with patch.object(validation, "dana_json_request", return_value={"access_token": "new-token", "expires_in": 3600}) as request:
+            validation._DANA_TOKEN_CACHE.update(access_token="expired", expires_at=0)
+            self.assertEqual(validation.get_dana_access_token(), "new-token")
+        request.assert_called_once()
+
+    def test_oauth_body_auth_and_password_fallback(self):
+        from urllib.parse import parse_qs
+        with patch.dict(validation.os.environ, {"DANA_OAUTH_AUTH_METHOD": "body"}), patch.object(validation, "dana_json_request", return_value={"access_token": "token"}) as request:
+            validation.get_dana_access_token()
+            self.assertEqual(parse_qs(request.call_args.args[0].data.decode())["client_secret"], ["test-secret"])
+        with patch.dict(validation.os.environ, {"DANA_CLIENT_ID": "", "DANA_CLIENT_SECRET": ""}), patch.object(validation, "dana_json_request", return_value={"access_token": "token"}) as request:
+            validation.get_dana_access_token()
+            self.assertEqual(parse_qs(request.call_args.args[0].data.decode())["grant_type"], ["password"])
+
+    def test_http_error_is_sanitized_and_not_retried(self):
+        with patch.object(validation, "urlopen", side_effect=HTTPError("https://example.com", 401, "sensitive detail", {}, None)) as http:
+            with self.assertRaisesRegex(RuntimeError, "^DANA API HTTP 401$"):
+                validation.dana_json_request(validation.Request("https://example.com"))
+        http.assert_called_once()
+
+    def test_api_rejection_on_http_200_is_failure(self):
+        with patch.object(validation, "urlopen", return_value=self.http_result({"success": False, "error": "rejected"})):
+            with self.assertRaisesRegex(RuntimeError, "rechazo"):
+                validation.dana_json_request(validation.Request("https://example.com"))
+
+    def test_invalid_json_is_failure(self):
+        result = self.http_result({})
+        result.__enter__.return_value.read.return_value = b"<html>error</html>"
+        with patch.object(validation, "urlopen", return_value=result):
+            with self.assertRaisesRegex(RuntimeError, "JSON invalida"):
+                validation.dana_json_request(validation.Request("https://example.com"))
+
+    def test_rest_submission_uploads_then_starts_correct_project_without_smtp(self):
+        with patch.object(validation, "get_dana_access_token", return_value="token"), patch.object(validation, "upload_files_and_merge_data", return_value=({"NOMBRES": "Demo", "DOCUMENTO_IDENTIDAD": "file-1"}, [{"fileID": "file-1"}])) as upload, patch.object(validation, "start_dana_conversation", return_value={"success": True}) as start, patch.object(validation.smtplib, "SMTP") as smtp:
+            result = validation.submit_onboarding_via_rest({"data": {"NOMBRES": "Demo"}, "files": []})
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["mode"], "rest")
+        self.assertEqual(result["projectId"], "204507")
+        start.assert_called_once_with("204507", {"NOMBRES": "Demo", "DOCUMENTO_IDENTIDAD": "file-1"})
+        upload.assert_called_once()
+        smtp.assert_not_called()
+
+    def test_oauth_failure_prevents_upload_and_start(self):
+        with patch.object(validation, "get_dana_access_token", side_effect=RuntimeError("unavailable")), patch.object(validation, "upload_files_and_merge_data") as upload, patch.object(validation, "start_dana_conversation") as start, self.assertLogs(level="ERROR"):
+            result = validation.submit_onboarding_via_rest({"data": {"NOMBRES": "Demo"}})
+        self.assertEqual(result["stage"], "oauth")
+        self.assertFalse(result["ok"])
+        upload.assert_not_called()
+        start.assert_not_called()
+
+    def test_file_upload_507_prevents_conversation(self):
+        with patch.object(validation, "get_dana_access_token", return_value="token"), patch.object(validation, "upload_files_and_merge_data", side_effect=HTTPError("https://example.com", 507, "Insufficient Storage", {}, None)), patch.object(validation, "start_dana_conversation") as start, self.assertLogs(level="ERROR"):
+            result = validation.submit_onboarding_via_rest({"data": {"NOMBRES": "Demo"}})
+        self.assertEqual(result["stage"], "file_upload")
+        self.assertIn("507", result["error"])
+        start.assert_not_called()
+
+    def test_start_failure_has_separate_stage(self):
+        with patch.object(validation, "get_dana_access_token", return_value="token"), patch.object(validation, "upload_files_and_merge_data", return_value=({"NOMBRES": "Demo"}, [])), patch.object(validation, "start_dana_conversation", side_effect=RuntimeError("unavailable")), self.assertLogs(level="ERROR"):
+            result = validation.submit_onboarding_via_rest({"data": {"NOMBRES": "Demo"}})
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["stage"], "start_conversation")
+
+    def test_files_use_http_credentials_without_smtp_configuration(self):
+        self.assertEqual(validation.resolve_file_upload_user("venturestars"), "test-user")
+        self.assertEqual(validation.resolve_file_upload_password(), "test-password")
+
+    def test_onboarding_project_cannot_be_audit_project(self):
+        with patch.dict(validation.os.environ, {"DANA_ONBOARDING_PROJECT_ID": "207867"}):
+            with self.assertRaises(ValueError):
+                validation.submit_onboarding_via_rest({"data": {"NOMBRES": "Demo"}})
 
 
 class ReferenceValidationTests(unittest.TestCase):

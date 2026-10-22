@@ -770,23 +770,6 @@ export function DocumentsPage({ companyId }: { companyId: string }) {
             </div>
           ) : null}
         </Card>
-        {isVenezuelaNatural ? (
-          <Card>
-            <h3 className="text-lg font-semibold text-dark">Datos bancarios</h3>
-            <div className="mt-4 grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
-              {([
-                ['bankInstitution', 'Institución bancaria'],
-                ['bankProduct', 'Producto bancario'],
-                ['bankBalanceFigures', 'Cifras del saldo']
-              ] as const).map(([field, label]) => (
-                <label key={field} className="space-y-2">
-                  <span className="text-sm font-medium text-dark">{label}</span>
-                  <input type="text" maxLength={200} value={state.personalInfo[field]} onChange={event => setPersonalInfo({ [field]: event.target.value })} className="w-full rounded-lg border border-borderLight px-3 py-2.5 text-sm text-dark outline-none focus:border-primary" />
-                </label>
-              ))}
-            </div>
-          </Card>
-        ) : null}
         </aside>
       ) : null}
       </div>
